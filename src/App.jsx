@@ -28,7 +28,9 @@ import {
   Shield, 
   Download, 
   LogOut, 
-  Lock 
+  Lock,
+  Mail,
+  Key
 } from 'lucide-react';
 
 // Firebase Imports
@@ -36,7 +38,8 @@ import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
   signInWithCustomToken, 
-  signInAnonymously, 
+  signInAnonymously,
+  signInWithEmailAndPassword, // Added for Login
   onAuthStateChanged,
   signOut
 } from "firebase/auth";
@@ -55,8 +58,7 @@ import {
   getDoc 
 } from "firebase/firestore";
 
-// --- Firebase Configuration (請在此填入您的金鑰) ---
-// 1. 請將以下的 "YOUR_..." 替換為您從 Firebase Console > Project Settings 取得的真實資料
+// --- Firebase Configuration ---
 const firebaseConfig = {
   apiKey: "AIzaSyCNJ-TZcqTres8fXcZr3rLaH5x2xLsk3Os",
   authDomain: "event-management-system-9f764.firebaseapp.com",
@@ -70,10 +72,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// 設定一個固定的 appId，這會作為資料庫中的根目錄名稱
 const appId = "my-venue-crm"; 
 
-// 2. 請在此填入您的 Gemini API Key (從 Google AI Studio 取得)
 const apiKey = "AIzaSyArNDvUTl9vADzhIhezHZuveNcnJzaEzSk"; 
 
 // --- Constants & Types ---
@@ -94,16 +94,13 @@ const SERVING_STYLES = ['位上', '圍餐', '分菜', '自助餐'];
 
 // --- Helper: Gemini API Call ---
 async function generateAIContent(prompt) {
-  // 注意：如果 API Key 為空，這裡會直接報錯，請確保已填入 Key
   if (!apiKey || apiKey.includes("YOUR_")) {
     return "請先在程式碼中設定 Gemini API Key。";
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
   
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }]
-  };
+  const payload = { contents: [{ parts: [{ text: prompt }] }] };
 
   try {
     const response = await fetch(url, {
@@ -121,7 +118,7 @@ async function generateAIContent(prompt) {
   }
 }
 
-// --- Components ---
+// --- Global UI Components (Defined OUTSIDE App to fix focus bug) ---
 
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
@@ -129,13 +126,67 @@ const Card = ({ children, className = "" }) => (
   </div>
 );
 
+const FormInput = ({ label, name, value, onChange, type = "text", required, className = "", placeholder = "" }) => (
+  <div className={className}>
+    <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
+    <input
+      type={type}
+      name={name}
+      required={required}
+      value={value || ''} // Handle null/undefined
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+    />
+  </div>
+);
+
+const FormSelect = ({ label, name, value, onChange, options, required, className = "" }) => (
+  <div className={className}>
+    <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
+    <select
+      name={name}
+      required={required}
+      value={value || ''}
+      onChange={onChange}
+      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+    >
+      {options.map(opt => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
+  </div>
+);
+
+const FormTextArea = ({ label, name, value, onChange, rows = 3, className = "", placeholder = "" }) => (
+  <div className={className}>
+    <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
+    <textarea
+      name={name}
+      rows={rows}
+      value={value || ''}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+    />
+  </div>
+);
+
+const FormCheckbox = ({ label, name, checked, onChange }) => (
+  <label className="flex items-center space-x-2 cursor-pointer p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+    <input 
+      type="checkbox" 
+      name={name} 
+      checked={checked || false} 
+      onChange={onChange}
+      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300" 
+    />
+    <span className="text-sm text-slate-700">{label}</span>
+  </label>
+);
+
 const Badge = ({ status }) => {
-  const map = {
-    'confirmed': '已確認',
-    'tentative': '暫定',
-    'cancelled': '已取消',
-    'completed': '已完成'
-  };
+  const map = { 'confirmed': '已確認', 'tentative': '暫定', 'cancelled': '已取消', 'completed': '已完成' };
   const label = map[status] || status;
   const style = STATUS_COLORS[status.toLowerCase()] || 'bg-gray-100 text-gray-800';
   return (
@@ -164,7 +215,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-// AI Result Modal Component
 const AIResultModal = ({ isOpen, onClose, content, isLoading, title, onApply }) => {
   if (!isOpen) return null;
   return (
@@ -218,7 +268,6 @@ const AIResultModal = ({ isOpen, onClose, content, isLoading, title, onApply }) 
   );
 };
 
-// --- Printable Component ---
 const PrintableEO = ({ data }) => {
   if (!data) return null;
 
@@ -385,12 +434,96 @@ const PrintableEO = ({ data }) => {
   );
 };
 
+// --- Login Component ---
+const LoginView = ({ onLogin, onGuestLogin, error }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onLogin(email, password);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95">
+        <div className="bg-slate-900 p-8 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl shadow-lg mb-4">
+            <MapPin size={32} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">VenueMgr</h1>
+          <p className="text-blue-200 text-sm mt-1">Venue & Event Management System</p>
+        </div>
+        
+        <div className="p-8">
+          {error && (
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-6 flex items-center">
+              <AlertCircle size={16} className="mr-2 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="name@company.com"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+              <div className="relative">
+                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-blue-600/20">
+              登入 (Login)
+            </button>
+          </form>
+
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <button 
+              onClick={onGuestLogin}
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium py-2 rounded-lg transition-colors text-sm"
+            >
+              使用訪客身份登入 (Guest Access)
+            </button>
+            <p className="text-xs text-center text-slate-400 mt-2">
+              注意：訪客登入權限可能受限
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main Application ---
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -475,21 +608,9 @@ export default function App() {
   const [formData, setFormData] = useState(initialFormState);
   const [formTab, setFormTab] = useState('basic'); // basic, fnb, venue, billing, logistics
 
-  // --- Auth & Data ---
+  // --- Auth Logic ---
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
-    };
-    initAuth();
-    
+    // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -501,7 +622,7 @@ export default function App() {
           uid: u.uid,
           lastLogin: serverTimestamp(),
           role: 'staff', // Default role
-          displayName: u.displayName || `User ${u.uid.slice(0,4)}`,
+          displayName: u.displayName || u.email || `User ${u.uid.slice(0,4)}`,
           email: u.email || 'anonymous'
         };
 
@@ -512,27 +633,51 @@ export default function App() {
         } else {
           await setDoc(userRef, profileData);
         }
-        
         setUserProfile(profileData);
+        setAuthError("");
       } else {
-        setLoading(false);
         setIsAdmin(false);
         setUserProfile(null);
       }
+      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
+  const handleLogin = async (email, password) => {
+    try {
+      setAuthLoading(true);
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      console.error(err);
+      setAuthError("登入失敗：密碼錯誤或找不到用戶。");
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    try {
+      setAuthLoading(true);
+      await signInAnonymously(auth);
+    } catch (err) {
+      setAuthError("訪客登入失敗。");
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut(auth);
+    // State will be cleared by onAuthStateChanged
+  };
+
   // Fetch Events (SHARED PUBLIC DATA)
   useEffect(() => {
     if (!user) return;
-    // NOTE: Changed from users/{uid}/events to public/data/events for SHARED CRM
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'events'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => new Date(a.date) - new Date(b.date));
       setEvents(data);
-      setLoading(false);
     });
     return () => unsubscribe();
   }, [user]);
@@ -636,7 +781,6 @@ export default function App() {
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
-    // Simple passcode check for demo purposes
     if (adminPasscode === "admin888") {
       const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid);
       await updateDoc(userRef, { role: 'admin' });
@@ -648,13 +792,7 @@ export default function App() {
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut(auth);
-    window.location.reload();
-  };
-
   // --- AI Actions ---
-  
   const handleAIEmailDraft = async () => {
     setAiTitle("AI 郵件助理 (Email Drafter)");
     setAiLoading(true);
@@ -918,7 +1056,6 @@ export default function App() {
   };
 
   const CalendarView = () => {
-    // Reuse previous calendar logic but localized
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay(); 
     const monthName = currentDate.toLocaleString('zh-HK', { month: 'long', year: 'numeric' });
@@ -1055,70 +1192,14 @@ export default function App() {
     </div>
   );
 
-  // --- Form Sections ---
-  
-  const FormInput = ({ label, name, type = "text", required, className = "", placeholder = "" }) => (
-    <div className={className}>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
-      <input
-        type={type}
-        name={name}
-        required={required}
-        value={formData[name]}
-        onChange={handleInputChange}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-      />
-    </div>
-  );
+  // --- Render Logic ---
 
-  const FormSelect = ({ label, name, options, required, className = "" }) => (
-    <div className={className}>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
-      <select
-        name={name}
-        required={required}
-        value={formData[name]}
-        onChange={handleInputChange}
-        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-      >
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-    </div>
-  );
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-500"><Loader2 className="animate-spin mr-2" /> 載入中 (Loading)...</div>;
 
-  const FormTextArea = ({ label, name, rows = 3, className = "", placeholder = "" }) => (
-    <div className={className}>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
-      <textarea
-        name={name}
-        rows={rows}
-        value={formData[name]}
-        onChange={handleInputChange}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-      />
-    </div>
-  );
-
-  const FormCheckbox = ({ label, name, checked, onChange }) => (
-    <label className="flex items-center space-x-2 cursor-pointer p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-      <input 
-        type="checkbox" 
-        name={name} 
-        checked={checked} 
-        onChange={onChange}
-        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300" 
-      />
-      <span className="text-sm text-slate-700">{label}</span>
-    </label>
-  );
-
-  // --- Render ---
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400">Loading...</div>;
+  // Show Login Screen if no user
+  if (!user) {
+    return <LoginView onLogin={handleLogin} onGuestLogin={handleGuestLogin} error={authError} />;
+  }
 
   return (
     <>
@@ -1226,24 +1307,24 @@ export default function App() {
               {formTab === 'basic' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormInput label="訂單編號 (Order ID)" name="orderId" required />
-                    <FormSelect label="活動狀態" name="status" options={['tentative', 'confirmed', 'completed', 'cancelled']} />
-                    <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} />
+                    <FormInput label="訂單編號 (Order ID)" name="orderId" required value={formData.orderId} onChange={handleInputChange} />
+                    <FormSelect label="活動狀態" name="status" options={['tentative', 'confirmed', 'completed', 'cancelled']} value={formData.status} onChange={handleInputChange} />
+                    <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
                   </div>
                   
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
                     <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情 (Event Details)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="活動名稱" name="eventName" required placeholder="例如：陳李聯婚" />
-                      <FormSelect label="活動位置" name="venueLocation" options={LOCATIONS} />
+                      <FormInput label="活動名稱" name="eventName" required placeholder="例如：陳李聯婚" value={formData.eventName} onChange={handleInputChange} />
+                      <FormSelect label="活動位置" name="venueLocation" options={LOCATIONS} value={formData.venueLocation} onChange={handleInputChange} />
                       <div className="grid grid-cols-3 gap-4">
-                        <FormInput label="活動日期" name="date" type="date" required className="col-span-1" />
-                        <FormInput label="開始時間" name="startTime" type="time" required className="col-span-1" />
-                        <FormInput label="結束時間" name="endTime" type="time" required className="col-span-1" />
+                        <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
+                        <FormInput label="開始時間" name="startTime" type="time" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
+                        <FormInput label="結束時間" name="endTime" type="time" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <FormInput label="席數 (Table Count)" name="tableCount" placeholder="20" />
-                        <FormInput label="賓客人數 (Guests)" name="guestCount" placeholder="240" />
+                        <FormInput label="席數 (Table Count)" name="tableCount" placeholder="20" value={formData.tableCount} onChange={handleInputChange} />
+                        <FormInput label="賓客人數 (Guests)" name="guestCount" placeholder="240" value={formData.guestCount} onChange={handleInputChange} />
                       </div>
                     </div>
                   </div>
@@ -1260,14 +1341,14 @@ export default function App() {
                       </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="客戶姓名" name="clientName" required />
-                      <FormInput label="電話" name="clientPhone" />
-                      <FormInput label="公司名稱 (如適用)" name="companyName" />
-                      <FormInput label="Email" name="clientEmail" />
-                      <FormInput label="第二聯絡人" name="secondaryContact" />
-                      <FormInput label="第二聯絡人電話" name="secondaryPhone" />
-                      <FormInput label="銷售人員 (Sales)" name="salesRep" />
-                      <FormInput label="地址" name="address" />
+                      <FormInput label="客戶姓名" name="clientName" required value={formData.clientName} onChange={handleInputChange} />
+                      <FormInput label="電話" name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
+                      <FormInput label="公司名稱 (如適用)" name="companyName" value={formData.companyName} onChange={handleInputChange} />
+                      <FormInput label="Email" name="clientEmail" value={formData.clientEmail} onChange={handleInputChange} />
+                      <FormInput label="第二聯絡人" name="secondaryContact" value={formData.secondaryContact} onChange={handleInputChange} />
+                      <FormInput label="第二聯絡人電話" name="secondaryPhone" value={formData.secondaryPhone} onChange={handleInputChange} />
+                      <FormInput label="銷售人員 (Sales)" name="salesRep" value={formData.salesRep} onChange={handleInputChange} />
+                      <FormInput label="地址" name="address" value={formData.address} onChange={handleInputChange} />
                     </div>
                   </div>
                 </div>
@@ -1288,16 +1369,16 @@ export default function App() {
                       </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormSelect label="菜單選擇 (Menu)" name="menuType" options={['Menu A', 'Menu B', 'Custom', 'N/A']} />
-                      <FormSelect label="上菜方式 (Serving Style)" name="servingStyle" options={SERVING_STYLES} />
+                      <FormSelect label="菜單選擇 (Menu)" name="menuType" options={['Menu A', 'Menu B', 'Custom', 'N/A']} value={formData.menuType} onChange={handleInputChange} />
+                      <FormSelect label="上菜方式 (Serving Style)" name="servingStyle" options={SERVING_STYLES} value={formData.servingStyle} onChange={handleInputChange} />
                     </div>
-                    <FormTextArea label="特殊餐單需求 (Special Menu Request)" name="specialMenuReq" placeholder="例如：素食 x 3, 不吃牛 x 2" />
+                    <FormTextArea label="特殊餐單需求 (Special Menu Request)" name="specialMenuReq" placeholder="例如：素食 x 3, 不吃牛 x 2" value={formData.specialMenuReq} onChange={handleInputChange} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="席前/席間餐單 (Pre-dinner Snacks)" name="preDinnerSnacks" />
-                      <FormInput label="員工餐 (Staff Meals)" name="staffMeals" />
+                      <FormInput label="席前/席間餐單 (Pre-dinner Snacks)" name="preDinnerSnacks" value={formData.preDinnerSnacks} onChange={handleInputChange} />
+                      <FormInput label="員工餐 (Staff Meals)" name="staffMeals" value={formData.staffMeals} onChange={handleInputChange} />
                     </div>
-                    <FormInput label="餐飲/酒水 (Beverage Package)" name="drinksPackage" placeholder="例如：每席 $500 無限暢飲" />
-                    <FormTextArea label="食物過敏 (Allergies)" name="allergies" rows={2} className="bg-red-50 p-2 rounded-lg" />
+                    <FormInput label="餐飲/酒水 (Beverage Package)" name="drinksPackage" placeholder="例如：每席 $500 無限暢飲" value={formData.drinksPackage} onChange={handleInputChange} />
+                    <FormTextArea label="食物過敏 (Allergies)" name="allergies" rows={2} className="bg-red-50 p-2 rounded-lg" value={formData.allergies} onChange={handleInputChange} />
                   </div>
                 </div>
               )}
@@ -1308,17 +1389,17 @@ export default function App() {
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
                     <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">費用概覽 (Billing)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="總費用 (Total Amount)" name="totalAmount" type="number" required className="text-lg font-bold" />
-                      <FormSelect label="付款方式" name="paymentMethod" options={['現金', '信用卡', '支票', '轉數快']} />
+                      <FormInput label="總費用 (Total Amount)" name="totalAmount" type="number" required className="text-lg font-bold" value={formData.totalAmount} onChange={handleInputChange} />
+                      <FormSelect label="付款方式" name="paymentMethod" options={['現金', '信用卡', '支票', '轉數快']} value={formData.paymentMethod} onChange={handleInputChange} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormInput label="訂金一 (Deposit 1)" name="deposit1" />
-                      <FormInput label="訂金二 (Deposit 2)" name="deposit2" />
-                      <FormInput label="訂金三 (Deposit 3)" name="deposit3" />
+                      <FormInput label="訂金一 (Deposit 1)" name="deposit1" value={formData.deposit1} onChange={handleInputChange} />
+                      <FormInput label="訂金二 (Deposit 2)" name="deposit2" value={formData.deposit2} onChange={handleInputChange} />
+                      <FormInput label="訂金三 (Deposit 3)" name="deposit3" value={formData.deposit3} onChange={handleInputChange} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="折扣 (Discount)" name="discount" />
-                      <FormInput label="加一服務費 (Service Charge)" name="serviceCharge" />
+                      <FormInput label="折扣 (Discount)" name="discount" value={formData.discount} onChange={handleInputChange} />
+                      <FormInput label="加一服務費 (Service Charge)" name="serviceCharge" value={formData.serviceCharge} onChange={handleInputChange} />
                     </div>
                   </div>
                 </div>
@@ -1330,10 +1411,10 @@ export default function App() {
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
                     <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">場地佈置 (Decor)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="檯布顏色" name="tableClothColor" placeholder="例如：香檳金" />
-                      <FormInput label="椅套顏色" name="chairCoverColor" placeholder="例如：米白色" />
+                      <FormInput label="檯布顏色" name="tableClothColor" placeholder="例如：香檳金" value={formData.tableClothColor} onChange={handleInputChange} />
+                      <FormInput label="椅套顏色" name="chairCoverColor" placeholder="例如：米白色" value={formData.chairCoverColor} onChange={handleInputChange} />
                     </div>
-                    <FormTextArea label="舞台/花藝佈置 (Stage Decor)" name="stageDecor" />
+                    <FormTextArea label="舞台/花藝佈置 (Stage Decor)" name="stageDecor" value={formData.stageDecor} onChange={handleInputChange} />
                   </div>
 
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
@@ -1345,7 +1426,7 @@ export default function App() {
                       <FormCheckbox label="無線咪 (Mics)" name="av_mics" checked={formData.avRequirements.mics} onChange={handleInputChange} />
                       <FormCheckbox label="舞台燈光 (Lighting)" name="av_lighting" checked={formData.avRequirements.lighting} onChange={handleInputChange} />
                     </div>
-                    <FormTextArea label="AV 系統備註 (AV Notes)" name="avNotes" placeholder="流程、音樂播放要求等..." />
+                    <FormTextArea label="AV 系統備註 (AV Notes)" name="avNotes" placeholder="流程、音樂播放要求等..." value={formData.avNotes} onChange={handleInputChange} />
                   </div>
                 </div>
               )}
@@ -1364,9 +1445,9 @@ export default function App() {
                         <Sparkles size={12} className="mr-1" /> AI 整理清單
                       </button>
                     </div>
-                    <FormTextArea label="送貨/物資清單 (Delivery List)" name="deliveryNotes" placeholder="項目 / 送達時間 / 送貨員..." rows={4} />
-                    <FormTextArea label="免費泊車登記 (Parking Plates)" name="parkingPlates" placeholder="車牌1, 車牌2, 車牌3..." rows={3} />
-                    <FormTextArea label="其他注意事項 (Other Notes)" name="otherNotes" rows={3} />
+                    <FormTextArea label="送貨/物資清單 (Delivery List)" name="deliveryNotes" placeholder="項目 / 送達時間 / 送貨員..." rows={4} value={formData.deliveryNotes} onChange={handleInputChange} />
+                    <FormTextArea label="免費泊車登記 (Parking Plates)" name="parkingPlates" placeholder="車牌1, 車牌2, 車牌3..." rows={3} value={formData.parkingPlates} onChange={handleInputChange} />
+                    <FormTextArea label="其他注意事項 (Other Notes)" name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} />
                   </div>
                 </div>
               )}

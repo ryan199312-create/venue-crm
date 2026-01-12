@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 列印專用樣式 */
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; position: static !important; }
+  .break-after-page { page-break-after: always; break-after: page; height: 1px; display: block; }
+}
+.print-only { display: none; }

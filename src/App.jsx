@@ -32,7 +32,8 @@ import {
   Key,
   Upload,
   Image as ImageIcon,
-  AlertTriangle
+  AlertTriangle,
+  Bell
 } from 'lucide-react';
 
 // Firebase Imports
@@ -83,7 +84,7 @@ const appId = "my-venue-crm";
 
 const apiKey = "AIzaSyArNDvUTl9vADzhIhezHZuveNcnJzaEzSk"; 
 
-// --- Constants & Types ---
+// --- Constants ---
 const STATUS_COLORS = {
   confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   tentative: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -96,7 +97,7 @@ const EVENT_TYPES = [
   '演唱會 (Concert)', '會議 (Conference)', '私人聚會 (Private Party)', '其他 (Other)'
 ];
 
-const LOCATIONS = ['大禮堂', '小禮堂', '戶外花園', 'VIP房'];
+const LOCATION_CHECKBOXES = ['紅區', '黃區', '綠區', '南區', '全場'];
 const SERVING_STYLES = ['位上', '圍餐', '分菜', '自助餐'];
 const DRINK_PACKAGES = ['Package A (Basic)', 'Package B (Standard)', 'Package C (Premium)'];
 
@@ -134,7 +135,7 @@ async function generateAIContent(prompt) {
   }
 }
 
-// --- Global UI Components ---
+// --- Components ---
 
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
@@ -157,15 +158,12 @@ const FormInput = ({ label, name, value, onChange, type = "text", required, clas
   </div>
 );
 
-// New Money Input Component
 const MoneyInput = ({ label, name, value, onChange, required, className = "" }) => {
   const handleChange = (e) => {
     const rawValue = parseMoney(e.target.value);
-    // Only allow numbers
     if (rawValue && isNaN(rawValue)) return; 
     onChange({ target: { name, value: rawValue } });
   };
-
   return (
     <div className={className}>
       <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
@@ -229,20 +227,73 @@ const FormCheckbox = ({ label, name, checked, onChange }) => (
   </label>
 );
 
-const DepositField = ({ label, prefix, formData, setFormData, onUpload }) => {
+// --- NEW COMPONENT: Location Selector ---
+const LocationSelector = ({ formData, setFormData }) => {
+  const selectedLocs = formData.selectedLocations || [];
+
+  const handleCheckboxChange = (loc) => {
+    let newLocs;
+    if (selectedLocs.includes(loc)) {
+      newLocs = selectedLocs.filter(l => l !== loc);
+    } else {
+      newLocs = [...selectedLocs, loc];
+    }
+    // Update formData
+    setFormData(prev => ({
+      ...prev,
+      selectedLocations: newLocs,
+      // We also update the old 'venueLocation' string for backward compatibility with lists
+      venueLocation: newLocs.join(', ') + (prev.locationOther ? `, ${prev.locationOther}` : '')
+    }));
+  };
+
+  const handleOtherChange = (e) => {
+    const val = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      locationOther: val,
+      venueLocation: prev.selectedLocations.join(', ') + (val ? `, ${val}` : '')
+    }));
+  };
+
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-slate-700 mb-2">活動位置 (Venue Location)</label>
+      <div className="flex flex-wrap gap-3 mb-2">
+        {LOCATION_CHECKBOXES.map(loc => (
+          <label key={loc} className="flex items-center space-x-2 bg-white px-3 py-2 rounded border border-slate-200 cursor-pointer hover:bg-slate-50">
+            <input 
+              type="checkbox" 
+              checked={selectedLocs.includes(loc)} 
+              onChange={() => handleCheckboxChange(loc)}
+              className="rounded text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm">{loc}</span>
+          </label>
+        ))}
+      </div>
+      <input 
+        type="text" 
+        placeholder="其他位置 (Other)" 
+        value={formData.locationOther || ''}
+        onChange={handleOtherChange}
+        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none"
+      />
+    </div>
+  );
+};
+
+// --- UPDATED: Deposit Field with Reminder ---
+const DepositField = ({ label, prefix, formData, setFormData, onUpload, onChasePayment }) => {
   const amountKey = `${prefix}`;
-  const dateKey = `${prefix}Date`; // New Date Key
+  const dateKey = `${prefix}Date`;
   const receivedKey = `${prefix}Received`;
   const proofKey = `${prefix}Proof`;
-  
   const fileInputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleAmountChange = (e) => {
-     const raw = parseMoney(e.target.value);
-     if (raw && isNaN(raw)) return;
-     setFormData(prev => ({ ...prev, [amountKey]: raw }));
-  };
+  // Overdue Logic: Has Amount AND Has Date AND Not Received AND Date is in Past
+  const isOverdue = formData[amountKey] && !formData[receivedKey] && formData[dateKey] && new Date(formData[dateKey]) < new Date().setHours(0,0,0,0);
 
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
@@ -259,73 +310,74 @@ const DepositField = ({ label, prefix, formData, setFormData, onUpload }) => {
   };
 
   return (
-    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-      <div className="flex justify-between items-center mb-2">
-        <label className="text-sm font-medium text-slate-700">{label}</label>
+    <div className={`p-4 rounded-lg border transition-all ${isOverdue ? 'bg-red-50 border-red-200 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
+      <div className="flex justify-between items-center mb-3">
+        <label className="text-sm font-bold text-slate-700 flex items-center">
+          {label}
+          {isOverdue && <span className="ml-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full animate-pulse">OVERDUE</span>}
+        </label>
         <label className="flex items-center space-x-2 text-xs cursor-pointer select-none">
           <input 
             type="checkbox" 
             checked={formData[receivedKey] || false} 
             onChange={e => setFormData(prev => ({...prev, [receivedKey]: e.target.checked}))}
-            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
           />
-          <span className={formData[receivedKey] ? "text-emerald-600 font-bold" : "text-slate-400"}>
-            {formData[receivedKey] ? "已收款 (Received)" : "未收款"}
+          <span className={formData[receivedKey] ? "text-emerald-600 font-bold" : "text-slate-500"}>
+            {formData[receivedKey] ? "已收款 (Received)" : "未收款 (Pending)"}
           </span>
         </label>
       </div>
       
-      <div className="grid grid-cols-2 gap-2 mb-2">
-         {/* Amount */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
          <div className="relative">
-            <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
               type="text"
               value={formatMoney(formData[amountKey])}
-              onChange={handleAmountChange}
-              className="w-full pl-7 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none font-mono"
-              placeholder="金額"
+              onChange={e => {
+                const val = parseMoney(e.target.value);
+                if(!isNaN(val)) setFormData(prev => ({ ...prev, [amountKey]: val }));
+              }}
+              className="w-full pl-8 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none font-mono bg-white"
+              placeholder="0.00"
             />
          </div>
-         {/* Suggested Date */}
-         <div className="relative">
-             <input 
-               type="date"
-               value={formData[dateKey] || ''}
-               onChange={e => setFormData(prev => ({...prev, [dateKey]: e.target.value}))}
-               className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-               title="應付日期 (Due Date)"
-             />
-         </div>
+         <input 
+           type="date"
+           value={formData[dateKey] || ''}
+           onChange={e => setFormData(prev => ({...prev, [dateKey]: e.target.value}))}
+           className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+         />
       </div>
 
-      <div className="flex justify-end">
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
-          accept="image/*"
-          onChange={handleFileSelect}
-        />
-        
-        {formData[proofKey] ? (
-           <div className="flex items-center space-x-3 bg-white px-2 py-1 rounded border border-slate-200">
-             <a href={formData[proofKey]} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline">
-               <ImageIcon size={14} className="mr-1"/> 查看收據
-             </a>
-             <button type="button" onClick={() => { if(window.confirm('移除?')) setFormData(prev => ({...prev, [proofKey]: ''})); }} className="text-slate-400 hover:text-red-500"><X size={14}/></button>
-           </div>
-        ) : (
-           <button 
-             type="button"
-             onClick={() => fileInputRef.current?.click()}
-             disabled={isUploading}
-             className="text-xs flex items-center text-slate-500 hover:text-blue-600"
-           >
-             {isUploading ? <Loader2 size={12} className="animate-spin mr-1"/> : <Upload size={12} className="mr-1"/>}
-             上傳收據
-           </button>
-        )}
+      <div className="flex justify-between items-center border-t border-slate-200/50 pt-2">
+        {/* Payment Reminder Button (Only shows if overdue) */}
+        {isOverdue ? (
+          <button 
+            type="button" 
+            onClick={() => onChasePayment(label, formData[amountKey], formData[dateKey])}
+            className="text-xs flex items-center bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm"
+          >
+            <Bell size={12} className="mr-1.5"/> 追數 (Remind)
+          </button>
+        ) : <div></div>}
+
+        <div className="flex items-center">
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+          {formData[proofKey] ? (
+             <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
+               <a href={formData[proofKey]} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline">
+                 <ImageIcon size={14} className="mr-1"/> 收據
+               </a>
+               <button type="button" onClick={() => { if(window.confirm('移除?')) setFormData(prev => ({...prev, [proofKey]: ''})); }} className="text-slate-400 hover:text-red-500"><X size={14}/></button>
+             </div>
+          ) : (
+             <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-xs flex items-center text-slate-500 hover:text-blue-600 bg-white px-2 py-1 rounded border border-transparent hover:border-slate-200 transition-all">
+               {isUploading ? <Loader2 size={12} className="animate-spin mr-1"/> : <Upload size={12} className="mr-1"/>} 上傳收據
+             </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -454,7 +506,7 @@ const PrintableEO = ({ data }) => {
           <DetailRow label="活動類型" value={data.eventType} />
           <DetailRow label="活動日期" value={data.date} />
           <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} />
-          <DetailRow label="活動位置" value={data.venueLocation} />
+          <DetailRow label="活動位置" value={data.venueLocation || '-'} fullWidth />
           <DetailRow label="席數/人數" value={`${data.tableCount || 0} 席 / ${data.guestCount || 0} 人`} />
         </Section>
 
@@ -511,7 +563,7 @@ const PrintableEO = ({ data }) => {
         <div className="flex justify-between items-start border-b-4 border-slate-900 pb-4 mb-8">
           <div>
             <h1 className="text-4xl font-black tracking-tight uppercase">廚房出品單</h1>
-            <p className="text-xl font-bold mt-2 text-slate-700">{data.venueLocation}</p>
+            <p className="text-xl font-bold mt-2 text-slate-700">{data.venueLocation || '未定位置'}</p>
           </div>
           <div className="text-right">
              <div className="inline-block bg-slate-900 text-white px-4 py-2 text-lg font-bold rounded mb-2">
@@ -668,12 +720,14 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   
+  // Admin & User Management State
   const [isAdmin, setIsAdmin] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [adminPasscode, setAdminPasscode] = useState("");
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
 
+  // AI State
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiContent, setAiContent] = useState("");
@@ -682,26 +736,33 @@ export default function App() {
 
   // EO Form State
   const initialFormState = {
+    // 1. Basic Info & Contact
     orderId: '',
     eventName: '',
     date: new Date().toISOString().split('T')[0],
-    startTime: '18:00',
-    endTime: '23:00',
-    venueLocation: '大禮堂',
+    startTime: '18:00', // 24H default
+    endTime: '23:00',   // 24H default
+    // NEW: Locations Data
+    selectedLocations: [], 
+    locationOther: '',
+    venueLocation: '', // Kept for string compatibility
+    
     eventType: '婚宴 (Wedding)',
     status: 'tentative',
     guestCount: '',
     tableCount: '',
     
+    // Client Info
     clientName: '',
     companyName: '',
     clientPhone: '',
     clientEmail: '',
     secondaryContact: '',
     secondaryPhone: '',
-    salesRep: '',
+    salesRep: '', // Auto-filled later
     address: '',
 
+    // 2. F&B (Menu)
     menuType: '', 
     specialMenuReq: '',
     staffMeals: '',
@@ -710,6 +771,7 @@ export default function App() {
     allergies: '',
     servingStyle: '圍餐',
     
+    // 3. Billing
     totalAmount: '',
     deposit1: '',
     deposit1Received: false,
@@ -728,6 +790,7 @@ export default function App() {
     discount: '',
     serviceCharge: '10%',
     
+    // 4. Venue & AV
     tableClothColor: '',
     chairCoverColor: '',
     stageDecor: '',
@@ -739,6 +802,8 @@ export default function App() {
       lighting: false,
     },
     avNotes: '',
+
+    // 5. Logistics
     deliveryNotes: '',
     parkingPlates: '', 
     otherNotes: ''
@@ -876,7 +941,14 @@ export default function App() {
 
   const openEditModal = (event) => {
     setEditingEvent(event);
-    setFormData({ ...initialFormState, ...event }); 
+    // Ensure default arrays exist for old data
+    const safeData = {
+      ...initialFormState,
+      ...event,
+      selectedLocations: event.selectedLocations || (event.venueLocation ? [event.venueLocation] : [])
+    };
+    setFormData(safeData); 
+    
     // Logic to set drink selector
     if (DRINK_PACKAGES.includes(event.drinksPackage)) {
       setDrinkPackageType(event.drinksPackage);
@@ -968,6 +1040,27 @@ export default function App() {
     setAiModalOpen(true);
     setAiApplyAction(null); 
     const prompt = `撰寫給客戶的郵件：客戶:${formData.clientName} 活動:${formData.eventName} 時間:${formData.date}`;
+    const result = await generateAIContent(prompt);
+    setAiContent(result);
+    setAiLoading(false);
+  };
+
+  // NEW: Chase Payment Email
+  const handlePaymentReminder = async (label, amount, date) => {
+    setAiTitle("AI 追數助理 (Payment Reminder)");
+    setAiLoading(true);
+    setAiModalOpen(true);
+    setAiApplyAction(null);
+    const prompt = `
+      請為我撰寫一封有禮貌但堅定的追討訂金郵件。
+      客戶: ${formData.clientName}
+      活動: ${formData.eventName} (${formData.date})
+      逾期項目: ${label}
+      金額: $${formatMoney(amount)}
+      應付日期: ${date}
+      
+      請以香港商務風格撰寫，提醒客戶盡快過數。
+    `;
     const result = await generateAIContent(prompt);
     setAiContent(result);
     setAiLoading(false);
@@ -1475,7 +1568,8 @@ export default function App() {
                     <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormInput label="活動名稱" name="eventName" required placeholder="例如：陳李聯婚" value={formData.eventName} onChange={handleInputChange} />
-                      <FormSelect label="活動位置" name="venueLocation" options={LOCATIONS} value={formData.venueLocation} onChange={handleInputChange} />
+                      {/* NEW LOCATION SELECTOR */}
+                      <LocationSelector formData={formData} setFormData={setFormData} />
                       <div className="grid grid-cols-3 gap-4">
                         <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
                         <FormInput label="開始時間" name="startTime" type="time" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
@@ -1508,6 +1602,7 @@ export default function App() {
                       <h4 className="font-bold text-slate-800">餐單設定</h4>
                       <button type="button" onClick={handleAIMenuSuggest} className="text-xs flex items-center bg-violet-100 text-violet-700 px-2 py-1 rounded-full"><Sparkles size={12} className="mr-1" /> AI 建議</button>
                     </div>
+                    {/* CHANGED TO TEXT AREA */}
                     <FormTextArea label="菜單內容 (Menu Details)" name="menuType" rows={8} placeholder="請在此輸入詳細菜單..." value={formData.menuType} onChange={handleInputChange} />
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1542,7 +1637,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* TAB 3: BILLING */}
+              {/* TAB 3: BILLING (UPDATED WITH REMINDER) */}
               {formTab === 'billing' && (
                 <div className="space-y-6 animate-in fade-in">
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
@@ -1554,9 +1649,10 @@ export default function App() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-4">
-                      <DepositField label="訂金一 (Deposit 1)" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} />
-                      <DepositField label="訂金二 (Deposit 2)" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} />
-                      <DepositField label="訂金三 (Deposit 3)" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} />
+                      {/* PASSED onChasePayment Prop */}
+                      <DepositField label="訂金一 (Deposit 1)" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} onChasePayment={handlePaymentReminder}/>
+                      <DepositField label="訂金二 (Deposit 2)" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} onChasePayment={handlePaymentReminder}/>
+                      <DepositField label="訂金三 (Deposit 3)" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} onChasePayment={handlePaymentReminder}/>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">

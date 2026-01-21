@@ -9,6 +9,7 @@ import { 
   AlertCircle, 
   X, 
   Trash2, 
+  Users,
   Edit2, 
   FileText, 
   Utensils, 
@@ -106,20 +107,85 @@ const EVENT_TYPES = [
 const INDIVIDUAL_ZONES = ['紅區', '黃區', '綠區', '藍區'];
 const LOCATION_CHECKBOXES = [...INDIVIDUAL_ZONES, '全場'];
 const SERVING_STYLES = ['位上', '圍餐', '分菜', '自助餐'];
-const DEFAULT_DRINK_PACKAGES = []; // Default packages removed as requested
-const DECOR_COLORS = ['白 (White)', '金 (Gold)'];
+const DEFAULT_DRINK_PACKAGES = []; 
+const DECOR_COLORS = ['白 (White)', '金 (Gold)', '紅 (Red)']; 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_LABELS = { Mon: '一', Tue: '二', Wed: '三', Thu: '四', Fri: '五', Sat: '六', Sun: '日' };
 
 // NEW: Revenue Allocation Departments
 const DEPARTMENTS = [
-  { key: 'kitchen', label: '廚房 (Kitchen)' },
-  { key: 'dimsum', label: '點心 (Dim Sum)' },
-  { key: 'roast', label: '燒味 (Roast)' },
-  { key: 'bar', label: '水吧 (Bar)' },
-  { key: 'liquor', label: '洋酒 (Liquor)' },
-  { key: 'floor', label: '樓面 (Floor)' }
+  { key: 'kitchen', label: '廚房 (Kitchen)' },
+  { key: 'dimsum', label: '點心 (Dim Sum)' },
+  { key: 'roast', label: '燒味 (Roast)' },
+  { key: 'bar', label: '水吧 (Bar)' },
+  { key: 'liquor', label: '洋酒 (Liquor)' },
+  { key: 'floor', label: '樓面 (Floor/Venue)' },
+  { key: 'other', label: '其他 (Other)' }
 ];
+
+const calculateDepartmentSplit = (data) => {
+  const split = {
+    kitchen: 0, dimsum: 0, roast: 0, bar: 0, liquor: 0, floor: 0, other: 0
+  };
+
+  // 1. Process Menus
+  (data.menus || []).forEach(m => {
+    const qty = parseFloat(m.qty) || 1;
+    const allocation = m.allocation || {};
+    
+    // If allocation exists, use it
+    let hasAllocation = false;
+    Object.keys(allocation).forEach(deptKey => {
+       const amount = parseFloat(allocation[deptKey]) || 0;
+       if (amount > 0 && split[deptKey] !== undefined) {
+          split[deptKey] += amount * qty;
+          hasAllocation = true;
+       }
+    });
+
+    // If NO allocation defined, dump strictly into Kitchen (Food) or Floor (if price > 0)
+    // You can customize this fallback logic
+    if (!hasAllocation) {
+       split.kitchen += (parseFloat(m.price) || 0) * qty; 
+    }
+  });
+
+  // 2. Process Drinks
+  const dQty = parseFloat(data.drinksQty) || 1;
+  const dAllocation = data.drinkAllocation || {};
+  let dHasAllocation = false;
+  
+  Object.keys(dAllocation).forEach(deptKey => {
+     const amount = parseFloat(dAllocation[deptKey]) || 0;
+     if (amount > 0 && split[deptKey] !== undefined) {
+        split[deptKey] += amount * dQty;
+        dHasAllocation = true;
+     }
+  });
+  
+  if (!dHasAllocation) {
+     // Default drinks to Bar
+     split.bar += (parseFloat(data.drinksPrice) || 0) * dQty;
+  }
+
+  // 3. Process Custom Items
+  (data.customItems || []).forEach(item => {
+     const qty = parseFloat(item.qty) || 1;
+     const total = (parseFloat(item.price) || 0) * qty;
+     const cat = item.category || 'other';
+     if (split[cat] !== undefined) {
+        split[cat] += total;
+     } else {
+        split.other += total;
+     }
+  });
+
+  // 4. Service Charge -> Usually goes to Floor/Company, but let's keep it separate or put in Floor
+  // For this accounting view, we usually track Service Charge separately, but if you want to book it:
+  // split.floor += calculateServiceCharge(data); <--- Optional
+
+  return split;
+};
 
 // ==========================================
 // SECTION 2: HELPER FUNCTIONS
@@ -135,6 +201,13 @@ const formatMoney = (val) => {
 
 const parseMoney = (val) => {
   return val.replace(/,/g, '');
+};
+
+const formatDateWithDay = (dateStr) => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  const day = date.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${dateStr} (${day})`;
 };
 
 const calculateTotalAmount = (data) => {
@@ -510,228 +583,394 @@ const DepositField = ({ label, prefix, formData, setFormData, onUpload, addToast
 // SECTION 5: PRINTABLE VIEWS
 // ==========================================
 
-const PrintableEO = ({ data }) => {
-  if (!data) return null;
+// ==========================================
+// SECTION 5: PRINTABLE VIEWS (CORRECTED)
+// ==========================================
 
-  const DetailRow = ({ label, value, widthClass = "w-1/4" }) => (
-    <div className={`mb-3 ${widthClass} px-2 inline-block align-top`}>
-      <span className="text-slate-500 text-xs block uppercase tracking-wider font-bold mb-1">{label}</span>
-      <span className="text-slate-900 font-semibold text-sm whitespace-pre-wrap leading-snug block">{value || '-'}</span>
-    </div>
-  );
+const PrintableEO = ({ data, printMode }) => {
+  if (!data) return null;
 
-  const Section = ({ title, children, className = "" }) => (
-    <div className={`mb-6 border-b border-slate-200 pb-3 ${className}`}>
-      <h3 className="font-bold text-slate-800 text-base mb-3 border-l-4 border-slate-800 pl-2 bg-slate-50 py-1">{title}</h3>
-      <div className="flex flex-wrap -mx-2">
-        {children}
-      </div>
-    </div>
-  );
+  // --- Helpers (Reused) ---
+  const DetailRow = ({ label, value, widthClass = "w-1/4", highlight = false }) => {
+    if (!value) return null;
+    return (
+      <div className={`mb-3 ${widthClass} px-2 inline-block align-top`}>
+        <span className="text-slate-500 text-[10px] block uppercase tracking-wider font-bold mb-1">{label}</span>
+        <span className={`text-slate-900 font-semibold text-sm whitespace-pre-wrap leading-snug block ${highlight ? 'text-red-600' : ''}`}>{value}</span>
+      </div>
+    );
+  };
 
-  const renderCheckList = (obj, labelMap) => {
-    if (!obj) return '無';
-    const checked = Object.entries(obj)
-      .filter(([k, v]) => v)
-      .map(([k]) => labelMap[k] || k);
-    return checked.length > 0 ? checked.join(', ') : '無';
-  };
+  const Section = ({ title, children, className = "", color = "slate" }) => (
+    <div className={`mb-4 border-b border-${color}-200 pb-3 ${className}`}>
+      <h3 className={`font-bold text-${color}-800 text-sm mb-3 border-l-4 border-${color}-800 pl-2 bg-${color}-50 py-1 uppercase`}>{title}</h3>
+      <div className="flex flex-wrap -mx-2">
+        {children}
+      </div>
+    </div>
+  );
 
-  const equipmentMap = { podium: '講台', mic: '咪', micStand: '咪架', cake: '蛋糕', nameSign: '禮堂字牌' };
-  const decorationMap = { ceremonyService: '證婚服務', ceremonyChairs: '證婚椅子', flowerPillars: '花柱佈置', guestBook: '簽名冊', easel: '畫架', mahjong: '麻雀枱', invites: '喜帖', wreaths: '花圈' };
-  const avMap = { 
-    ledBig: '大禮堂LED', projBig: '大禮堂Projector', ledSmall: '小禮堂LED', projSmall: '小禮堂Projector',
-    spotlight: '聚光燈', movingHead: '電腦燈', entranceLight: '進場燈', tv60v: '60"TV(直)', tv60h: '60"TV(橫)',
-    mic: '咪', speaker: '喇叭'
-  };
+  const CheckItem = ({ label, checked }) => (
+    <div className={`flex items-center w-1/4 mb-2 px-2 ${checked ? 'opacity-100' : 'opacity-30 grayscale'}`}>
+      <div className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${checked ? 'bg-black border-black text-white' : 'border-slate-300'}`}>
+        {checked && "✓"}
+      </div>
+      <span className={`text-xs font-bold ${checked ? 'text-slate-900' : 'text-slate-400'}`}>{label}</span>
+    </div>
+  );
 
-  return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white">
-      <style>
-        {`
-          @media print {
-            body, html { height: auto !important; overflow: visible !important; font-size: 11pt; }
-            .no-print, aside, nav, button, .modal-overlay { display: none !important; }
-            .print-only { 
-              display: block !important; 
-              position: absolute; 
-              top: 0; 
-              left: 0; 
-              width: 100%; 
-              z-index: 9999; 
-              background: white; 
-            }
-            @page { margin: 1cm; size: a4; }
-            .break-after-page { page-break-after: always; break-after: page; display: block; height: 1px; width: 100%; margin: 0; }
-            .print-page { page-break-inside: avoid; min-height: 290mm; padding-bottom: 20px; }
-          }
-        `}
-      </style>
+  // Mappings
+  const equipmentMap = { podium: '講台', mic: '咪', micStand: '咪架', cake: '蛋糕', nameSign: '禮堂字牌' };
+  const decorationMap = { ceremonyService: '證婚桌', ceremonyChairs: '證婚椅子', flowerPillars: '花柱佈置', guestBook: '簽名冊', easel: '畫架', mahjong: '麻雀枱', invites: '喜帖', wreaths: '花圈' };
+  const avMap = { ledBig: '大禮堂LED', projBig: '大禮堂Projector', ledSmall: '小禮堂LED', projSmall: '小禮堂Projector', spotlight: '聚光燈', movingHead: '電腦燈', entranceLight: '進場燈', tv60v: '60"TV(直)', tv60h: '60"TV(橫)', mic: '咪', speaker: '喇叭' };
 
-      {/* PAGE 1: 廳面經理單 (FLOOR COPY) */}
-      <div className="print-page relative p-8">
-        <div className="flex justify-between items-end border-b-4 border-slate-900 pb-2 mb-6">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight leading-none">活動訂單 (EO)</h1>
-            <p className="text-slate-500 text-xs mt-1">Venue Management System</p>
-          </div>
-          <div className="text-right">
-             <div className="inline-block bg-slate-900 text-white px-3 py-1 text-sm font-bold rounded mb-1">
-               FLOOR COPY
-             </div>
-             <div className="text-xl font-mono font-bold text-slate-800 leading-none">{data.orderId}</div>
-             <div className="text-xs text-slate-400 mt-1">Printed: {new Date().toLocaleDateString()}</div>
-          </div>
-        </div>
+  // Helper: Date with Weekday
+  const formatDateWithDay = (dateStr) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    const day = date.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${dateStr} (${day})`;
+  };
 
-        <Section title="活動概覽 (Event Info)">
-          <DetailRow label="活動名稱" value={data.eventName} widthClass="w-1/2" />
-          <DetailRow label="活動類型" value={data.eventType} widthClass="w-1/4" />
-          <DetailRow label="席數/人數" value={`${data.tableCount || 0} 席 / ${data.guestCount || 0} 人`} widthClass="w-1/4" />
-          
-          <DetailRow label="活動日期" value={data.date} widthClass="w-1/4" />
-          <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} widthClass="w-1/4" />
-          <DetailRow label="活動位置" value={data.venueLocation || '-'} widthClass="w-1/2" />
-        </Section>
+  // Header Component
+  const Header = ({ title, copyType, badgeColor = "bg-slate-900" }) => (
+    <div className="flex justify-between items-end border-b-4 border-slate-900 pb-2 mb-6">
+      <div>
+        <h1 className="text-2xl font-extrabold tracking-tight leading-none uppercase">{title}</h1>
+        <p className="text-slate-500 text-xs mt-1">Order ID: {data.orderId}</p>
+      </div>
+      <div className="text-right">
+         <div className={`inline-block ${badgeColor} text-white px-3 py-1 text-sm font-bold rounded mb-1 uppercase`}>
+           {copyType}
+         </div>
+         <div className="text-sm font-bold text-slate-800">{formatDateWithDay(data.date)}</div>
+         <div className="text-xs text-slate-400">Printed: {new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+  );
 
-        <Section title="客戶資料 (Client)">
-           <DetailRow label="客戶姓名" value={data.clientName} widthClass="w-1/4" />
-           <DetailRow label="電話" value={data.clientPhone} widthClass="w-1/4" />
-           <DetailRow label="公司/機構" value={data.companyName} widthClass="w-1/4" />
-           <DetailRow label="銷售負責人" value={data.salesRep} widthClass="w-1/4" />
-        </Section>
+  // Summary Component
+  const EventSummary = () => (
+    <div className="flex flex-wrap bg-slate-50 p-2 rounded mb-6 border border-slate-100">
+        <DetailRow label="活動名稱" value={data.eventName} widthClass="w-1/3" />
+        <DetailRow label="位置" value={data.venueLocation} widthClass="w-1/3" />
+        <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} widthClass="w-1/3" />
+        <DetailRow label="起菜時間" value={data.servingTime} widthClass="w-1/4" highlight={true} />
+        <DetailRow label="席數" value={`${data.tableCount || 0} 席`} widthClass="w-1/4" />
+        <DetailRow label="人數" value={`${data.guestCount || 0} 人`} widthClass="w-1/4" />
+        <DetailRow label="類型" value={data.eventType} widthClass="w-1/4" />
+    </div>
+  );
 
-        <Section title="餐飲安排 (F&B)">
-          <div className="w-full mb-3 px-2">
-            <span className="text-slate-500 text-xs block uppercase tracking-wider font-bold mb-1">餐單內容 (Menu)</span>
-            {data.menus && data.menus.length > 0 ? (
-              <div className="space-y-2">
-                {data.menus.map((menu, idx) => (
-                  <div key={menu.id || idx} className="pl-3 border-l-2 border-slate-300">
-                    {menu.title && <h4 className="font-bold underline mb-1 text-sm">{menu.title}</h4>}
-                    <p className="text-slate-900 font-medium text-sm whitespace-pre-wrap leading-relaxed">{menu.content}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <span className="text-slate-900 font-medium text-sm whitespace-pre-wrap">{data.menuType || '未輸入餐單'}</span>
-            )}
-          </div>
-          
-          <div className="flex flex-wrap w-full mt-2">
-            <DetailRow label="上菜方式" value={data.servingStyle} widthClass="w-1/4" />
-            <DetailRow label="酒水安排" value={data.drinksPackage} widthClass="w-1/4" />
-            <DetailRow label="席前小食" value={data.preDinnerSnacks} widthClass="w-1/4" />
-            <DetailRow label="員工餐" value={data.staffMeals} widthClass="w-1/4" />
-            <DetailRow label="特殊飲食/過敏" value={data.specialMenuReq + (data.allergies ? ` / 過敏: ${data.allergies}` : '')} widthClass="w-full" />
-          </div>
-        </Section>
+  const renderCheckList = (obj, labelMap) => {
+    if (!obj) return '無';
+    const checked = Object.entries(obj).filter(([k, v]) => v).map(([k]) => labelMap[k] || k);
+    return checked.length > 0 ? checked.join(', ') : '無';
+  };
 
-        <Section title="佈置與物流 (Decor & Logistics)">
-          <div className="flex flex-wrap w-full">
-            <DetailRow label="檯布顏色" value={data.tableClothColor} widthClass="w-1/4" />
-            <DetailRow label="椅套顏色" value={data.chairCoverColor} widthClass="w-1/4" />
-            <DetailRow label="主家席" value={data.headTableColorType === 'custom' ? `自訂: ${data.headTableCustomColor}` : '同客席'} widthClass="w-1/4" />
-            <DetailRow label="新娘房" value={data.bridalRoom ? `✅ 需要 (${data.bridalRoomHours || '未定'})` : '❌ 不需要'} widthClass="w-1/4" />
-            
-            <DetailRow label="一般物資" value={renderCheckList(data.equipment, equipmentMap)} widthClass="w-full" />
-            <DetailRow label="場地佈置" value={`${renderCheckList(data.decoration, decorationMap)} ${data.decorationOther ? `[其他: ${data.decorationOther}]` : ''}`} widthClass="w-full" />
-            <DetailRow label="AV 設備" value={`${renderCheckList(data.avRequirements, avMap)} ${data.avOther ? `[其他: ${data.avOther}]` : ''} ${data.avNotes ? `(備註: ${data.avNotes})` : ''}`} widthClass="w-full" />
-            <DetailRow label="物流/泊車" value={data.deliveryNotes || data.parkingPlates ? `${data.deliveryNotes || ''} ${data.parkingPlates ? `/ 泊車: ${data.parkingPlates}` : ''}` : '-'} widthClass="w-full" />
-          </div>
-        </Section>
-        
-        <Section title="費用摘要 (Billing)" className="border-none mb-0">
-          <div className="flex flex-wrap w-full bg-slate-50 p-3 rounded-lg">
-            <DetailRow label="總費用" value={`$${formatMoney(data.totalAmount)}`} widthClass="w-1/3" />
-            <DetailRow label="付款方式" value={data.paymentMethod} widthClass="w-1/3" />
-            <DetailRow label="餘額" value={`$${formatMoney(Number(data.totalAmount) - Number(data.deposit1 || 0) - Number(data.deposit2 || 0) - Number(data.deposit3 || 0))}`} widthClass="w-1/3" />
-          </div>
-        </Section>
-      </div>
+  // Calculations
+  const subtotal = calculateTotalAmount({...data, enableServiceCharge: false, discount: 0});
+  const serviceChargeVal = data.enableServiceCharge !== false ? (parseFloat(data.serviceCharge) || (subtotal * 0.1)) : 0; 
+  const discountVal = parseFloat(data.discount) || 0;
 
-      <div className="break-after-page"></div>
+  // ==================================================================================
+  // MODE 1: BRIEFING SHEET (Station Card)
+  // This block was missing in your previous code!
+  // ==================================================================================
+  if (printMode === 'BRIEFING') {
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm p-4">
+        <style>{`@media print { @page { margin: 5mm; size: A4; } }`}</style>
+        
+        {/* Briefing Header */}
+        <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
+           <div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">FLOOR STAFF BRIEFING</div>
+              <h1 className="text-3xl font-black mt-1">{data.eventName}</h1>
+              <div className="flex gap-4 mt-2 text-sm font-bold">
+                 <span className="bg-black text-white px-2 py-1 rounded">{formatDateWithDay(data.date)}</span>
+                 <span className="border border-black px-2 py-1 rounded">{data.startTime} - {data.endTime}</span>
+                 <span className="text-red-600 border border-red-600 px-2 py-1 rounded">{data.servingTime ? `${data.servingTime} 起菜` : '起菜時間待定'}</span>
+              </div>
+           </div>
+           <div className="text-right">
+              <div className="text-4xl font-black text-slate-200">BRIEF</div>
+           </div>
+        </div>
 
-      {/* PAGE 2: 廚房單 (KITCHEN COPY) - 保留放大版 */}
-      <div className="print-page relative p-8">
-        <div className="flex justify-between items-start border-b-4 border-slate-900 pb-4 mb-6">
-          <div>
-            <h1 className="text-5xl font-black tracking-tight uppercase">廚房出品單</h1>
-            <p className="text-2xl font-bold mt-2 text-slate-700">{data.venueLocation || '未定位置'}</p>
-          </div>
-          <div className="text-right">
-             <div className="inline-block bg-slate-900 text-white px-4 py-1 text-lg font-bold rounded mb-2">KITCHEN COPY</div>
-             <div className="text-4xl font-mono font-bold leading-none">{data.date}</div>
-             <div className="text-3xl font-bold text-red-600 leading-none mt-2">{data.startTime} 開席</div>
-          </div>
-        </div>
+        {/* 1. WRITEABLE ASSIGNMENT BOXES */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50">
+              <span className="text-slate-400 text-xs font-bold uppercase mb-2">負責檯號 (Table Numbers)</span>
+              <div className="text-4xl font-black text-slate-200">寫在此處</div>
+           </div>
+           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50">
+              <span className="text-slate-400 text-xs font-bold uppercase mb-2">員工姓名/編號 (Staff Name)</span>
+              <div className="text-4xl font-black text-slate-200">寫在此處</div>
+           </div>
+        </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-100 p-4 rounded-lg border-l-8 border-slate-800">
-            <span className="block text-slate-500 text-sm font-bold uppercase">活動名稱</span>
-            <span className="block text-xl font-bold truncate">{data.eventName}</span>
-          </div>
-          <div className="bg-slate-100 p-4 rounded-lg border-l-8 border-blue-600">
-            <span className="block text-slate-500 text-sm font-bold uppercase">席數</span>
-            <span className="block text-3xl font-bold text-blue-700">{data.tableCount || '-'} 席</span>
-          </div>
-          <div className="bg-slate-100 p-4 rounded-lg border-l-8 border-orange-500">
-            <span className="block text-slate-500 text-sm font-bold uppercase">人數</span>
-            <span className="block text-3xl font-bold text-orange-600">{data.guestCount || '-'} 人</span>
-          </div>
-        </div>
+        {/* 2. IMPORTANT ALERTS */}
+        <div className="mb-6">
+           <div className="flex gap-4">
+              {/* Allergy Box */}
+              <div className="flex-1 border-2 border-red-500 rounded-lg p-3 bg-red-50">
+                 <div className="flex justify-between items-start mb-2">
+                    <span className="text-red-700 font-bold flex items-center"><AlertTriangle size={16} className="mr-1"/> 過敏 / 特別餐 (Allergies)</span>
+                    <span className="text-[10px] text-red-400">請填寫檯號</span>
+                 </div>
+                 <div className="min-h-[80px]">
+                    <p className="text-lg font-bold text-red-900 whitespace-pre-wrap">
+                       {data.allergies || data.specialMenuReq || '暫無特別記錄'}
+                    </p>
+                 </div>
+                 {/* Empty lines for writing */}
+                 <div className="border-b border-red-200 mt-6"></div>
+                 <div className="border-b border-red-200 mt-6"></div>
+              </div>
 
-        <div className="border-2 border-slate-800 rounded-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4 border-b-2 border-slate-300 pb-2">
-            <h3 className="text-3xl font-bold">餐單內容 (Menu)</h3>
-            <span className="text-2xl font-bold bg-slate-200 px-4 py-1 rounded">{data.servingStyle}</span>
-          </div>
-          <div className="space-y-6">
-            {data.menus && data.menus.length > 0 ? (
-              data.menus.map((menu, idx) => (
-                <div key={menu.id || idx}>
-                  {menu.title && <h4 className="text-2xl font-bold underline mb-2">{menu.title}</h4>}
-                  <p className="text-xl font-medium whitespace-pre-wrap leading-relaxed">{menu.content}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-xl font-medium whitespace-pre-wrap leading-relaxed">{data.menuType || '未輸入餐單'}</p>
-            )}
+              {/* Drinks Box */}
+              <div className="w-1/3 border-2 border-blue-200 rounded-lg p-3 bg-blue-50">
+                 <span className="text-blue-700 font-bold block mb-2"><Coffee size={16} className="inline mr-1"/> 酒水 (Drinks)</span>
+                 <p className="text-sm font-bold text-blue-900 whitespace-pre-wrap">{data.drinksPackage || '未定'}</p>
+              </div>
+           </div>
+        </div>
 
-             {(data.specialMenuReq || data.allergies) && (
-                <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-200 mt-4">
-                  {data.specialMenuReq && (
-                    <p className="text-xl font-bold text-red-600 mb-2">⚠️ 特殊要求: {data.specialMenuReq}</p>
-                  )}
-                  {data.allergies && (
-                    <p className="text-2xl font-black text-red-700">⛔️ 過敏: {data.allergies}</p>
-                  )}
-                </div>
-             )}
-          </div>
-        </div>
-        
-        {/* Logistics for Kitchen */}
-        <div className="border-t-2 border-slate-300 pt-4 mt-4">
-           <div className="flex flex-wrap gap-y-4">
-             <div className="w-1/2 pr-4">
-                <span className="text-sm text-slate-500 font-bold uppercase block mb-1">席前小食</span>
-                <span className="text-xl font-medium">{data.preDinnerSnacks || '-'}</span>
-             </div>
-             <div className="w-1/2 pl-4">
-                <span className="text-sm text-slate-500 font-bold uppercase block mb-1">員工餐</span>
-                <span className="text-xl font-medium">{data.staffMeals || '-'}</span>
-             </div>
-             <div className="w-full mt-2">
-                <span className="text-sm text-slate-500 font-bold uppercase block mb-1">送貨/食材備註</span>
-                <span className="text-xl font-medium">{data.deliveryNotes || '-'}</span>
-             </div>
-           </div>
-        </div>
-      </div>
-    </div>
-  );
+        {/* 3. MENU REFERENCE */}
+        <div className="border-2 border-slate-800 rounded-xl overflow-hidden">
+           <div className="bg-slate-800 text-white px-4 py-2 flex justify-between items-center">
+              <span className="font-bold">餐單 (Menu Reference)</span>
+              <span className="text-xs bg-slate-600 px-2 py-1 rounded">{data.servingStyle}</span>
+           </div>
+           <div className="p-4 bg-white min-h-[300px]">
+              <div className="space-y-6">
+                 {data.menus && data.menus.length > 0 ? (
+                    data.menus.map((menu, idx) => (
+                       <div key={idx}>
+                          {menu.title && <h4 className="font-bold underline mb-2 text-lg">{menu.title}</h4>}
+                          <p className="text-base font-medium leading-relaxed whitespace-pre-wrap text-slate-800">{menu.content}</p>
+                       </div>
+                    ))
+                 ) : (
+                    <p className="text-lg font-medium leading-relaxed">{data.menuType}</p>
+                 )}
+              </div>
+           </div>
+        </div>
+
+        {/* 4. FOOTER NOTES */}
+        <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-slate-500">
+           <div>
+              <span className="font-bold block text-slate-700">席前小食:</span> {data.preDinnerSnacks || '無'}
+           </div>
+           <div>
+              <span className="font-bold block text-slate-700">其他備註:</span> {data.otherNotes || '無'}
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================================================================================
+  // MODE 2: STANDARD EO (Manager, Setup, Kitchen)
+  // This runs if printMode is NOT 'BRIEFING' (e.g., 'EO')
+  // ==================================================================================
+  return (
+    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
+      <style>{`@media print { body, html { height: auto !important; overflow: visible !important; } .no-print, aside, nav, button, .modal-overlay { display: none !important; } .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } @page { margin: 10mm; size: A4; } .break-after-page { page-break-after: always; break-after: page; display: block; height: 1px; width: 100%; margin: 0; } .print-page { page-break-inside: avoid; min-height: 280mm; position: relative; } }`}</style>
+
+      {/* PAGE 1: MANAGER COPY */}
+      <div className="print-page">
+        <Header title="活動訂單 (EO)" copyType="Manager Copy (Admin)" badgeColor="bg-blue-900" />
+        <EventSummary />
+        <Section title="客戶資料 (Client Info)">
+           <DetailRow label="客戶姓名" value={data.clientName} />
+           <DetailRow label="電話" value={data.clientPhone} />
+           <DetailRow label="Email" value={data.clientEmail} />
+           <DetailRow label="公司/機構" value={data.companyName} />
+           {data.secondaryContact && <DetailRow label="第二聯絡人" value={data.secondaryContact} />}
+           {data.secondaryPhone && <DetailRow label="第二電話" value={data.secondaryPhone} />}
+           {data.address && <DetailRow label="地址" value={data.address} widthClass="w-full" />}
+        </Section>
+        <Section title="餐飲安排 (F&B)">
+           <DetailRow label="上菜方式" value={data.servingStyle} widthClass="w-1/4" />
+           <DetailRow label="酒水安排" value={data.drinksPackage} widthClass="w-3/4" />
+           <DetailRow label="席前小食" value={data.preDinnerSnacks} widthClass="w-1/4" />
+           <DetailRow label="員工餐" value={data.staffMeals} widthClass="w-1/4" />
+           <div className="w-full px-2 mb-2 mt-2">
+              <span className="text-slate-500 text-[10px] block uppercase font-bold mb-1">餐單內容</span>
+              <div className="text-sm font-medium whitespace-pre-wrap leading-relaxed bg-slate-50 p-2 rounded border border-slate-100">{data.menus?.map(m => `${m.title}:\n${m.content}`).join('\n\n') || data.menuType}</div>
+           </div>
+           <DetailRow label="特殊要求 / 過敏" value={`${data.specialMenuReq || ''} ${data.allergies ? `/ ALLERGY: ${data.allergies}` : ''}`} widthClass="w-full" highlight={!!data.allergies}/>
+        </Section>
+        <Section title="費用明細 (Billing)">
+           <div className="w-full px-2">
+              <table className="w-full text-xs border-collapse mb-2">
+                 <thead>
+                    <tr className="border-b border-slate-300 bg-slate-50">
+                       <th className="text-left py-1 px-1">項目</th>
+                       <th className="text-right py-1 px-1">單價</th>
+                       <th className="text-center py-1 px-1">數量</th>
+                       <th className="text-right py-1 px-1">金額</th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                    {(data.menus || []).map((m, i) => (
+                       <tr key={`m-${i}`} className="border-b border-slate-100">
+                          <td className="py-1 px-1">{m.title}</td>
+                          <td className="text-right px-1">${formatMoney(m.price)}</td>
+                          <td className="text-center px-1">{m.qty}</td>
+                          <td className="text-right px-1 font-mono">${formatMoney((m.price||0)*(m.qty||1))}</td>
+                       </tr>
+                    ))}
+                    <tr className="border-b border-slate-100">
+                       <td className="py-1 px-1">酒水 ({data.drinksPackage || 'Standard'})</td>
+                       <td className="text-right px-1">${formatMoney(data.drinksPrice)}</td>
+                       <td className="text-center px-1">{data.drinksQty}</td>
+                       <td className="text-right px-1 font-mono">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td>
+                    </tr>
+                    {(data.customItems || []).map((item, i) => (
+                       <tr key={`c-${i}`} className="border-b border-slate-100">
+                          <td className="py-1 px-1">{item.name}</td>
+                          <td className="text-right px-1">${formatMoney(item.price)}</td>
+                          <td className="text-center px-1">{item.qty}</td>
+                          <td className="text-right px-1 font-mono">${formatMoney((item.price||0)*(item.qty||1))}</td>
+                       </tr>
+                    ))}
+                 </tbody>
+                 <tfoot>
+                    <tr className="border-t border-slate-300">
+                       <td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (Total):</td>
+                       <td className="text-right font-bold pt-1 font-mono text-sm">${formatMoney(data.totalAmount)}</td>
+                    </tr>
+                    <tr>
+                       <td colSpan="3" className="text-right text-slate-500">已收訂金:</td>
+                       <td className="text-right text-slate-500 font-mono">-${formatMoney((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0))}</td>
+                    </tr>
+                    <tr>
+                       <td colSpan="3" className="text-right font-bold text-red-600">餘額 (Balance):</td>
+                       <td className="text-right font-bold text-red-600 font-mono">${formatMoney(Number(data.totalAmount) - ((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0)))}</td>
+                    </tr>
+                 </tfoot>
+              </table>
+           </div>
+        </Section>
+        {/* REVENUE ALLOCATION */}
+        <Section title="內部拆帳 (Revenue Allocation / Accounting)">
+           <div className="w-full px-2">
+              <div className="grid grid-cols-2 gap-6">
+                 <div>
+                    <table className="w-full text-xs border-collapse">
+                       <thead><tr className="border-b-2 border-slate-800"><th className="text-left py-1">部門 (Dept)</th><th className="text-right py-1">入帳金額 (Credit)</th></tr></thead>
+                       <tbody>
+                          {Object.entries(calculateDepartmentSplit(data)).map(([key, val]) => (val > 0 && (
+                               <tr key={key} className="border-b border-slate-100">
+                                  <td className="py-1 text-slate-600">{DEPARTMENTS.find(d=>d.key===key)?.label || key}</td>
+                                  <td className="text-right font-mono font-bold text-slate-800">${formatMoney(val)}</td>
+                               </tr>
+                          )))}
+                          {data.enableServiceCharge !== false && (<tr className="border-b border-slate-100 bg-slate-50"><td className="py-1 text-slate-600">服務費 (Service Charge)</td><td className="text-right font-mono font-bold text-slate-800">${formatMoney(serviceChargeVal)}</td></tr>)}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+           </div>
+        </Section>
+        <Section title="其他資訊 (Other Info)">
+           <DetailRow label="物流備註" value={data.deliveryNotes} widthClass="w-full" />
+           <DetailRow label="泊車" value={data.parkingPlates} widthClass="w-full" />
+           <DetailRow label="其他備註" value={data.otherNotes} widthClass="w-full" />
+        </Section>
+      </div>
+      <div className="break-after-page"></div>
+
+      {/* PAGE 2: SETUP & LOGISTICS COPY */}
+      <div className="print-page">
+        <Header title="活動指示單 (EO)" copyType="Setup & Logistics" badgeColor="bg-indigo-600" />
+        <EventSummary />
+
+        {/* SETUP: A. VENUE */}
+        <Section title="A. 場地設置 (Venue Setup)" color="indigo">
+           <div className="flex flex-wrap w-full bg-slate-50 p-2 rounded mb-4 border border-slate-100">
+              <DetailRow label="檯布顏色" value={data.tableClothColor} />
+              <DetailRow label="椅套顏色" value={data.chairCoverColor} />
+              <DetailRow label="主家席" value={data.headTableColorType === 'custom' ? data.headTableCustomColor : '同客席'} />
+              <DetailRow label="新娘房" value={data.bridalRoom ? `✅ 使用 (${data.bridalRoomHours})` : '❌ 不使用'} />
+           </div>
+           {(data.stageDecor || data.stageDecorPhoto) && <div className="mt-3 flex gap-4 border-t border-slate-200 pt-2"><div className="flex-1"><span className="text-xs font-bold text-slate-500 block">舞台/花藝:</span><p className="text-sm whitespace-pre-wrap">{data.stageDecor || '無'}</p></div>{data.stageDecorPhoto && <img src={data.stageDecorPhoto} alt="Stage Ref" className="w-24 h-24 object-cover border rounded bg-white" />}</div>}
+           <div className="w-full px-2 mt-2">
+              <p className="text-xs font-bold text-slate-500 mb-2 uppercase">物資清單</p>
+              <div className="flex flex-wrap">{Object.keys(equipmentMap).map(key => <CheckItem key={key} label={equipmentMap[key]} checked={data.equipment?.[key]} />)}</div>
+           </div>
+        </Section>
+
+        {/* SETUP: B. DECORATION */}
+        <Section title="B. 裝飾佈置 (Decoration)" color="indigo">
+           <div className="w-full px-2">
+              <div className="flex flex-wrap mb-2">{Object.keys(decorationMap).map(key => <CheckItem key={key} label={decorationMap[key]} checked={data.decoration?.[key]} />)}</div>
+              <div className="grid grid-cols-2 gap-4 mt-3 bg-slate-50 p-2 rounded">
+                 {data.equipment?.nameSign && <div className="text-xs"><strong>禮堂字牌:</strong> {data.nameSignText || '無文字'}</div>}
+                 {data.decoration?.invites && <div className="text-xs"><strong>喜帖數量:</strong> {data.invitesQty || '-'} 套</div>}
+                 {data.decoration?.ceremonyChairs && <div className="text-xs"><strong>證婚椅:</strong> {data.decorationChairsQty || '-'} 張</div>}
+              </div>
+              {(data.venueDecor || data.venueDecorPhoto) && <div className="mt-3 flex gap-4 border-t border-slate-200 pt-2"><div className="flex-1"><span className="text-xs font-bold text-slate-500 block">場地佈置備註:</span><p className="text-sm whitespace-pre-wrap">{data.venueDecor || '無'}</p></div>{data.venueDecorPhoto && <img src={data.venueDecorPhoto} alt="Decor Ref" className="w-24 h-24 object-cover border rounded bg-white" />}</div>}
+           </div>
+        </Section>
+
+        {/* SETUP: C. AV */}
+        <Section title="C. 影音工程 (AV)" color="indigo">
+           <div className="w-full px-2">
+              <div className="flex flex-wrap mb-3">{Object.keys(avMap).map(key => <CheckItem key={key} label={avMap[key]} checked={data.avRequirements?.[key]} />)}</div>
+              <div className="space-y-2"><DetailRow label="AV 備註" value={data.avNotes} widthClass="w-full" /><DetailRow label="其他器材" value={data.avOther} widthClass="w-full" /></div>
+           </div>
+        </Section>
+
+        {/* SETUP: D. LOGISTICS */}
+        <Section title="D. 物流與泊車 (Logistics)" color="indigo">
+           <div className="w-full px-2 space-y-4">
+              {/* Deliveries List */}
+              <div className="border border-slate-300 rounded overflow-hidden">
+                 <div className="bg-slate-100 px-2 py-1 border-b border-slate-300 flex justify-between items-center"><span className="text-xs font-bold text-slate-700 uppercase">送貨安排</span><span className="text-[10px] bg-white px-1.5 rounded border border-slate-300">共 {data.deliveries?.length || 0} 項</span></div>
+                 {(!data.deliveries || data.deliveries.length === 0) ? (<div className="p-2 text-xs text-slate-400 italic">無送貨登記</div>) : (<div className="divide-y divide-slate-200">{data.deliveries.map((item, i) => (<div key={i} className="p-2 flex gap-4"><div className="w-1/3"><div className="font-bold text-sm text-slate-800">{item.unit || '-'}</div><div className="flex gap-1 mt-1"><span className="text-xs font-mono bg-white px-1 rounded border border-slate-300">{item.date ? new Date(item.date).toLocaleDateString('en-US', {month:'numeric', day:'numeric'}) : '--/--'}</span><span className="text-xs font-mono bg-slate-50 px-1 rounded border border-slate-200">{item.time || '--:--'}</span></div></div><div className="flex-1 text-sm whitespace-pre-wrap border-l border-slate-100 pl-4 text-slate-600">{item.items || '無備註'}</div></div>))}</div>)}
+              </div>
+              {/* Parking Tickets */}
+              <div className="border border-slate-300 rounded p-2 flex gap-4">
+                 <div className="w-1/2"><span className="text-xs font-bold text-slate-500 uppercase block mb-1">免費泊車券</span><div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-800">{data.parkingInfo?.ticketQty || '0'}</span><span className="text-xs font-bold text-slate-500">張</span><span className="text-slate-300">x</span><span className="text-xl font-bold text-slate-800">{data.parkingInfo?.ticketHours || '0'}</span><span className="text-xs font-bold text-slate-500">小時</span></div></div>
+                 <div className="w-1/2 border-l border-dashed border-slate-300 pl-4"><span className="text-xs font-bold text-slate-500 uppercase block mb-1">車牌登記</span><p className="font-mono text-sm font-bold whitespace-pre-wrap">{data.parkingInfo?.plates || '無'}</p></div>
+              </div>
+              {data.otherNotes && (<div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm"><span className="font-bold text-slate-600 mr-2">⚠️ 其他備註:</span>{data.otherNotes}</div>)}
+           </div>
+        </Section>
+      </div>
+      <div className="break-after-page"></div>
+
+      {/* PAGE 3: KITCHEN COPY */}
+      <div className="print-page">
+        <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-6">
+           <div><h1 className="text-4xl font-black tracking-tight uppercase">廚房出品單</h1><p className="text-xl font-bold mt-2">{data.venueLocation || '未定位置'}</p></div>
+           <div className="text-right"><div className="inline-block bg-black text-white px-4 py-2 text-xl font-bold rounded mb-2">KITCHEN</div><div className="text-3xl font-mono font-bold">{data.date}</div><div className="text-4xl font-black text-red-600 mt-2 border-2 border-red-600 px-2 py-1 rounded inline-block">{data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}</div></div>
+        </div>
+        <div className="flex gap-4 mb-8">
+           <div className="flex-1 bg-slate-100 p-4 border-l-8 border-slate-800"><span className="block text-slate-500 text-sm font-bold uppercase">活動名稱</span><span className="block text-2xl font-bold">{data.eventName}</span></div>
+           <div className="flex-1 bg-slate-100 p-4 border-l-8 border-black"><span className="block text-slate-500 text-sm font-bold uppercase">席數 (Tables)</span><span className="block text-4xl font-black">{data.tableCount || '-'}</span></div>
+           <div className="flex-1 bg-slate-100 p-4 border-l-8 border-slate-600"><span className="block text-slate-500 text-sm font-bold uppercase">人數 (Pax)</span><span className="block text-4xl font-black">{data.guestCount || '-'}</span></div>
+        </div>
+        <div className="mb-8 p-4 border-2 border-black rounded-lg">
+           <div className="flex justify-between items-center mb-4 border-b-2 border-gray-300 pb-2"><h3 className="text-3xl font-bold">餐單 (Menu)</h3><span className="text-xl font-bold bg-gray-200 px-3 py-1 rounded">{data.servingStyle}</span></div>
+           <div className="space-y-6">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="text-2xl font-bold underline mb-2">{menu.title}</h4>}<p className="text-2xl font-medium leading-relaxed whitespace-pre-wrap">{menu.content}</p></div>))) : (<p className="text-2xl font-medium leading-relaxed">{data.menuType}</p>)}</div>
+        </div>
+        {(data.specialMenuReq || data.allergies) && (<div className="mb-8 p-4 border-4 border-red-600 rounded-lg bg-red-50"><h3 className="text-2xl font-black text-red-600 mb-2 underline">⚠️ 特殊飲食 & 過敏 (ALLERGIES)</h3><p className="text-2xl font-bold text-red-800 whitespace-pre-wrap">{data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}</p></div>)}
+        <div className="grid grid-cols-2 gap-6 border-t-4 border-gray-300 pt-6">
+           <div><span className="block text-gray-500 font-bold uppercase mb-1">席前小食 (Snacks)</span><span className="text-2xl font-bold block">{data.preDinnerSnacks || '無'}</span></div>
+           <div><span className="block text-gray-500 font-bold uppercase mb-1">員工餐 (Staff Meal)</span><span className="text-2xl font-bold block">{data.staffMeals || '無'}</span></div>
+           <div className="col-span-2"><span className="block text-gray-500 font-bold uppercase mb-1">送貨/食材備註 (Delivery/Notes)</span><span className="text-xl font-bold block">{data.deliveryNotes || '無'}</span></div>
+        </div>
+      </div>
+    </div>
+  );
 };
+
 
 // ==========================================
 // SECTION 6: VIEW COMPONENTS (LOGIN, SETTINGS)
@@ -816,384 +1055,542 @@ const LoginView = ({ onLogin, onGuestLogin, error }) => {
 };
 
 const SettingsView = ({ settings, onSave, addToast }) => {
-  const [localSettings, setLocalSettings] = useState({
-    minSpendRules: [], 
-    defaultMenus: [], 
-    ...settings 
-  });
-  
-  const [activeSubTab, setActiveSubTab] = useState('minSpend'); 
+  const [localSettings, setLocalSettings] = useState({
+    minSpendRules: [],
+    defaultMenus: [],
+    paymentRules: [],
+    ...settings
+  });
+  
+  const [activeSubTab, setActiveSubTab] = useState('minSpend'); 
 
-  const [editingRule, setEditingRule] = useState({
-    id: null,
-    locations: [],
-    prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' }
-  });
+  // --- 1. MIN SPEND STATE ---
+  const [editingRule, setEditingRule] = useState({
+    id: null,
+    locations: [],
+    prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' }
+  });
 
-  const [editingMenu, setEditingMenu] = useState({ 
-    id: null, 
-    title: '', 
-    content: '', 
-    type: 'food', 
-    price: '' 
-  });
+  // --- 2. MENU STATE ---
+  const [editingMenu, setEditingMenu] = useState({ 
+    id: null, title: '', content: '', type: 'food', price: '', allocation: {} 
+  });
 
-  const handleLocationToggle = (loc) => {
-    setEditingRule(prev => {
-      const exists = prev.locations.includes(loc);
-      return {
-        ...prev,
-        locations: exists ? prev.locations.filter(l => l !== loc) : [...prev.locations, loc]
-      };
-    });
-  };
+  // --- 3. PAYMENT RULE STATE ---
+  const [editingPaymentRule, setEditingPaymentRule] = useState({
+    id: null,
+    name: '',
+    minMonthsInAdvance: 0,
+    deposit1: 30, deposit1Offset: 0,
+    deposit2: 30, deposit2Offset: 3,
+    deposit3: 30, deposit3Offset: 6
+  });
 
-  const handlePriceChange = (day, value) => {
-    setEditingRule(prev => ({
-      ...prev,
-      prices: { ...prev.prices, [day]: value }
-    }));
-  };
+  // ==========================
+  // HANDLERS (With Auto-Save)
+  // ==========================
 
-  const handleSaveRule = () => {
-    if (editingRule.locations.length === 0) {
-      addToast("請至少選擇一個區域 (Please select at least one location)", "error");
-      return;
-    }
+  // Min Spend Handlers
+  const handleLocationToggle = (loc) => {
+    setEditingRule(prev => {
+      const exists = prev.locations.includes(loc);
+      return {
+        ...prev,
+        locations: exists ? prev.locations.filter(l => l !== loc) : [...prev.locations, loc]
+      };
+    });
+  };
 
-    let newRules = [...(localSettings.minSpendRules || [])];
-    if (editingRule.id) {
-      const idx = newRules.findIndex(r => r.id === editingRule.id);
-      if (idx !== -1) newRules[idx] = editingRule;
-    } else {
-      newRules.push({ ...editingRule, id: Date.now() });
-    }
+  const handlePriceChange = (day, value) => {
+    setEditingRule(prev => ({
+      ...prev,
+      prices: { ...prev.prices, [day]: value }
+    }));
+  };
 
-    const updatedSettings = { ...localSettings, minSpendRules: newRules };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings); // Auto-save
+  const handleSaveRule = () => {
+    if (editingRule.locations.length === 0) return addToast("請至少選擇一個區域", "error");
+    
+    const newRules = [...(localSettings.minSpendRules || [])];
+    if (editingRule.id) {
+      const idx = newRules.findIndex(r => r.id === editingRule.id);
+      if (idx !== -1) newRules[idx] = editingRule;
+    } else {
+      newRules.push({ ...editingRule, id: Date.now() });
+    }
+    
+    const updatedSettings = { ...localSettings, minSpendRules: newRules };
+    setLocalSettings(updatedSettings);
+    onSave(updatedSettings); // Auto-save to backend
+    
+    setEditingRule({ id: null, locations: [], prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' } });
+    addToast("規則已儲存", "success");
+  };
 
-    setEditingRule({ id: null, locations: [], prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' } });
-    addToast("規則已暫存 (Rule Cached)", "success");
-  };
+  const handleDeleteRule = (id) => {
+    const updatedSettings = { 
+        ...localSettings, 
+        minSpendRules: localSettings.minSpendRules.filter(r => r.id !== id) 
+    };
+    setLocalSettings(updatedSettings);
+    onSave(updatedSettings); // Auto-save
+  };
 
-  const handleDeleteRule = (id) => {
-    const newRules = localSettings.minSpendRules.filter(r => r.id !== id);
-    const updatedSettings = { ...localSettings, minSpendRules: newRules };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings);
-  };
+  const handleEditRule = (rule) => setEditingRule(rule);
 
-  const handleEditRule = (rule) => {
-    setEditingRule(rule);
-  };
+  // Menu Handlers
+  const handleSaveMenu = () => {
+    if (!editingMenu.title) return addToast("請輸入標題", "error");
+    
+    const newMenus = [...(localSettings.defaultMenus || [])];
+    if (editingMenu.id) {
+       const idx = newMenus.findIndex(m => m.id === editingMenu.id);
+       if (idx !== -1) newMenus[idx] = editingMenu;
+    } else {
+       newMenus.push({ ...editingMenu, id: Date.now() });
+    }
+    
+    const updatedSettings = { ...localSettings, defaultMenus: newMenus };
+    setLocalSettings(updatedSettings);
+    onSave(updatedSettings); // Auto-save
+    
+    setEditingMenu({ id: null, title: '', content: '', type: 'food', price: '', allocation: {} });
+    addToast("菜單已儲存", "success");
+  };
 
-  const handleSaveMenu = () => {
-    if (!editingMenu.title) return addToast("請輸入標題 (Title required)", "error");
-    
-    let newMenus = [...(localSettings.defaultMenus || [])];
-    if (editingMenu.id) {
-       const idx = newMenus.findIndex(m => m.id === editingMenu.id);
-       if (idx !== -1) newMenus[idx] = editingMenu;
-    } else {
-       newMenus.push({ ...editingMenu, id: Date.now() });
-    }
-    
-    const updatedSettings = { ...localSettings, defaultMenus: newMenus };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings);
+  const handleDeleteMenu = (id) => {
+    const updatedSettings = { 
+        ...localSettings, 
+        defaultMenus: localSettings.defaultMenus.filter(m => m.id !== id) 
+    };
+    setLocalSettings(updatedSettings);
+    onSave(updatedSettings); // Auto-save
+  };
 
-    setEditingMenu({ id: null, title: '', content: '', type: 'food', price: '' });
-    addToast("菜單已儲存", "success");
-  };
+  const handleEditMenu = (menu) => setEditingMenu(menu);
 
-  const handleDeleteMenu = (id) => {
-    const newMenus = localSettings.defaultMenus.filter(m => m.id !== id);
-    const updatedSettings = { ...localSettings, defaultMenus: newMenus };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings);
-  };
+  // Payment Rule Handlers
+  const handleSavePaymentRule = () => {
+     if (!editingPaymentRule.name) return addToast("請輸入規則名稱", "error");
+     
+     const totalPercent = editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3;
+     if(totalPercent > 100) return addToast("錯誤：訂金總比例不能超過 100%", "error");
 
-  const handleEditMenu = (menu) => {
-    setEditingMenu(menu);
-  };
+     const newRules = [...(localSettings.paymentRules || [])];
+     if (editingPaymentRule.id) {
+        const idx = newRules.findIndex(r => r.id === editingPaymentRule.id);
+        if (idx !== -1) newRules[idx] = editingPaymentRule;
+     } else {
+        newRules.push({ ...editingPaymentRule, id: Date.now() });
+     }
+     newRules.sort((a, b) => b.minMonthsInAdvance - a.minMonthsInAdvance);
+     
+     const updatedSettings = { ...localSettings, paymentRules: newRules };
+     setLocalSettings(updatedSettings);
+     onSave(updatedSettings); // Auto-save
+     
+     setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 });
+     addToast("付款規則已儲存", "success");
+  };
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20">
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">系統設定 (Settings)</h2>
-          <p className="text-slate-500">管理場地規則與預設餐單</p>
-        </div>
-        {/* Save button removed as requested */}
-      </div>
+  const handleDeletePaymentRule = (id) => {
+     const updatedSettings = { 
+         ...localSettings, 
+         paymentRules: localSettings.paymentRules.filter(r => r.id !== id) 
+     };
+     setLocalSettings(updatedSettings);
+     onSave(updatedSettings); // Auto-save
+  };
 
-      <div className="flex space-x-1 border-b border-slate-200">
-        <button 
-          onClick={() => setActiveSubTab('minSpend')}
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-        >
-          場地低消設定 (Min Spend)
-        </button>
-        <button 
-          onClick={() => setActiveSubTab('menus')}
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-        >
-          餐飲預設 (F&B Presets)
-        </button>
-      </div>
 
-      {activeSubTab === 'minSpend' && (
-        <div className="space-y-6 animate-in fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 space-y-4">
-              <Card className="p-5 border-l-4 border-l-blue-500">
-                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-                  {editingRule.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
-                  {editingRule.id ? "編輯規則 (Edit Rule)" : "新增規則 (New Rule)"}
-                </h3>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">1. 選擇區域組合 (Select Locations)</label>
-                  <div className="flex flex-wrap gap-2">
-                    {LOCATION_CHECKBOXES.map(loc => (
-                      <button
-                        key={loc}
-                        onClick={() => handleLocationToggle(loc)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                          editingRule.locations.includes(loc) 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
-                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {loc}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-2 text-xs text-slate-500">
-                    目前選擇: {editingRule.locations.length > 0 ? editingRule.locations.join(' + ') : '無 (None)'}
-                  </div>
-                </div>
+  return (
+    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20">
+      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">系統設定 (Settings)</h2>
+          <p className="text-slate-500">管理場地規則、預設餐單與付款條款</p>
+        </div>
+        {/* Save All button removed. Actions now save automatically. */}
+      </div>
 
-                <div className="mb-6">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">2. 設定每日低消 (Set Minimum Spend)</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {DAYS_OF_WEEK.map(day => (
-                      <div key={day} className="flex items-center">
-                        <span className="w-12 text-xs font-bold text-slate-500 uppercase">{day} ({DAY_LABELS[day]})</span>
-                        <div className="relative flex-1">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                          <input 
-                            type="number"
-                            value={editingRule.prices[day]}
-                            onChange={(e) => handlePriceChange(day, e.target.value)}
-                            className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 outline-none"
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+      <div className="flex space-x-1 border-b border-slate-200">
+        <button onClick={() => setActiveSubTab('minSpend')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>場地低消 (Min Spend)</button>
+        <button onClick={() => setActiveSubTab('menus')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>餐飲預設 (Presets)</button>
+        <button onClick={() => setActiveSubTab('payment')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'payment' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>付款規則 (Payment Rules)</button>
+      </div>
 
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleSaveRule} 
-                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors"
-                  >
-                    {editingRule.id ? "更新規則 (Update)" : "新增規則 (Add)"}
-                  </button>
-                  {editingRule.id && (
-                    <button 
-                      onClick={() => setEditingRule({ id: null, locations: [], prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' } })} 
-                      className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-bold hover:bg-slate-200 transition-colors"
-                    >
-                      取消
-                    </button>
-                  )}
-                </div>
-              </Card>
-            </div>
+      {/* TAB 1: MIN SPEND RULES */}
+      {activeSubTab === 'minSpend' && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            <div className="md:col-span-5 space-y-4">
+              <Card className="p-5 border-l-4 border-l-blue-500">
+                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
+                  {editingRule.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
+                  {editingRule.id ? "編輯規則 (Edit Rule)" : "新增規則 (New Rule)"}
+                </h3>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">1. 選擇區域組合 (Locations)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {LOCATION_CHECKBOXES.map(loc => (
+                      <button
+                        key={loc}
+                        onClick={() => handleLocationToggle(loc)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                          editingRule.locations.includes(loc) 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {loc}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="md:col-span-7">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                  <h3 className="font-bold text-slate-700">現有規則列表 ({localSettings.minSpendRules?.length || 0})</h3>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                  {(!localSettings.minSpendRules || localSettings.minSpendRules.length === 0) ? (
-                    <div className="p-8 text-center text-slate-400">尚無設定任何低消規則</div>
-                  ) : (
-                    localSettings.minSpendRules.map((rule) => (
-                      <div key={rule.id} className="p-4 hover:bg-blue-50/50 transition-colors group">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex flex-wrap gap-1">
-                            {rule.locations.map(l => (
-                              <span key={l} className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded font-bold">{l}</span>
-                            ))}
-                          </div>
-                          <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEditRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
-                            <button onClick={() => handleDeleteRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-y-1 gap-x-2 text-xs text-slate-600">
-                          {DAYS_OF_WEEK.map(day => (
-                            <div key={day} className={`flex justify-between ${rule.prices[day] ? 'font-medium' : 'text-slate-300'}`}>
-                              <span>{day}:</span>
-                              <span>{rule.prices[day] ? `$${parseInt(rule.prices[day]).toLocaleString()}` : '-'}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">2. 設定每日低消 (Min Spend)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {DAYS_OF_WEEK.map(day => (
+                      <div key={day} className="flex items-center">
+                        <span className="w-12 text-xs font-bold text-slate-500 uppercase">{day}</span>
+                        <div className="relative flex-1">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                          <input 
+                            type="number"
+                            value={editingRule.prices[day]}
+                            onChange={(e) => handlePriceChange(day, e.target.value)}
+                            className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-      {activeSubTab === 'menus' && (
-        <div className="space-y-6 animate-in fade-in">
-           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-             <div className="md:col-span-5 space-y-4">
-                <Card className="p-5 border-l-4 border-l-emerald-500">
-                   <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-                     {editingMenu.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
-                     {editingMenu.id ? "編輯預設 (Edit)" : "新增預設 (New Preset)"}
-                   </h3>
-                   <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm font-bold text-slate-700 mb-1">類型 (Type)</label>
-                       <div className="flex space-x-2">
-                          <button 
-                            onClick={() => setEditingMenu(p => ({...p, type: 'food'}))}
-                            className={`flex-1 py-2 rounded border text-sm font-medium ${editingMenu.type === 'food' ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-white border-slate-300 text-slate-600'}`}
-                          >
-                            <Utensils size={14} className="inline mr-1"/> 菜單 (Menu)
-                          </button>
-                          <button 
-                            onClick={() => setEditingMenu(p => ({...p, type: 'drink'}))}
-                            className={`flex-1 py-2 rounded border text-sm font-medium ${editingMenu.type === 'drink' ? 'bg-blue-100 border-blue-500 text-blue-800' : 'bg-white border-slate-300 text-slate-600'}`}
-                          >
-                            <Coffee size={14} className="inline mr-1"/> 酒水 (Drink)
-                          </button>
-                       </div>
-                     </div>
-                     <FormInput 
-                       label="標題 (Title)" 
-                       value={editingMenu.title} 
-                       onChange={e => setEditingMenu(p => ({...p, title: e.target.value}))} 
-                       placeholder="例如: 2024 春季菜單"
-                     />
-                     <MoneyInput
-                       label="預設價格 (Default Price)"
-                       name="price"
-                       value={editingMenu.price}
-                       onChange={e => setEditingMenu(p => ({...p, price: e.target.value}))}
-                     />
-                     
-                     {/* Revenue Allocation UI in Settings */}
-                     <div className="mt-4 border-t border-slate-100 pt-4">
-                        <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center">
-                          <PieChart size={14} className="mr-1.5"/> 部門拆帳設定 (Revenue Allocation)
-                        </h4>
-                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
-                            {DEPARTMENTS.map(dept => (
-                                <div key={dept.key}>
-                                    <label className="block text-xs font-medium text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
-                                    <div className="relative">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                                      <input 
-                                          type="number" 
-                                          value={editingMenu.allocation?.[dept.key] || ''}
-                                          onChange={e => setEditingMenu(prev => ({
-                                              ...prev,
-                                              allocation: { ...prev.allocation, [dept.key]: e.target.value }
-                                          }))}
-                                          className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 outline-none"
-                                          placeholder="0"
-                                      />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="text-right mt-2 text-xs text-slate-400">
-                            總計: ${Object.values(editingMenu.allocation || {}).reduce((a, b) => a + (Number(b) || 0), 0)}
-                        </div>
-                     </div>
+                <div className="flex gap-2">
+                  <button onClick={handleSaveRule} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">{editingRule.id ? "更新" : "新增"}</button>
+                  {editingRule.id && <button onClick={() => setEditingRule({ id: null, locations: [], prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' } })} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-bold hover:bg-slate-200">取消</button>}
+                </div>
+              </Card>
+            </div>
 
-                     {editingMenu.type === 'food' ? (
-                       <FormTextArea 
-                         label="內容 (Content)" 
-                         value={editingMenu.content} 
-                         onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))} 
-                         rows={8}
-                         placeholder="輸入詳細菜色..."
-                       />
-                     ) : (
-                       <FormInput
-                         label="酒水內容 (Content)"
-                         value={editingMenu.content}
-                         onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))}
-                         placeholder="例如: 紅白酒 + 汽水任飲"
-                       />
-                     )}
-                     
-                     <div className="flex gap-2">
-                       <button onClick={handleSaveMenu} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold hover:bg-emerald-700 transition-colors">儲存 (Save)</button>
-                       {editingMenu.id && <button onClick={() => setEditingMenu({id:null, title:'', content:'', type:'food', price: ''})} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold hover:bg-slate-200">取消</button>}
-                     </div>
-                   </div>
-                </Card>
-             </div>
+            <div className="md:col-span-7">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">規則列表</h3></div>
+                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                  {(!localSettings.minSpendRules || localSettings.minSpendRules.length === 0) ? (
+                    <div className="p-8 text-center text-slate-400">尚無設定</div>
+                  ) : (
+                    localSettings.minSpendRules.map((rule) => (
+                      <div key={rule.id} className="p-4 hover:bg-blue-50/50 transition-colors group">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex flex-wrap gap-1">{rule.locations.map(l => <span key={l} className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded font-bold">{l}</span>)}</div>
+                          <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleEditRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
+                            <button onClick={() => handleDeleteRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-y-1 gap-x-2 text-xs text-slate-600">
+                          {DAYS_OF_WEEK.map(day => (
+                            <div key={day} className={`flex justify-between ${rule.prices[day] ? 'font-medium' : 'text-slate-300'}`}>
+                              <span>{day}:</span><span>{rule.prices[day] ? `$${parseInt(rule.prices[day]).toLocaleString()}` : '-'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-             <div className="md:col-span-7">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                   <div className="p-4 border-b border-slate-100 bg-slate-50">
-                      <h3 className="font-bold text-slate-700">預設列表 ({localSettings.defaultMenus?.length || 0})</h3>
-                   </div>
-                   <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                     {(!localSettings.defaultMenus || localSettings.defaultMenus.length === 0) ? (
-                       <div className="p-8 text-center text-slate-400">尚無預設項目</div>
-                     ) : (
-                       localSettings.defaultMenus.map(m => (
-                           <div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group">
-                             <div className="flex justify-between items-start mb-1">
-                                 <div className="flex items-center">
-                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase mr-2 ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                                       {m.type === 'food' ? 'MENU' : 'DRINK'}
-                                    </span>
-                                    <span className="font-bold text-slate-800">{m.title}</span>
-                                    {m.price && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${formatMoney(m.price)}</span>}
-                                 </div>
-                                 <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => handleEditMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
-                                    <button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
-                                 </div>
-                             </div>
-                             {/* Show quick allocation summary */}
-                             {m.allocation && (
-                                <div className="flex gap-2 text-[10px] text-slate-400 mt-1 mb-1">
-                                    {Object.entries(m.allocation).map(([k, v]) => v > 0 && (
-                                        <span key={k}>{DEPARTMENTS.find(d=>d.key===k)?.label.split(' ')[0]}:${v}</span>
-                                    ))}
-                                </div>
-                             )}
-                             <p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p>
-                           </div>
-                       ))
-                     )}
-                   </div>
-                </div>
-             </div>
-           </div>
-        </div>
-      )}
-    </div>
-  );
+      {/* TAB 2: MENUS PRESETS */}
+      {activeSubTab === 'menus' && (
+        <div className="space-y-6 animate-in fade-in">
+           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+             <div className="md:col-span-5 space-y-4">
+                <Card className="p-5 border-l-4 border-l-emerald-500">
+                   <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
+                     {editingMenu.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
+                     {editingMenu.id ? "編輯預設" : "新增預設"}
+                   </h3>
+                   <div className="space-y-4">
+                     <div className="flex space-x-2">
+                        <button onClick={() => setEditingMenu(p => ({...p, type: 'food'}))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'food' ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-white border-slate-300'}`}><Utensils size={14} className="inline mr-1"/> Menu</button>
+                        <button onClick={() => setEditingMenu(p => ({...p, type: 'drink'}))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'drink' ? 'bg-blue-100 border-blue-500 text-blue-800' : 'bg-white border-slate-300'}`}><Coffee size={14} className="inline mr-1"/> Drink</button>
+                     </div>
+                     <FormInput label="標題 (Title)" value={editingMenu.title} onChange={e => setEditingMenu(p => ({...p, title: e.target.value}))} placeholder="例如: 2024 春季菜單"/>
+                     <MoneyInput label="預設價格 (Default Price)" name="price" value={editingMenu.price} onChange={e => setEditingMenu(p => ({...p, price: e.target.value}))}/>
+                     
+                     <div className="mt-4 border-t border-slate-100 pt-4">
+                        <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center"><PieChart size={14} className="mr-1.5"/> 部門拆帳 (Revenue Allocation)</h4>
+                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
+                            {DEPARTMENTS.map(dept => (
+                                <div key={dept.key}>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
+                                    <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                        <input type="number" value={editingMenu.allocation?.[dept.key] || ''} onChange={e => setEditingMenu(prev => ({ ...prev, allocation: { ...prev.allocation, [dept.key]: e.target.value } }))} className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" placeholder="0"/>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                     </div>
+
+                     {editingMenu.type === 'food' ? (
+                       <FormTextArea label="內容 (Content)" value={editingMenu.content} onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))} rows={6} placeholder="輸入詳細菜色..."/>
+                     ) : (
+                       <FormInput label="酒水內容" value={editingMenu.content} onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))} placeholder="例如: 紅白酒 + 汽水任飲"/>
+                     )}
+                     
+                     <div className="flex gap-2">
+                       <button onClick={handleSaveMenu} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold hover:bg-emerald-700 transition-colors">儲存</button>
+                       {editingMenu.id && <button onClick={() => setEditingMenu({id:null, title:'', content:'', type:'food', price: '', allocation: {}})} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold hover:bg-slate-200">取消</button>}
+                     </div>
+                   </div>
+                </Card>
+             </div>
+
+             <div className="md:col-span-7">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                   <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">預設列表</h3></div>
+                   <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                     {(!localSettings.defaultMenus || localSettings.defaultMenus.length === 0) ? (
+                       <div className="p-8 text-center text-slate-400">尚無預設項目</div>
+                     ) : (
+                       localSettings.defaultMenus.map(m => (
+                           <div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group">
+                             <div className="flex justify-between items-start mb-1">
+                                 <div className="flex items-center">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase mr-2 ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{m.type === 'food' ? 'MENU' : 'DRINK'}</span>
+                                    <span className="font-bold text-slate-800">{m.title}</span>
+                                    {m.price && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${formatMoney(m.price)}</span>}
+                                 </div>
+                                 <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => handleEditMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
+                                    <button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
+                                 </div>
+                             </div>
+                             {m.allocation && (
+                                <div className="flex gap-2 text-[10px] text-slate-400 mt-1 mb-1">
+                                    {Object.entries(m.allocation).map(([k, v]) => v > 0 && <span key={k}>{DEPARTMENTS.find(d=>d.key===k)?.label.split(' ')[0]}:${v}</span>)}
+                                </div>
+                             )}
+                             <p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p>
+                           </div>
+                       ))
+                     )}
+                   </div>
+                </div>
+             </div>
+           </div>
+        </div>
+      )}
+
+      {/* TAB 3: PAYMENT RULES (VISUAL BUILDER) */}
+      {activeSubTab === 'payment' && (
+        <div className="space-y-6 animate-in fade-in">
+           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              
+              {/* LEFT: EDITOR */}
+              <div className="md:col-span-5 space-y-4">
+                 <Card className="border-l-4 border-l-violet-500 overflow-hidden">
+                    <div className="bg-violet-50 p-4 border-b border-violet-100">
+                        <h3 className="font-bold text-lg text-violet-900 flex items-center">
+                           {editingPaymentRule.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
+                           {editingPaymentRule.id ? "編輯規則 (Edit)" : "新增規則 (New)"}
+                        </h3>
+                        <input 
+                          type="text" 
+                          className="w-full mt-2 bg-white border border-violet-200 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                          placeholder="規則名稱 (e.g. 6個月前預訂 / Long Term)"
+                          value={editingPaymentRule.name} 
+                          onChange={e => setEditingPaymentRule({...editingPaymentRule, name: e.target.value})}
+                        />
+                    </div>
+                    
+                    <div className="p-5 space-y-6">
+                       {/* 1. TRIGGER CONDITION */}
+                       <div>
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
+                             <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs">1</span>
+                             觸發條件 (Condition)
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm flex items-center flex-wrap gap-2">
+                             <span>當活動日期在</span>
+                             <input 
+                               type="number" 
+                               value={editingPaymentRule.minMonthsInAdvance} 
+                               onChange={e => setEditingPaymentRule({...editingPaymentRule, minMonthsInAdvance: parseFloat(e.target.value)})}
+                               className="w-16 text-center border-b-2 border-violet-500 bg-transparent font-bold outline-none text-violet-700"
+                             />
+                             <span>個月之後 (Months Ahead)</span>
+                          </div>
+                       </div>
+
+                       {/* 2. DEPOSIT SPLIT */}
+                       <div>
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
+                             <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs">2</span>
+                             付款拆分 (Payment Split)
+                          </div>
+                          
+                          <div className="space-y-3">
+                             {/* Deposit 1 */}
+                             <div className="flex items-center gap-3 text-sm">
+                                <span className="font-bold text-slate-500 w-12">訂金 1</span>
+                                <div className="flex-1 bg-white border border-slate-200 rounded-md flex items-center px-2 py-1.5 shadow-sm">
+                                   <span className="text-xs text-slate-400 mr-2">即時收取</span>
+                                   <input 
+                                      type="number" 
+                                      value={editingPaymentRule.deposit1} 
+                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit1: parseFloat(e.target.value)})}
+                                      className="flex-1 outline-none text-right font-bold text-slate-700"
+                                   />
+                                   <span className="ml-1 text-slate-400">%</span>
+                                </div>
+                             </div>
+
+                             {/* Deposit 2 */}
+                             <div className="flex items-center gap-3 text-sm">
+                                <span className="font-bold text-slate-500 w-12">訂金 2</span>
+                                <div className="flex-1 bg-white border border-slate-200 rounded-md flex items-center px-2 py-1.5 shadow-sm">
+                                   <span className="text-xs text-slate-400 mr-1">下單後</span>
+                                   <input 
+                                      type="number" 
+                                      value={editingPaymentRule.deposit2Offset} 
+                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit2Offset: parseFloat(e.target.value)})}
+                                      className="w-8 text-center border-b border-dashed border-slate-300 outline-none text-blue-600 font-bold mx-1"
+                                   />
+                                   <span className="text-xs text-slate-400 mr-auto">個月</span>
+                                   <input 
+                                      type="number" 
+                                      value={editingPaymentRule.deposit2} 
+                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit2: parseFloat(e.target.value)})}
+                                      className="w-12 outline-none text-right font-bold text-slate-700"
+                                   />
+                                   <span className="ml-1 text-slate-400">%</span>
+                                </div>
+                             </div>
+
+                             {/* Deposit 3 */}
+                             <div className="flex items-center gap-3 text-sm">
+                                <span className="font-bold text-slate-500 w-12">訂金 3</span>
+                                <div className="flex-1 bg-white border border-slate-200 rounded-md flex items-center px-2 py-1.5 shadow-sm">
+                                   <span className="text-xs text-slate-400 mr-1">下單後</span>
+                                   <input 
+                                      type="number" 
+                                      value={editingPaymentRule.deposit3Offset} 
+                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit3Offset: parseFloat(e.target.value)})}
+                                      className="w-8 text-center border-b border-dashed border-slate-300 outline-none text-blue-600 font-bold mx-1"
+                                   />
+                                   <span className="text-xs text-slate-400 mr-auto">個月</span>
+                                   <input 
+                                      type="number" 
+                                      value={editingPaymentRule.deposit3} 
+                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit3: parseFloat(e.target.value)})}
+                                      className="w-12 outline-none text-right font-bold text-slate-700"
+                                   />
+                                   <span className="ml-1 text-slate-400">%</span>
+                                </div>
+                             </div>
+                          </div>
+                       </div>
+
+                       {/* 3. VISUAL SUMMARY BAR */}
+                       <div className="pt-2">
+                          <div className="flex justify-between text-xs font-bold text-slate-500 mb-1">
+                             <span>總預付: {editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3}%</span>
+                             <span>尾數: {100 - (editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3)}%</span>
+                          </div>
+                          <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex border border-slate-200">
+                             <div style={{ width: `${editingPaymentRule.deposit1}%` }} className="h-full bg-blue-400" title="Deposit 1"></div>
+                             <div style={{ width: `${editingPaymentRule.deposit2}%` }} className="h-full bg-blue-500" title="Deposit 2"></div>
+                             <div style={{ width: `${editingPaymentRule.deposit3}%` }} className="h-full bg-blue-600" title="Deposit 3"></div>
+                             {(editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3) > 100 && (
+                                <div className="flex-1 bg-red-500 animate-pulse" title="Error: > 100%"></div>
+                             )}
+                          </div>
+                          {(editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3) > 100 && (
+                             <p className="text-xs text-red-500 font-bold mt-1 text-right">⚠️ 總比例超過 100%</p>
+                          )}
+                       </div>
+
+                       <div className="flex gap-2 pt-2">
+                          <button onClick={handleSavePaymentRule} className="flex-1 bg-violet-600 text-white py-2 rounded-lg font-bold hover:bg-violet-700 transition-colors shadow-md">儲存規則</button>
+                          {editingPaymentRule.id && <button onClick={() => setEditingPaymentRule({id:null, name:'', minMonthsInAdvance:0, deposit1:0, deposit1Offset:0, deposit2:0, deposit2Offset:0, deposit3:0, deposit3Offset:0})} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold hover:bg-slate-200">取消</button>}
+                       </div>
+                    </div>
+                 </Card>
+              </div>
+
+              {/* RIGHT: LIST */}
+              <div className="md:col-span-7">
+                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                       <div>
+                          <h3 className="font-bold text-slate-700">規則列表 (Priority Order)</h3>
+                          <p className="text-xs text-slate-400">系統將依順序檢查條件 (System checks top-down)</p>
+                       </div>
+                       <span className="bg-violet-100 text-violet-700 text-xs px-2 py-1 rounded-full font-bold">
+                          {localSettings.paymentRules?.length || 0} Rules
+                       </span>
+                    </div>
+                    <div className="divide-y divide-slate-100 overflow-y-auto flex-1">
+                       {(!localSettings.paymentRules || localSettings.paymentRules.length === 0) ? (
+                          <div className="p-10 text-center text-slate-400 flex flex-col items-center">
+                             <AlertCircle size={32} className="mb-2 opacity-20"/>
+                             <p>尚未設定規則</p>
+                             <p className="text-xs">請在左側新增您的第一條付款規則</p>
+                          </div>
+                       ) : (
+                          localSettings.paymentRules.map((rule, idx) => (
+                             <div key={rule.id} className="p-4 hover:bg-violet-50/50 transition-colors group flex items-start gap-3">
+                                <div className="mt-1 w-6 h-6 rounded-full bg-slate-100 text-slate-500 font-bold text-xs flex items-center justify-center border border-slate-200">
+                                   {idx + 1}
+                                </div>
+                                <div className="flex-1">
+                                   <div className="flex justify-between items-start">
+                                      <span className="font-bold text-slate-800 text-sm">{rule.name}</span>
+                                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <button onClick={() => setEditingPaymentRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1.5 rounded"><Edit2 size={14}/></button>
+                                         <button onClick={() => handleDeletePaymentRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1.5 rounded"><Trash2 size={14}/></button>
+                                      </div>
+                                   </div>
+                                   
+                                   <div className="text-xs text-violet-700 bg-violet-50 inline-block px-2 py-0.5 rounded font-medium mt-1 mb-2">
+                                      早於 {rule.minMonthsInAdvance} 個月前預訂
+                                   </div>
+
+                                   {/* Mini Progress Bar */}
+                                   <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex max-w-[200px]">
+                                       <div style={{ width: `${rule.deposit1}%` }} className="h-full bg-blue-300"></div>
+                                       <div style={{ width: `${rule.deposit2}%` }} className="h-full bg-blue-400"></div>
+                                       <div style={{ width: `${rule.deposit3}%` }} className="h-full bg-blue-500"></div>
+                                   </div>
+                                   <div className="text-[10px] text-slate-400 mt-1 flex gap-2">
+                                      <span>D1: {rule.deposit1}%</span>
+                                      {rule.deposit2 > 0 && <span>D2: {rule.deposit2}% (+{rule.deposit2Offset}m)</span>}
+                                      {rule.deposit3 > 0 && <span>D3: {rule.deposit3}% (+{rule.deposit3Offset}m)</span>}
+                                   </div>
+                                </div>
+                             </div>
+                          ))
+                       )}
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ==========================================
@@ -1588,7 +1985,8 @@ export default function App() {
   // Settings State
   const [appSettings, setAppSettings] = useState({
     minSpendRules: [], 
-    defaultMenus: [] 
+    defaultMenus: [] ,
+    paymentRules: []
   }); 
 
   // User Management State
@@ -1601,6 +1999,7 @@ export default function App() {
       eventName: '',
       date: new Date().toISOString().split('T')[0],
       startTime: '18:00',
+      servingTime: '',
       endTime: '23:00',
       selectedLocations: [],
       locationOther: '',
@@ -1672,6 +2071,9 @@ export default function App() {
       serviceCharge: '10%',
       enableServiceCharge: true, // NEW: Master switch for Service Charge
       balanceDueDateType: 'eventDay',
+      enableServiceCharge: true,
+      balanceDueDateType: 'eventDay',
+      autoSchedulePayment: false,
       
       // 4. Venue & AV
       tableClothColor: '',
@@ -1681,6 +2083,11 @@ export default function App() {
       bridalRoom: false,
       bridalRoomHours: '',
       stageDecor: '',
+      stageDecorPhoto: '', // NEW: Photo URL
+      venueDecor: '',      // NEW: General Decor Text
+      venueDecorPhoto: '', // NEW: Photo URL
+      nameSignText: '',    // NEW: Text for name sign
+      invitesQty: '',
       equipment: {
         podium: false, mic: false, micStand: false, cake: false, nameSign: false
       },
@@ -1701,10 +2108,14 @@ export default function App() {
       avNotes: '',
 
       // 5. Logistics
-      deliveryNotes: '',
-      parkingPlates: '',
-      otherNotes: ''
-    };
+      deliveries: [], // Array: { id, unit, time, items }
+
+      parkingInfo: {       
+        ticketQty: '',    // Changed from 'qty'
+        ticketHours: '',  // Changed from 'hours'
+        plates: ''        
+      },
+ };
 
   const [formData, setFormData] = useState(initialFormState);
   const [formTab, setFormTab] = useState('basic'); 
@@ -1720,6 +2131,60 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  // Helper: Calculate Payment Terms based on Rules
+  const calculatePaymentTerms = (currentTotal, currentDate) => {
+    if (!currentTotal || !currentDate) return null;
+
+    const eventDate = new Date(currentDate);
+    const orderDate = editingEvent?.createdAt ? new Date(editingEvent.createdAt.seconds * 1000) : new Date();
+    const monthsDiff = (eventDate.getFullYear() - orderDate.getFullYear()) * 12 + (eventDate.getMonth() - orderDate.getMonth());
+    
+    const formatDate = (date) => date.toISOString().split('T')[0];
+    const addMonths = (date, months) => {
+        const d = new Date(date);
+        d.setMonth(d.getMonth() + months);
+        return formatDate(d);
+    };
+
+    const rules = appSettings.paymentRules || [];
+    const matchingRule = rules.find(r => monthsDiff >= r.minMonthsInAdvance);
+
+    if (!matchingRule) return null;
+
+    return {
+        deposit1: matchingRule.deposit1 > 0 ? Math.round(currentTotal * (matchingRule.deposit1 / 100)) : '',
+        deposit1Date: matchingRule.deposit1 > 0 ? addMonths(orderDate, matchingRule.deposit1Offset || 0) : '',
+        deposit2: matchingRule.deposit2 > 0 ? Math.round(currentTotal * (matchingRule.deposit2 / 100)) : '',
+        deposit2Date: matchingRule.deposit2 > 0 ? addMonths(orderDate, matchingRule.deposit2Offset || 0) : '',
+        deposit3: matchingRule.deposit3 > 0 ? Math.round(currentTotal * (matchingRule.deposit3 / 100)) : '',
+        deposit3Date: matchingRule.deposit3 > 0 ? addMonths(orderDate, matchingRule.deposit3Offset || 0) : '',
+        ruleName: matchingRule.name
+    };
+  };
+
+  // EFFECT: Auto-Schedule Payment Terms
+  useEffect(() => {
+    // Only run if Toggle is ON and we have necessary data
+    if (formData.autoSchedulePayment && formData.totalAmount && formData.date) {
+        const updates = calculatePaymentTerms(formData.totalAmount, formData.date);
+        
+        if (updates) {
+            // Check if values are actually different to prevent infinite loops/re-renders
+            setFormData(prev => {
+                if (
+                    prev.deposit1 === updates.deposit1 &&
+                    prev.deposit2 === updates.deposit2 &&
+                    prev.deposit3 === updates.deposit3 &&
+                    prev.deposit1Date === updates.deposit1Date
+                ) {
+                    return prev; // No change needed
+                }
+                return { ...prev, ...updates }; // Update silently
+            });
+        }
+    }
+  }, [formData.totalAmount, formData.date, formData.autoSchedulePayment, appSettings.paymentRules]);
+  
   // --- Auth Logic ---
   useEffect(() => {
     const initAuth = async () => {
@@ -1992,73 +2457,16 @@ export default function App() {
     }
   };
 
-  // --- Auto Payment Schedule Handler ---
-  const applyStandardPaymentTerms = () => {
-    const total = parseFloat(formData.totalAmount);
-    if (!total) {
-        addToast("請先輸入總金額", "error");
-        return;
-    }
-    
-    if (!formData.date) {
-        addToast("請先輸入活動日期", "error");
-        return;
-    }
-
-    const eventDate = new Date(formData.date);
-    const orderDate = editingEvent?.createdAt ? new Date(editingEvent.createdAt.seconds * 1000) : new Date();
-    
-    const monthsDiff = (eventDate.getFullYear() - orderDate.getFullYear()) * 12 + (eventDate.getMonth() - orderDate.getMonth());
-    
-    const formatDate = (date) => date.toISOString().split('T')[0];
-    const addMonths = (date, months) => {
-        const d = new Date(date);
-        d.setMonth(d.getMonth() + months);
-        return formatDate(d);
-    };
-
-    if (monthsDiff >= 6) {
-        const depositVal = Math.round(total * 0.3);
-        setFormData(prev => ({
-            ...prev,
-            deposit1: depositVal,
-            deposit1Date: addMonths(orderDate, 0),
-            deposit2: depositVal,
-            deposit2Date: addMonths(orderDate, 3),
-            deposit3: depositVal,
-            deposit3Date: addMonths(orderDate, 6),
-        }));
-        addToast("已套用 6 個月以上付款計劃 (30%/30%/30%)", "success");
-    } else if (monthsDiff >= 4) {
-        const depositVal = Math.round(total * 0.3);
-        setFormData(prev => ({
-            ...prev,
-            deposit1: depositVal,
-            deposit1Date: addMonths(orderDate, 0),
-            deposit2: depositVal,
-            deposit2Date: addMonths(orderDate, 2),
-            deposit3: depositVal,
-            deposit3Date: addMonths(orderDate, 4),
-        }));
-        addToast("已套用 4-6 個月付款計劃 (30%/30%/30%)", "success");
-    } else if (monthsDiff >= 1) {
-        const deposit1Val = Math.round(total * 0.5);
-        const deposit2Val = Math.round(total * 0.4);
-        
-        setFormData(prev => ({
-            ...prev,
-            deposit1: deposit1Val,
-            deposit1Date: addMonths(orderDate, 0),
-            deposit2: deposit2Val,
-            deposit2Date: addMonths(eventDate, -1), // 1 month before event
-            deposit3: '',
-            deposit3Date: '',
-        }));
-        addToast("已套用 1-3 個月付款計劃 (50%/40%)", "success");
-    } else {
-        addToast("活動日期少於 1 個月，請手動設定付款期", "info");
-    }
-  };
+  // --- Auto Payment Schedule Handler (Dynamic Version) ---
+    const applyStandardPaymentTerms = () => {
+        const updates = calculatePaymentTerms(formData.totalAmount, formData.date);
+        if (updates) {
+            setFormData(prev => ({ ...prev, ...updates }));
+            addToast(`已套用規則: ${updates.ruleName}`, "success");
+        } else {
+            addToast("未找到適用規則或資料不全", "info");
+        }
+      };
 
   // --- MIN SPEND CALCULATION ---
   const minSpendInfo = useMemo(() => {
@@ -2155,6 +2563,19 @@ export default function App() {
     await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
   };
+
+  const handleImageUpload = async (file, fieldName) => {
+    if (!user) return;
+    const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+    try {
+       await uploadBytes(storageRef, file);
+       const url = await getDownloadURL(storageRef);
+       setFormData(prev => ({ ...prev, [fieldName]: url }));
+       addToast("圖片上傳成功", "success");
+    } catch (e) {
+       addToast("上傳失敗", "error");
+    }
+  };
   
   const handleRemoveProof = (key) => {
       setConfirmConfig({
@@ -2222,6 +2643,11 @@ export default function App() {
     setPrintMode('EO');
     setTimeout(() => window.print(), 100);
   };
+// --- Briefing Sheet Handlers ---
+  const handlePrintBriefing = () => {
+    setPrintMode('BRIEFING');
+    setTimeout(() => window.print(), 100);
+  };  
 
   // --- Views ---
 
@@ -2456,49 +2882,87 @@ export default function App() {
                     <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
                   </div>
                   
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
-                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                      <div className="md:col-span-12">
-                        <FormInput label="活動名稱" name="eventName" required placeholder="例如：陳李聯婚" value={formData.eventName} onChange={handleInputChange} />
-                      </div>
-                      
-                      <div className="md:col-span-4">
-                        <FormInput label="活動日期" name="date" type="date" required value={formData.date} onChange={handleInputChange} />
-                      </div>
-                      <div className="md:col-span-4">
-                        <FormInput label="開始時間" name="startTime" type="time" required value={formData.startTime} onChange={handleInputChange} />
-                      </div>
-                      <div className="md:col-span-4">
-                        <FormInput label="結束時間" name="endTime" type="time" required value={formData.endTime} onChange={handleInputChange} />
-                      </div>
+                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情</h4>
+                    
+                    {/* 1. Date & Time Row (4 Columns) */}
+                    <FormInput 
+                        label="活動名稱 (Event Name)" 
+                        name="eventName" 
+                        required 
+                        value={formData.eventName} 
+                        onChange={handleInputChange} 
+                        placeholder="e.g. 陳李聯婚 / Annual Dinner"
+                      />
+                    <div className="grid grid-cols-4 gap-4">
+                      <FormInput 
+                        label="活動日期" 
+                        name="date" 
+                        type="date" 
+                        required 
+                        className="col-span-1" 
+                        value={formData.date} 
+                        onChange={handleInputChange} 
+                      />
+                      <FormInput 
+                        label="開始時間 (Start)" 
+                        name="startTime" 
+                        type="time" 
+                        required 
+                        className="col-span-1" 
+                        value={formData.startTime} 
+                        onChange={handleInputChange} 
+                      />
+                      
+                      {/* Serving Time Input */}
+                      <div className="col-span-1">
+                         <label className="block text-sm font-bold text-slate-700 mb-1.5 text-red-600">起菜時間 (Serving)</label>
+                         <input
+                           type="time"
+                           name="servingTime"
+                           value={formData.servingTime || ''}
+                           onChange={handleInputChange}
+                           className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all bg-red-50"
+                         />
+                      </div>
 
-                      {/* Location (6 cols) + Tables (3 cols) + Guests (3 cols) */}
-                      <div className="md:col-span-6">
-                        <LocationSelector formData={formData} setFormData={setFormData} />
-                      </div>
-                      <div className="md:col-span-3">
-                        <FormInput label="席數" name="tableCount" placeholder="20" value={formData.tableCount} onChange={handleInputChange} />
-                      </div>
-                      <div className="md:col-span-3">
-                        <FormInput label="人數" name="guestCount" placeholder="240" value={formData.guestCount} onChange={handleInputChange} />
-                      </div>
+                      <FormInput 
+                        label="結束時間 (End)" 
+                        name="endTime" 
+                        type="time" 
+                        required 
+                        className="col-span-1" 
+                        value={formData.endTime} 
+                        onChange={handleInputChange} 
+                      />
+                    </div>
 
-                      {/* Min Spend Reminder for Basic Tab */}
-                      {minSpendInfo && (
-                        <div className="md:col-span-12 bg-amber-50 text-amber-800 text-sm p-3 rounded-lg border border-amber-200 flex items-start animate-in fade-in">
-                           <Info size={18} className="mr-2 flex-shrink-0 mt-0.5"/>
-                           <div>
-                             <p className="font-bold">
-                               {new Date(formData.date).toLocaleDateString('en-US', { weekday: 'long' })} 最低消費 (Min Spend): 
-                               <span className="font-mono text-base ml-2">${minSpendInfo.amount.toLocaleString()}</span>
-                             </p>
-                             <p className="text-xs opacity-75 mt-0.5">適用規則: {minSpendInfo.ruleName}</p>
-                           </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    {/* 2. Location & Counts Row (Restored) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-50 mt-2">
+                       {/* Location Selector Component */}
+                       <LocationSelector formData={formData} setFormData={setFormData} />
+                       
+                       {/* Table & Guest Counts */}
+                       <div className="grid grid-cols-2 gap-4">
+                          <FormInput 
+                            label="席數 (Tables)" 
+                            name="tableCount" 
+                            type="number" 
+                            value={formData.tableCount} 
+                            onChange={handleInputChange} 
+                            placeholder="20"
+                          />
+                          <FormInput 
+                            label="人數 (Guests)" 
+                            name="guestCount" 
+                            type="number" 
+                            value={formData.guestCount} 
+                            onChange={handleInputChange} 
+                            placeholder="240"
+                          />
+                       </div>
+                    </div>
+                  </div>
 
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
                     <h4 className="font-bold text-slate-800">聯絡人資訊</h4>
@@ -2539,7 +3003,7 @@ export default function App() {
                             <div className="flex items-center flex-1 gap-2">
                                 <input 
                                   type="text" 
-                                  placeholder="菜單標題 (例如: Main Menu / Vegetarian)"
+                                  placeholder="菜單標題 (例如: 席前小食 / 員工餐)"
                                   value={menu.title}
                                   onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
                                   className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
@@ -2798,12 +3262,14 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* 4. CUSTOM ITEMS ROWS */}
+                      {/* 4. CUSTOM ITEMS ROWS (Fixed SC Button) */}
                       {(formData.customItems || []).map((item, idx) => {
                         const subtotal = (item.price || 0) * (item.qty || 1);
 
                         return (
                           <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-3 items-center group hover:bg-slate-50 transition-colors animate-in fade-in border-t border-slate-50">
+                              
+                              {/* Name */}
                               <div className="col-span-5 flex items-center">
                                 <div className="p-1.5 bg-slate-100 text-slate-500 rounded mr-3 flex-shrink-0"><Plus size={14}/></div>
                                 <input 
@@ -2811,14 +3277,17 @@ export default function App() {
                                   value={item.name}
                                   placeholder="項目名稱 (e.g. 額外租用)"
                                   onChange={e => {
-                                      const newItems = [...formData.customItems];
-                                      newItems[idx].name = e.target.value;
-                                      setFormData(prev => ({...prev, customItems: newItems}));
+                                      const val = e.target.value;
+                                      setFormData(prev => {
+                                        const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, name: val } : it);
+                                        return { ...prev, customItems: newItems };
+                                      });
                                   }}
                                   className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none text-sm text-slate-700 transition-all placeholder:text-slate-300"
                                 />
                               </div>
 
+                              {/* Rate */}
                               <div className="col-span-2 flex items-center justify-end">
                                 <span className="text-slate-400 text-xs mr-1">$</span>
                                 <input 
@@ -2826,30 +3295,32 @@ export default function App() {
                                   value={item.price}
                                   placeholder="0"
                                   onChange={e => {
-                                      const newItems = [...formData.customItems];
-                                      newItems[idx].price = e.target.value;
-                                      setFormData(prev => ({...prev, customItems: newItems, totalAmount: calculateTotalAmount({...prev, customItems: newItems})}));
+                                      const val = e.target.value;
+                                      setFormData(prev => {
+                                        const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, price: val } : it);
+                                        return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                      });
                                   }}
                                   className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono"
                                 />
                               </div>
 
-                              {/* UNIFIED QTY COLUMN STYLE */}
+                              {/* Unit/Qty */}
                               <div className="col-span-2">
                                 <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden">
                                     <select 
                                       value={item.unitType || 'fixed'}
                                       onChange={e => {
                                         const type = e.target.value;
+                                        // Auto-update qty logic
                                         let newQty = item.qty || 1;
                                         if(type === 'perTable') newQty = formData.tableCount || 1;
                                         if(type === 'perPerson') newQty = formData.guestCount || 1;
 
-                                        const newItems = [...formData.customItems];
-                                        newItems[idx].unitType = type;
-                                        newItems[idx].qty = newQty;
-                                        
-                                        setFormData(prev => ({...prev, customItems: newItems, totalAmount: calculateTotalAmount({...prev, customItems: newItems})}));
+                                        setFormData(prev => {
+                                            const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, unitType: type, qty: newQty } : it);
+                                            return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                        });
                                       }}
                                       className="bg-slate-100 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 hover:bg-slate-200 cursor-pointer min-w-[60px]"
                                     >
@@ -2861,32 +3332,41 @@ export default function App() {
                                       type="number" 
                                       value={item.qty || ''}
                                       onChange={e => {
-                                        const newItems = [...formData.customItems];
-                                        newItems[idx].qty = e.target.value;
-                                        setFormData(prev => ({...prev, customItems: newItems, totalAmount: calculateTotalAmount({...prev, customItems: newItems})}));
+                                        const val = e.target.value;
+                                        setFormData(prev => {
+                                            const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, qty: val } : it);
+                                            return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                        });
                                       }}
                                       className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors"
                                     />
                                 </div>
                               </div>
 
+                              {/* Amount */}
                               <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
                                 ${formatMoney(subtotal)}
                               </div>
 
-                              {/* SC Toggle (Fixed Logic) */}
-                              <div className="col-span-1 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {/* SC Toggle (Fixed) */}
+                              <div className="col-span-1 flex justify-center gap-1">
                                 <button 
                                   title="Apply Service Charge"
                                   type="button"
                                   onClick={() => {
-                                      // FIXED: Use .map to ensure state update triggers properly
-                                      const newItems = formData.customItems.map((it, i) => 
-                                        i === idx ? { ...it, applySC: !it.applySC } : it
-                                      );
-                                      setFormData(prev => ({...prev, customItems: newItems, totalAmount: calculateTotalAmount({...prev, customItems: newItems})}));
+                                      setFormData(prev => {
+                                        // IMMUTABLE UPDATE: Create a new object for the updated item
+                                        const newItems = prev.customItems.map((it, i) => 
+                                            i === idx ? { ...it, applySC: !it.applySC } : it
+                                        );
+                                        return { 
+                                            ...prev, 
+                                            customItems: newItems, 
+                                            totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) 
+                                        };
+                                      });
                                   }}
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${item.applySC ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-75'}`}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${item.applySC ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
                                 >
                                   SC
                                 </button>
@@ -2894,8 +3374,10 @@ export default function App() {
                                   title="Delete Item"
                                   type="button"
                                   onClick={() => {
-                                      const newItems = formData.customItems.filter((_, i) => i !== idx);
-                                      setFormData(prev => ({...prev, customItems: newItems, totalAmount: calculateTotalAmount({...prev, customItems: newItems})}));
+                                      setFormData(prev => {
+                                        const newItems = prev.customItems.filter((_, i) => i !== idx);
+                                        return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                      });
                                   }}
                                   className="text-slate-300 hover:text-red-500 p-1 transition-colors"
                                 >
@@ -2992,16 +3474,49 @@ export default function App() {
 
                   {/* 7. PAYMENT SCHEDULE */}
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mt-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h4 className="font-bold text-slate-700">付款進度 (Payment Schedule)</h4>
-                        <button 
-                          type="button" 
-                          onClick={applyStandardPaymentTerms}
-                          className="text-xs bg-white border border-slate-300 hover:border-blue-400 text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded-lg transition-colors font-bold shadow-sm flex items-center"
-                        >
-                          <CalendarIcon size={14} className="mr-1.5"/> 自動計算付款期 (Auto-Schedule)
-                        </button>
-                    </div>
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="flex items-center gap-4">
+                              <h4 className="font-bold text-slate-700">付款進度 (Payment Schedule)</h4>
+                              
+                              {/* NEW: Auto-Schedule Toggle */}
+                              <label className="flex items-center cursor-pointer select-none">
+                                  <div className="relative">
+                                    <input 
+                                      type="checkbox" 
+                                      className="sr-only peer"
+                                      checked={formData.autoSchedulePayment || false}
+                                      onChange={e => {
+                                          const isChecked = e.target.checked;
+                                          setFormData(prev => ({...prev, autoSchedulePayment: isChecked}));
+                                          if(isChecked) {
+                                            // Trigger immediate update when turning ON
+                                            const updates = calculatePaymentTerms(formData.totalAmount, formData.date);
+                                            if(updates) {
+                                                setFormData(prev => ({...prev, autoSchedulePayment: true, ...updates}));
+                                                addToast("已啟用自動付款排程 (Auto-Schedule ON)", "success");
+                                            }
+                                          }
+                                      }}
+                                    />
+                                    <div className="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-600"></div>
+                                  </div>
+                                  <span className={`text-xs font-bold ml-2 ${formData.autoSchedulePayment ? 'text-violet-600' : 'text-slate-400'}`}>
+                                    {formData.autoSchedulePayment ? "自動更新 (Auto)" : "手動 (Manual)"}
+                                  </span>
+                              </label>
+                            </div>
+
+                            {/* Show Manual Button ONLY if Auto is OFF */}
+                            {!formData.autoSchedulePayment && (
+                              <button 
+                                  type="button" 
+                                  onClick={applyStandardPaymentTerms}
+                                  className="text-xs bg-white border border-slate-300 hover:border-violet-400 text-slate-600 hover:text-violet-600 px-3 py-1.5 rounded-lg transition-colors font-bold shadow-sm flex items-center"
+                              >
+                                  <CalendarIcon size={14} className="mr-1.5"/> 套用規則 (Apply Rules)
+                              </button>
+                            )}
+                        </div>
                     
                     <div className="grid grid-cols-1 gap-4">
                         <DepositField label="訂金一 (Deposit 1)" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof}/>
@@ -3117,169 +3632,331 @@ export default function App() {
               )}
 
               {/* TAB 4: VENUE */}
-              {formTab === 'venue' && (
-                <div className="space-y-6 animate-in fade-in">
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">場地佈置</h4>
-                    <div className="flex justify-between items-start">
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
-                          <FormSelect label="檯布顏色 (Table Cloth)" name="tableClothColor" options={DECOR_COLORS} value={formData.tableClothColor} onChange={handleInputChange} />
-                          <FormSelect label="椅套顏色 (Chair Cover)" name="chairCoverColor" options={DECOR_COLORS} value={formData.chairCoverColor} onChange={handleInputChange} />
-                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2 pt-4 border-t border-slate-100">
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1.5">主家席顏色 (Head Table Color)</label>
-                          <div className="flex gap-4 mb-2">
-                            <label className="flex items-center space-x-2 text-sm cursor-pointer">
-                              <input type="radio" name="headTableColorType" value="same" checked={formData.headTableColorType === 'same'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500"/>
-                              <span>同客席 (Same as Guest)</span>
-                            </label>
-                            <label className="flex items-center space-x-2 text-sm cursor-pointer">
-                              <input type="radio" name="headTableColorType" value="custom" checked={formData.headTableColorType === 'custom'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500"/>
-                              <span>自訂 (Custom)</span>
-                            </label>
-                          </div>
-                          {formData.headTableColorType === 'custom' && (
-                            <input 
-                              type="text" 
-                              name="headTableCustomColor" 
-                              value={formData.headTableCustomColor} 
-                              onChange={handleInputChange} 
-                              placeholder="請輸入主家席顏色"
-                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                          )}
-                      </div>
+              {formTab === 'venue' && (
+                <div className="space-y-6 animate-in fade-in">
+                  
+                  {/* MAIN DECOR SETTINGS */}
+                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">場地佈置 (Main Setup)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       <FormSelect label="檯布顏色 (Table Cloth)" name="tableClothColor" options={DECOR_COLORS} value={formData.tableClothColor} onChange={handleInputChange} />
+                       <FormSelect label="椅套顏色 (Chair Cover)" name="chairCoverColor" options={DECOR_COLORS} value={formData.chairCoverColor} onChange={handleInputChange} />
+                    </div>
+                    
+                    {/* Head Table & Bridal Room (Keep existing code logic here...) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2 pt-4 border-t border-slate-100">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">主家席顏色 (Head Table Color)</label>
+                          <div className="flex gap-4 mb-2">
+                            <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                              <input type="radio" name="headTableColorType" value="same" checked={formData.headTableColorType === 'same'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500"/>
+                              <span>同客席 (Same as Guest)</span>
+                            </label>
+                            <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                              <input type="radio" name="headTableColorType" value="custom" checked={formData.headTableColorType === 'custom'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500"/>
+                              <span>自訂 (Custom)</span>
+                            </label>
+                          </div>
+                          {formData.headTableColorType === 'custom' && (
+                            <input type="text" name="headTableCustomColor" value={formData.headTableCustomColor} onChange={handleInputChange} placeholder="請輸入主家席顏色" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                          )}
+                        </div>
+                        <div className="bg-pink-50 p-4 rounded-lg border border-pink-100">
+                          <div className="flex justify-between items-center mb-2">
+                             <label className="font-bold text-slate-700 text-sm">新娘房 / 更衣室</label>
+                             <label className="flex items-center space-x-2 cursor-pointer">
+                               <input type="checkbox" name="bridalRoom" checked={formData.bridalRoom} onChange={e => setFormData(prev => ({...prev, bridalRoom: e.target.checked}))} className="rounded text-pink-500"/>
+                               <span className="text-xs text-slate-500">使用</span>
+                             </label>
+                          </div>
+                          {formData.bridalRoom && (
+                            <input type="text" name="bridalRoomHours" value={formData.bridalRoomHours} onChange={handleInputChange} placeholder="使用時間 e.g. 17:00 - 23:00" className="w-full px-3 py-2 border border-pink-200 rounded-lg text-sm bg-white" />
+                          )}
+                        </div>
+                    </div>
 
-                      {/* Bridal Room */}
-                      <div className="bg-pink-50 p-4 rounded-lg border border-pink-100">
-                          <div className="flex justify-between items-center mb-2">
-                             <label className="font-bold text-slate-700 text-sm">新娘房 / 更衣室 (Bridal Room)</label>
-                             <label className="flex items-center space-x-2 cursor-pointer">
-                               <input type="checkbox" name="bridalRoom" checked={formData.bridalRoom} onChange={e => setFormData(prev => ({...prev, bridalRoom: e.target.checked}))} className="rounded text-pink-500 focus:ring-pink-500"/>
-                               <span className="text-xs text-slate-500">需要使用</span>
-                             </label>
-                          </div>
-                          {formData.bridalRoom && (
-                            <input 
-                              type="text"
-                              name="bridalRoomHours"
-                              value={formData.bridalRoomHours}
-                              onChange={handleInputChange}
-                              placeholder="使用時間 (Usage Hours) e.g. 17:00 - 23:00"
-                              className="w-full px-3 py-2 border border-pink-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-500 outline-none bg-white"
-                            />
-                          )}
-                      </div>
-                    </div>
-                    
-                    <FormTextArea label="舞台/花藝佈置" name="stageDecor" value={formData.stageDecor} onChange={handleInputChange} />
-                  </div>
-                  
-                  {/* NEW: Equipment & Decor Section */}
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">物資與佈置 (Equipment & Decor)</h4>
-                    
-                    {/* Equipment */}
-                    <div className="mb-4">
-                      <label className="text-sm font-bold text-slate-600 block mb-2">一般物資</label>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {['podium', 'mic', 'micStand', 'cake', 'nameSign'].map(key => (
-                          <FormCheckbox 
-                            key={key} 
-                            label={{podium:'講台', mic:'咪', micStand:'咪架', cake:'蛋糕', nameSign:'禮堂字牌'}[key]} 
-                            name={`eq_${key}`} 
-                            checked={formData.equipment?.[key]} 
-                            onChange={handleInputChange} 
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    {/* NEW: Stage Decor with Photo */}
+                    <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-4">
+                       <label className="block text-sm font-bold text-slate-700">舞台/花藝佈置 (Stage/Floral)</label>
+                       <div className="flex gap-4">
+                          <textarea 
+                             name="stageDecor" 
+                             rows={3} 
+                             value={formData.stageDecor} 
+                             onChange={handleInputChange} 
+                             placeholder="描述..." 
+                             className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none"
+                          />
+                          <div className="w-32 flex flex-col items-center">
+                             {formData.stageDecorPhoto ? (
+                                <div className="relative w-full h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
+                                   {/* Click to Open/Enlarge */}
+                                   <a href={formData.stageDecorPhoto} target="_blank" rel="noreferrer" className="block w-full h-full cursor-zoom-in" title="點擊放大 (Click to Enlarge)">
+                                      <img src={formData.stageDecorPhoto} alt="Decor" className="w-full h-full object-cover" />
+                                   </a>
+                                   <button type="button" onClick={() => setFormData(prev => ({...prev, stageDecorPhoto: ''}))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
+                                </div>
+                             ) : (
+                                <label className="w-full h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors">
+                                   <ImageIcon size={20} className="mb-1"/>
+                                   <span className="text-[10px]">上傳照片</span>
+                                   <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e.target.files[0], 'stageDecorPhoto')} />
+                                </label>
+                             )}
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+                  
+                  {/* EQUIPMENT & DECOR LIST */}
+                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">物資與佈置 (Equipment & Decor)</h4>
+                    
+                    {/* Equipment */}
+                    <div className="mb-4">
+                      <label className="text-sm font-bold text-slate-600 block mb-2">一般物資</label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {['podium', 'mic', 'micStand', 'cake'].map(key => (
+                          <FormCheckbox key={key} label={{podium:'講台', mic:'咪', micStand:'咪架', cake:'蛋糕'}[key]} name={`eq_${key}`} checked={formData.equipment?.[key]} onChange={handleInputChange} />
+                        ))}
+                        
+                        {/* Special Case: Name Sign (Text Input) */}
+                        <div className="col-span-2 flex items-center space-x-2 bg-slate-50 p-2 rounded border border-slate-200">
+                           <FormCheckbox label="禮堂字牌" name="eq_nameSign" checked={formData.equipment?.nameSign} onChange={handleInputChange} />
+                           {formData.equipment?.nameSign && (
+                              <input 
+                                type="text" 
+                                placeholder="輸入文字內容..." 
+                                className="flex-1 border-b border-slate-300 bg-transparent text-sm outline-none focus:border-blue-500"
+                                value={formData.nameSignText || ''}
+                                onChange={e => setFormData(prev => ({...prev, nameSignText: e.target.value}))}
+                              />
+                           )}
+                        </div>
+                      </div>
+                    </div>
 
-                    {/* Decoration */}
-                    <div>
-                      <label className="text-sm font-bold text-slate-600 block mb-2">婚宴/佈置</label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
-                        {['ceremonyService', 'flowerPillars', 'guestBook', 'easel', 'mahjong', 'invites', 'wreaths'].map(key => (
-                          <FormCheckbox 
-                            key={key} 
-                            label={{ceremonyService:'證婚服務', flowerPillars:'花柱佈置', guestBook:'簽名冊', easel:'畫架', mahjong:'麻雀枱', invites:'喜帖', wreaths:'花圈'}[key]} 
-                            name={`dec_${key}`} 
-                            checked={formData.decoration?.[key]} 
-                            onChange={handleInputChange} 
-                          />
-                        ))}
-                        {/* Special Case: Ceremony Chairs */}
-                        <div className="flex items-center space-x-2 bg-slate-50 p-2 rounded">
-                           <FormCheckbox label="證婚椅子" name="dec_ceremonyChairs" checked={formData.decoration?.ceremonyChairs} onChange={handleInputChange} />
-                           {formData.decoration?.ceremonyChairs && (
-                             <input 
-                               type="text" 
-                               placeholder="數量" 
-                               className="w-16 border border-slate-300 rounded px-1 py-0.5 text-sm"
-                               value={formData.decorationChairsQty || ''}
-                               onChange={(e) => setFormData(prev => ({...prev, decorationChairsQty: e.target.value}))}
-                             />
-                           )}
-                        </div>
-                      </div>
-                      <input 
-                        type="text" 
-                        placeholder="其他補充 (Other Decoration Notes)" 
-                        className="w-full border border-slate-300 rounded px-3 py-2 text-sm mt-2"
-                        value={formData.decorationOther || ''}
-                        onChange={(e) => setFormData(prev => ({...prev, decorationOther: e.target.value}))}
-                      />
-                    </div>
-                  </div>
+                    {/* Decoration */}
+                    <div>
+                      <label className="text-sm font-bold text-slate-600 block mb-2">婚宴/佈置</label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                        {/* Renamed Ceremony Table */}
+                        <FormCheckbox label="證婚桌 (Ceremony Table)" name="dec_ceremonyService" checked={formData.decoration?.ceremonyService} onChange={handleInputChange} />
+                        
+                        {['flowerPillars', 'guestBook', 'easel', 'mahjong', 'wreaths'].map(key => (
+                          <FormCheckbox key={key} label={{flowerPillars:'花柱佈置', guestBook:'簽名冊', easel:'畫架', mahjong:'麻雀枱', wreaths:'花圈'}[key]} name={`dec_${key}`} checked={formData.decoration?.[key]} onChange={handleInputChange} />
+                        ))}
 
-                  {/* Updated AV Section */}
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">AV 設備 (Audio Visual)</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {[
-                        {k:'ledBig', l:'大禮堂LED'}, {k:'projBig', l:'大禮堂Projector'},
-                        {k:'ledSmall', l:'小禮堂LED'}, {k:'projSmall', l:'小禮堂Projector'},
-                        {k:'spotlight', l:'聚光燈'}, {k:'movingHead', l:'電腦燈'}, {k:'entranceLight', l:'進場燈'},
-                        {k:'tv60v', l:'60寸電視(直)'}, {k:'tv60h', l:'60寸電視(橫)'},
-                        {k:'mic', l:'咪'}, {k:'speaker', l:'喇叭'}
-                      ].map(item => (
-                        <FormCheckbox 
-                          key={item.k} 
-                          label={item.l} 
-                          name={`av_${item.k}`} 
-                          checked={formData.avRequirements?.[item.k]} 
-                          onChange={handleInputChange} 
-                        />
-                      ))}
-                    </div>
-                    <input 
-                        type="text" 
-                        placeholder="其他 AV 補充" 
-                        className="w-full border border-slate-300 rounded px-3 py-2 text-sm mt-2"
-                        value={formData.avOther || ''}
-                        onChange={(e) => setFormData(prev => ({...prev, avOther: e.target.value}))}
-                    />
-                    <FormTextArea label="AV 系統備註 (AV Notes)" name="avNotes" value={formData.avNotes} onChange={handleInputChange} />
-                  </div>
-                </div>
-              )}
+                        {/* Special Case: Invites (Qty) */}
+                        <div className="flex items-center space-x-2 bg-slate-50 p-2 rounded border border-slate-200">
+                           <FormCheckbox label="喜帖" name="dec_invites" checked={formData.decoration?.invites} onChange={handleInputChange} />
+                           {formData.decoration?.invites && (
+                              <input 
+                                type="number" 
+                                placeholder="套數" 
+                                className="w-16 border border-slate-300 rounded px-1 py-0.5 text-sm"
+                                value={formData.invitesQty || ''}
+                                onChange={e => setFormData(prev => ({...prev, invitesQty: e.target.value}))}
+                              />
+                           )}
+                        </div>
+
+                        {/* Special Case: Chairs */}
+                        <div className="flex items-center space-x-2 bg-slate-50 p-2 rounded border border-slate-200">
+                           <FormCheckbox label="證婚椅子" name="dec_ceremonyChairs" checked={formData.decoration?.ceremonyChairs} onChange={handleInputChange} />
+                           {formData.decoration?.ceremonyChairs && (
+                             <input type="text" placeholder="數量" className="w-16 border border-slate-300 rounded px-1 py-0.5 text-sm" value={formData.decorationChairsQty || ''} onChange={(e) => setFormData(prev => ({...prev, decorationChairsQty: e.target.value}))} />
+                           )}
+                        </div>
+                      </div>
+
+                      {/* NEW: General Decor Text & Photo */}
+                      <div className="flex gap-4">
+                          <textarea 
+                             rows={2} 
+                             placeholder="其他佈置補充 (General Decor Notes)..." 
+                             className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none"
+                             value={formData.venueDecor || ''} 
+                             onChange={(e) => setFormData(prev => ({...prev, venueDecor: e.target.value}))}
+                          />
+                          <div className="w-32 flex flex-col items-center">
+                             {formData.venueDecorPhoto ? (
+                                <div className="relative w-full h-16 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
+                                   <img src={formData.venueDecorPhoto} alt="Decor" className="w-full h-full object-cover" />
+                                   <button type="button" onClick={() => setFormData(prev => ({...prev, venueDecorPhoto: ''}))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10}/></button>
+                                </div>
+                             ) : (
+                                <label className="w-full h-16 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors">
+                                   <ImageIcon size={16} className="mb-1"/>
+                                   <span className="text-[9px]">上傳照片</span>
+                                   <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e.target.files[0], 'venueDecorPhoto')} />
+                                </label>
+                             )}
+                          </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AV Section (Keep existing) */}
+                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">AV 設備</h4>
+                    {/* ... (Keep your existing AV Checkboxes code here) ... */}
+                    {/* Assuming you keep the same AV grid from previous version */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {[{k:'ledBig',l:'大禮堂LED'},{k:'projBig',l:'大禮堂Proj'},{k:'ledSmall',l:'小禮堂LED'},{k:'projSmall',l:'小禮堂Proj'},{k:'spotlight',l:'聚光燈'},{k:'movingHead',l:'電腦燈'},{k:'entranceLight',l:'進場燈'},{k:'tv60v',l:'60寸TV(直)'},{k:'tv60h',l:'60寸TV(橫)'},{k:'mic',l:'咪'},{k:'speaker',l:'喇叭'}].map(item=><FormCheckbox key={item.k} label={item.l} name={`av_${item.k}`} checked={formData.avRequirements?.[item.k]} onChange={handleInputChange}/>)}
+                    </div>
+                    <input type="text" placeholder="其他 AV 補充" className="w-full border border-slate-300 rounded px-3 py-2 text-sm mt-2" value={formData.avOther||''} onChange={e=>setFormData(prev=>({...prev,avOther:e.target.value}))}/>
+                    <FormTextArea label="AV 備註" name="avNotes" value={formData.avNotes} onChange={handleInputChange}/>
+                  </div>
+                </div>
+              )}
 
               {/* TAB 5: LOGISTICS */}
-              {formTab === 'logistics' && (
-                <div className="space-y-6 animate-in fade-in">
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                       <h4 className="font-bold text-slate-800">物流與備註</h4>
-                    </div>
-                    <FormTextArea label="送貨/物資清單" name="deliveryNotes" rows={4} value={formData.deliveryNotes} onChange={handleInputChange} />
-                    <FormTextArea label="泊車登記" name="parkingPlates" rows={3} value={formData.parkingPlates} onChange={handleInputChange} />
-                    <FormTextArea label="其他備註" name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} />
-                  </div>
-                </div>
-              )}
+              {formTab === 'logistics' && (
+                <div className="space-y-6 animate-in fade-in">
+                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">物流與備註 (Logistics)</h4>
+                    
+                  {/* 1. Multiple Deliveries Section (Updated with DATE) */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                       <div className="flex justify-between items-center mb-3">
+                          <label className="text-sm font-bold text-slate-700 flex items-center"><Truck size={16} className="mr-2"/> 送貨/物資安排 (Deliveries)</label>
+                          <button 
+                             type="button" 
+                             // UPDATE: Added date: '' to the new object
+                             onClick={() => setFormData(prev => ({...prev, deliveries: [...(prev.deliveries || []), { id: Date.now(), unit: '', date: '', time: '', items: '' }] }))}
+                             className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:text-blue-600 flex items-center shadow-sm"
+                          >
+                             <Plus size={12} className="mr-1"/> 新增單位
+                          </button>
+                       </div>
+                       
+                       <div className="space-y-3">
+                          {(!formData.deliveries || formData.deliveries.length === 0) && (
+                             <div className="text-center text-slate-400 text-xs py-2 italic">暫無送貨安排</div>
+                          )}
+                          
+                          {(formData.deliveries || []).map((delivery, idx) => (
+                             <div key={delivery.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm relative group">
+                                <div className="grid grid-cols-12 gap-2 mb-2">
+                                   {/* Unit Name */}
+                                   <div className="col-span-4">
+                                      <input 
+                                         type="text" 
+                                         placeholder="單位 (Unit)" 
+                                         className="w-full text-sm font-bold border-b border-slate-200 outline-none focus:border-blue-500 placeholder:font-normal"
+                                         value={delivery.unit}
+                                         onChange={e => {
+                                            const newDeliveries = [...formData.deliveries];
+                                            newDeliveries[idx].unit = e.target.value;
+                                            setFormData(prev => ({...prev, deliveries: newDeliveries}));
+                                         }}
+                                      />
+                                   </div>
+
+                                   {/* NEW: Date Input */}
+                                   <div className="col-span-4">
+                                      <input 
+                                         type="date" 
+                                         className="w-full text-sm border-b border-slate-200 outline-none focus:border-blue-500 text-slate-600"
+                                         value={delivery.date}
+                                         onChange={e => {
+                                            const newDeliveries = [...formData.deliveries];
+                                            newDeliveries[idx].date = e.target.value;
+                                            setFormData(prev => ({...prev, deliveries: newDeliveries}));
+                                         }}
+                                      />
+                                   </div>
+
+                                   {/* Time Input */}
+                                   <div className="col-span-3">
+                                      <input 
+                                         type="time" 
+                                         className="w-full text-sm border-b border-slate-200 outline-none focus:border-blue-500 text-slate-600"
+                                         value={delivery.time}
+                                         onChange={e => {
+                                            const newDeliveries = [...formData.deliveries];
+                                            newDeliveries[idx].time = e.target.value;
+                                            setFormData(prev => ({...prev, deliveries: newDeliveries}));
+                                         }}
+                                      />
+                                   </div>
+
+                                   {/* Delete Button */}
+                                   <div className="col-span-1 text-right">
+                                       <button 
+                                          type="button"
+                                          onClick={() => setFormData(prev => ({...prev, deliveries: prev.deliveries.filter((_, i) => i !== idx)}))}
+                                          className="text-slate-300 hover:text-red-500 p-1"
+                                       >
+                                          <Trash2 size={14} />
+                                       </button>
+                                   </div>
+                                </div>
+                                <textarea 
+                                   rows={2} 
+                                   placeholder="物資清單 / 備註 (Items List)..." 
+                                   className="w-full text-sm bg-slate-50 border border-slate-100 rounded p-2 outline-none focus:bg-white focus:border-blue-200 resize-none"
+                                   value={delivery.items}
+                                   onChange={e => {
+                                      const newDeliveries = [...formData.deliveries];
+                                      newDeliveries[idx].items = e.target.value;
+                                      setFormData(prev => ({...prev, deliveries: newDeliveries}));
+                                   }}
+                                />
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+
+                    {/* 2. Parking Tickets Section */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                       <label className="text-sm font-bold text-slate-700 flex items-center mb-3"><MapPin size={16} className="mr-2"/> 泊車安排 (Parking)</label>
+                       
+                       <div className="bg-white p-3 rounded border border-slate-200 mb-3">
+                          <span className="text-xs font-bold text-blue-600 uppercase mb-2 block">免費泊車券 (Free Parking Tickets)</span>
+                          <div className="grid grid-cols-2 gap-4">
+                             <div className="flex items-center border rounded px-2 py-1 bg-slate-50">
+                                <span className="text-xs text-slate-500 mr-2">數量:</span>
+                                <input 
+                                   type="number" 
+                                   className="flex-1 bg-transparent outline-none text-sm font-bold"
+                                   placeholder="0"
+                                   value={formData.parkingInfo?.ticketQty || ''}
+                                   onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, ticketQty: e.target.value }}))}
+                                />
+                                <span className="text-xs text-slate-400 ml-1">張</span>
+                             </div>
+                             <div className="flex items-center border rounded px-2 py-1 bg-slate-50">
+                                <span className="text-xs text-slate-500 mr-2">時數:</span>
+                                <input 
+                                   type="number" 
+                                   className="flex-1 bg-transparent outline-none text-sm font-bold"
+                                   placeholder="0"
+                                   value={formData.parkingInfo?.ticketHours || ''}
+                                   onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, ticketHours: e.target.value }}))}
+                                />
+                                <span className="text-xs text-slate-400 ml-1">小時</span>
+                             </div>
+                          </div>
+                       </div>
+                       
+                       <div className="mt-2">
+                          <label className="text-xs font-bold text-slate-500 mb-1 block">車牌登記 (License Plates Registration)</label>
+                          <textarea 
+                             rows={3} 
+                             value={formData.parkingInfo?.plates || ''} 
+                             onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, plates: e.target.value }}))} 
+                             placeholder="請輸入車牌 (e.g. AB1234, CD5678)"
+                             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                          />
+                       </div>
+                    </div>
+
+                    <FormTextArea label="其他備註 (Other Notes)" name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -3294,8 +3971,16 @@ export default function App() {
                     >
                       <Printer size={16} className="mr-2" /> 列印 EO
                     </button>
+                    <button
+                      type="button"
+                      onClick={handlePrintBriefing}
+                      className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm"
+                    >
+                      <Users size={16} className="mr-2" /> 樓面簡報 (Briefing)
+                    </button>
                   </>
                  )}
+
               </div>
               <div className="flex items-center space-x-3 pl-2 flex-shrink-0">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium">取消</button>
@@ -3306,9 +3991,11 @@ export default function App() {
         </Modal>
       </div>
       
-      <div className="print-only">
-        {printMode === 'EO' && <PrintableEO data={formData} />}
-      </div>
+<div className="print-only">
+        {/* FIX: Remove the '&&' check so it renders for both 'EO' and 'BRIEFING' modes */}
+        {/* Pass printMode as a prop so the component knows which layout to show */}
+        <PrintableEO data={formData} printMode={printMode} />
+      </div>
     </>
   );
 }

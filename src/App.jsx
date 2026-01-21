@@ -632,52 +632,36 @@ const PrintableEO = ({ data, printMode }) => {
      return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  // --- Financial & Allocation Logic ---
-  
-  // 1. Calculate Pure Revenue (Subtotal)
+  // --- Financial Logic ---
   const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
                  + ((data.drinksPrice||0)*(data.drinksQty||1)) 
                  + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
   
-  // 2. Calculate Service Charge Base (Only items marked applySC)
   let scBase = 0;
   (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
   if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
   (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
   
-  // 3. Calculate Final SC Amount
   const serviceChargeVal = data.enableServiceCharge !== false ? (parseFloat(data.serviceCharge) || (scBase * 0.1)) : 0; 
   const scLabel = data.serviceCharge && data.serviceCharge.includes('%') ? data.serviceCharge : 'Fixed';
-
   const discountVal = parseFloat(data.discount) || 0;
   const grandTotal = subtotal + serviceChargeVal - discountVal;
 
-  // 4. Breakdown Logic (Groups items by Dept)
-// --- Financial & Allocation Logic (CLEAN MERGE VERSION) ---
-// --- Financial & Allocation Logic (STRUCTURED DATA VERSION) ---
+  // --- Allocation Logic ---
   const getDetailedAllocation = () => {
-    // 1. Initialize Buckets
     const allocation = {};
     DEPARTMENTS.forEach(dept => {
         allocation[dept.key] = { label: dept.label, total: 0, items: [] };
     });
     if(!allocation['other']) allocation['other'] = { label: '其他 (Other)', total: 0, items: [] };
 
-    // Helper: Now accepts specific data points instead of just a string string
     const addItem = (key, name, subLabel, qty, unitPrice, totalAmount) => {
         if(totalAmount <= 0) return;
         let group = allocation[key] ? key : 'other';
         allocation[group].total += totalAmount;
-        allocation[group].items.push({ 
-            name, 
-            subLabel,
-            qty: parseFloat(qty), 
-            unit: parseFloat(unitPrice), 
-            amount: totalAmount 
-        });
+        allocation[group].items.push({ name, subLabel, qty: parseFloat(qty), unit: parseFloat(unitPrice), amount: totalAmount });
     };
 
-    // 2. Process Menus (Food)
     (data.menus || []).forEach(m => {
         const qty = parseFloat(m.qty) || 1;
         const price = parseFloat(m.price) || 0;
@@ -685,34 +669,27 @@ const PrintableEO = ({ data, printMode }) => {
 
         if (m.allocation && Object.keys(m.allocation).length > 0) {
             let nonKitchenAllocated = 0;
-
-            // A. Non-Kitchen Departments
             Object.entries(m.allocation).forEach(([dept, unitVal]) => {
                 if (dept !== 'kitchen') {
                     const val = parseFloat(unitVal) || 0;
                     if (val > 0) {
                         const lineAmt = val * qty;
                         nonKitchenAllocated += lineAmt;
-                        const deptLabel = DEPARTMENTS.find(d=>d.key===dept)?.label.split(' ')[0]; // e.g. "點心"
+                        const deptLabel = DEPARTMENTS.find(d=>d.key===dept)?.label.split(' ')[0];
                         addItem(dept, m.title, deptLabel, qty, val, lineAmt);
                     }
                 }
             });
-
-            // B. Balance to Kitchen
             const kitchenTotal = totalLineAmount - nonKitchenAllocated;
             if (kitchenTotal > 0) {
                 const unitKitchen = price - (nonKitchenAllocated / qty);
                 addItem('kitchen', m.title, '', qty, unitKitchen, kitchenTotal);
             }
-
         } else {
-            // No allocation -> 100% to Kitchen
             addItem('kitchen', m.title, '', qty, price, totalLineAmount);
         }
     });
 
-    // 3. Process Drinks (Bar)
     const dQty = parseFloat(data.drinksQty) || 1;
     const dPrice = parseFloat(data.drinksPrice) || 0;
     const dTotal = dPrice * dQty;
@@ -739,7 +716,6 @@ const PrintableEO = ({ data, printMode }) => {
          addItem('bar', dName, '', dQty, dPrice, dTotal);
     }
 
-    // 4. Custom Items
     (data.customItems || []).forEach(i => {
         const qty = parseFloat(i.qty) || 1;
         const price = parseFloat(i.price) || 0;
@@ -752,7 +728,6 @@ const PrintableEO = ({ data, printMode }) => {
 
   const detailedAlloc = getDetailedAllocation();
 
-  // --- Components ---
   const Header = ({ title, copyType, badgeColor = "bg-slate-900" }) => (
     <div className="flex justify-between items-end border-b-4 border-slate-900 pb-2 mb-6">
       <div>
@@ -766,22 +741,12 @@ const PrintableEO = ({ data, printMode }) => {
     </div>
   );
 
-// --- Components ---
-  // 更新後的 EventSummary：將日期放在第一位並高亮顯示
   const EventSummary = () => (
     <div className="flex flex-wrap bg-slate-50 p-2 rounded mb-6 border border-slate-100">
-        {/* NEW: Date Field (Added here prominently) */}
-        <DetailRow 
-            label="日期 (Date)" 
-            value={formatDateWithDay(data.date)} 
-            widthClass="w-1/4" 
-            highlight={true} // 紅色高亮
-        />
-
+        <DetailRow label="日期 (Date)" value={formatDateWithDay(data.date)} widthClass="w-1/4" highlight={true} />
         <DetailRow label="活動名稱" value={data.eventName} widthClass="w-1/4" />
         <DetailRow label="位置" value={data.venueLocation} widthClass="w-1/4" />
         <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} widthClass="w-1/4" />
-        
         <DetailRow label="起菜時間" value={data.servingTime} widthClass="w-1/4" highlight={true} />
         <DetailRow label="席數" value={`${data.tableCount || 0} 席`} widthClass="w-1/4" />
         <DetailRow label="人數" value={`${data.guestCount || 0} 人`} widthClass="w-1/4" />
@@ -789,9 +754,7 @@ const PrintableEO = ({ data, printMode }) => {
     </div>
   );
 
-  // ==========================================
   // VIEW 1: BRIEFING MODE
-  // ==========================================
   if (printMode === 'BRIEFING') {
     return (
       <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm p-4">
@@ -814,14 +777,12 @@ const PrintableEO = ({ data, printMode }) => {
         </div>
         <div className="mb-6"><div className="flex gap-4"><div className="flex-1 border-2 border-red-500 rounded-lg p-3 bg-red-50"><div className="flex justify-between items-start mb-2"><span className="text-red-700 font-bold flex items-center"><AlertTriangle size={16} className="mr-1"/> 過敏 / 特別餐 (Allergies)</span><span className="text-[10px] text-red-400">請填寫檯號</span></div><div className="min-h-[80px]"><p className="text-lg font-bold text-red-900 whitespace-pre-wrap">{data.allergies || data.specialMenuReq || '暫無特別記錄'}</p></div><div className="border-b border-red-200 mt-6"></div><div className="border-b border-red-200 mt-6"></div></div><div className="w-1/3 border-2 border-blue-200 rounded-lg p-3 bg-blue-50"><span className="text-blue-700 font-bold block mb-2"><Coffee size={16} className="inline mr-1"/> 酒水 (Drinks)</span><p className="text-sm font-bold text-blue-900 whitespace-pre-wrap">{data.drinksPackage || '未定'}</p></div></div></div>
         <div className="border-2 border-slate-800 rounded-xl overflow-hidden"><div className="bg-slate-800 text-white px-4 py-2 flex justify-between items-center"><span className="font-bold">餐單 (Menu Reference)</span><span className="text-xs bg-slate-600 px-2 py-1 rounded">{data.servingStyle}</span></div><div className="p-4 bg-white min-h-[300px]"><div className="space-y-6">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="font-bold underline mb-2 text-lg">{menu.title}</h4>}<p className="text-base font-medium leading-relaxed whitespace-pre-wrap text-slate-800">{menu.content}</p></div>))) : (<p className="text-lg font-medium leading-relaxed">{data.menuType}</p>)}</div></div></div>
-        <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-slate-500"><div><span className="font-bold block text-slate-700">席前小食:</span> {data.preDinnerSnacks || '無'}</div><div><span className="font-bold block text-slate-700">其他備註:</span> {data.otherNotes || '無'}</div></div>
+        <div className="mt-4 text-xs text-slate-500"><div><span className="font-bold block text-slate-700">其他備註:</span> {data.otherNotes || '無'}</div></div>
       </div>
     );
   }
 
-  // ==========================================
   // VIEW 2: QUOTATION MODE (Client Facing - Compact)
-  // ==========================================
   if (printMode === 'QUOTATION') {
     const BRAND_COLOR = '#A57C00'; 
     const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
@@ -966,7 +927,7 @@ const PrintableEO = ({ data, printMode }) => {
             </div>
         </div>
 
-        {/* Footer - No Overlapping Lines */}
+        {/* Footer */}
         <div className="mt-auto pt-12 flex justify-between items-end">
              <div className="text-[9px] text-slate-400 leading-tight">
                 <p className="mb-1 font-bold text-slate-500">Terms & Conditions:</p>
@@ -983,9 +944,8 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     );
   }
-  // ==========================================
-  // VIEW 2: STANDARD EO (Manager, Setup, Kitchen)
-  // ==========================================
+
+  // VIEW 3: STANDARD EO (Manager, Setup, Kitchen)
   return (
     <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
       <style>{`@media print { body, html { height: auto !important; overflow: visible !important; } .no-print, aside, nav, button, .modal-overlay { display: none !important; } .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } @page { margin: 10mm; size: A4; } .break-after-page { page-break-after: always; break-after: page; display: block; height: 1px; width: 100%; margin: 0; } .print-page { page-break-inside: avoid; min-height: 280mm; position: relative; } }`}</style>
@@ -1007,8 +967,7 @@ const PrintableEO = ({ data, printMode }) => {
         <Section title="餐飲安排 (F&B)">
            <DetailRow label="上菜方式" value={data.servingStyle} widthClass="w-1/4" />
            <DetailRow label="酒水安排" value={data.drinksPackage} widthClass="w-3/4" />
-           <DetailRow label="席前小食" value={data.preDinnerSnacks} widthClass="w-1/4" />
-           <DetailRow label="員工餐" value={data.staffMeals} widthClass="w-1/4" />
+           {/* REMOVED: preDinnerSnacks & staffMeals */}
            <div className="w-full px-2 mb-2 mt-2">
               <span className="text-slate-500 text-[10px] block uppercase font-bold mb-1">餐單內容</span>
               <div className="text-sm font-medium whitespace-pre-wrap leading-relaxed bg-slate-50 p-2 rounded border border-slate-100">{data.menus?.map(m => `${m.title}:\n${m.content}`).join('\n\n') || data.menuType}</div>
@@ -1062,18 +1021,17 @@ const PrintableEO = ({ data, printMode }) => {
            </div>
         </Section>
         
-        {/* REVENUE ALLOCATION - SHOWS QTY X UNIT PRICE */}
         {/* REVENUE ALLOCATION - TABLE VIEW */}
         <Section title="營收分配明細 (Detailed Revenue Allocation)" color="gray">
             <div className="w-full px-2">
                 <table className="w-full text-xs border-collapse table-fixed">
                     <colgroup>
-                        <col className="w-[15%]" /> {/* Dept */}
-                        <col className="w-[40%]" /> {/* Item */}
-                        <col className="w-[15%]" /> {/* Unit Price */}
-                        <col className="w-[10%]" /> {/* Qty */}
-                        <col className="w-[15%]" /> {/* Total */}
-                        <col className="w-[5%]" />  {/* % */}
+                        <col className="w-[15%]" />
+                        <col className="w-[40%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[5%]" />
                     </colgroup>
                     <thead>
                         <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-600">
@@ -1089,43 +1047,27 @@ const PrintableEO = ({ data, printMode }) => {
                         {Object.values(detailedAlloc).map((dept, i) => (
                             dept.total > 0 && (
                                 <React.Fragment key={i}>
-                                    {/* Render rows for each item in the department */}
                                     {dept.items.map((item, idx) => (
                                         <tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-100" : ""}>
-                                            {/* Dept Name (Show only on first item) */}
                                             <td className="py-1 px-2 font-bold text-slate-700 align-top">
                                                 {idx === 0 ? dept.label : ''}
                                             </td>
-                                            
-                                            {/* Item Name */}
                                             <td className="py-1 px-2 text-slate-600 align-top">
                                                 <span>{item.name}</span>
                                                 {item.subLabel && <span className="ml-2 text-[9px] bg-slate-100 text-slate-500 px-1 rounded">{item.subLabel}</span>}
                                             </td>
-
-                                            {/* Unit Price (NEW) */}
                                             <td className="py-1 px-2 text-right font-mono text-slate-500 align-top">
                                                 ${formatMoney(item.unit)}
                                             </td>
-
-                                            {/* Qty (NEW) */}
                                             <td className="py-1 px-2 text-center text-slate-500 align-top">
                                                 {item.qty}
                                             </td>
-
-                                            {/* Total Line Amount */}
                                             <td className="py-1 px-2 text-right font-mono font-medium text-slate-800 align-top">
                                                 ${formatMoney(item.amount)}
                                             </td>
-
-                                            {/* Percentage (Show only on last item of dept or empty) */}
-                                            <td className="py-1 px-2 text-right text-[10px] text-slate-400 align-top">
-                                                {/* Optional: Show line % or Dept % here. Currently showing empty to keep clean, or: */}
-                                                {/* {(item.amount / subtotal * 100).toFixed(1)}% */}
-                                            </td>
+                                            <td className="py-1 px-2 text-right text-[10px] text-slate-400 align-top"></td>
                                         </tr>
                                     ))}
-                                    {/* Department Subtotal Row */}
                                     <tr className="bg-slate-50/50 border-b border-slate-200">
                                         <td colSpan="4" className="py-1 px-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                             {dept.label.split(' ')[0]} Subtotal
@@ -1159,15 +1101,14 @@ const PrintableEO = ({ data, printMode }) => {
         </Section>
 
         <Section title="其他資訊 (Other Info)">
-           <DetailRow label="物流備註" value={data.deliveryNotes} widthClass="w-full" />
+           {/* REMOVED: Delivery Notes */}
            <DetailRow label="泊車" value={data.parkingInfo?.plates} widthClass="w-full" />
            <DetailRow label="其他備註" value={data.otherNotes} widthClass="w-full" />
         </Section>
       </div>
       <div className="break-after-page"></div>
 
-      {/* PAGE 2 & 3: SETUP & KITCHEN COPIES (Keep existing code from previous step) */}
-      {/* ... (Previous code for Page 2 and Page 3 is perfect, keeping it here implicitly) ... */}
+      {/* PAGE 2 & 3: SETUP & KITCHEN COPIES */}
       <div className="print-page">
         <Header title="活動指示單 (EO)" copyType="Setup & Logistics" badgeColor="bg-indigo-600" />
         <EventSummary />
@@ -1184,8 +1125,6 @@ const PrintableEO = ({ data, printMode }) => {
               <div className="flex flex-wrap">{Object.keys(equipmentMap).map(key => <CheckItem key={key} label={equipmentMap[key]} checked={data.equipment?.[key]} />)}</div>
            </div>
         </Section>
-        {/* ... (Section B, C, D omitted for brevity but should be here from previous step) ... */}
-        {/* If you need the full code block for Page 2/3 again, let me know, but they are unchanged from the "Chinese Date" step */}
         <Section title="B. 裝飾佈置 (Decoration)" color="indigo">
            <div className="w-full px-2">
               <div className="flex flex-wrap mb-2">{Object.keys(decorationMap).map(key => <CheckItem key={key} label={decorationMap[key]} checked={data.decoration?.[key]} />)}</div>
@@ -1235,11 +1174,7 @@ const PrintableEO = ({ data, printMode }) => {
            <div className="space-y-8">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="text-3xl font-bold underline mb-3">{menu.title}</h4>}<p className="text-3xl font-semibold leading-relaxed whitespace-pre-wrap">{menu.content}</p></div>))) : (<p className="text-3xl font-semibold leading-relaxed">{data.menuType}</p>)}</div>
         </div>
         {(data.specialMenuReq || data.allergies) && (<div className="mb-8 p-6 border-8 border-red-600 rounded-xl bg-red-50"><h3 className="text-3xl font-black text-red-600 mb-4 underline flex items-center"><AlertTriangle size={48} className="mr-4"/> 特殊飲食 & 過敏</h3><p className="text-4xl font-bold text-red-800 whitespace-pre-wrap leading-snug">{data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}</p></div>)}
-        <div className="grid grid-cols-2 gap-8 border-t-4 border-gray-300 pt-8">
-           <div className="bg-slate-50 p-4 border border-slate-200 rounded"><span className="block text-gray-500 text-xl font-bold uppercase mb-2">席前小食</span><span className="text-3xl font-bold block">{data.preDinnerSnacks || '無'}</span></div>
-           <div className="bg-slate-50 p-4 border border-slate-200 rounded"><span className="block text-gray-500 text-xl font-bold uppercase mb-2">員工餐</span><span className="text-3xl font-bold block">{data.staffMeals || '無'}</span></div>
-           <div className="col-span-2 bg-slate-50 p-4 border border-slate-200 rounded"><span className="block text-gray-500 text-xl font-bold uppercase mb-2">送貨/食材備註</span><span className="text-2xl font-bold block">{data.deliveryNotes || '無'}</span></div>
-        </div>
+        {/* REMOVED: Bottom grid with preDinnerSnacks, StaffMeals, DeliveryNotes */}
       </div>
     </div>
   );
@@ -2980,262 +2915,275 @@ export default function App() {
             {/* Content */}
             <div className="p-8 space-y-8 bg-slate-50/50 flex-1">
               
-              {/* TAB 1: BASIC */}
-              {formTab === 'basic' && (
-                <div className="space-y-6 animate-in fade-in">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormInput label="訂單編號 (Order ID)" name="orderId" required value={formData.orderId} onChange={handleInputChange} />
-                    <FormSelect 
-                      label="活動狀態 (Status)" 
-                      name="status" 
-                      options={[
-                        { value: 'tentative', label: '暫定 (Tentative)' }, 
-                        { value: 'confirmed', label: '已確認 (Confirmed)' }, 
-                        { value: 'completed', label: '已完成 (Completed)' }, 
-                        { value: 'cancelled', label: '已取消 (Cancelled)' }
-                      ]} 
-                      value={formData.status} 
-                      onChange={handleInputChange} 
-                    />
-                    <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
-                  </div>
-                  
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
-                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情</h4>
-                    
-                    {/* 1. Date & Time Row (4 Columns) */}
-                    <FormInput 
-                        label="活動名稱 (Event Name)" 
-                        name="eventName" 
-                        required 
-                        value={formData.eventName} 
-                        onChange={handleInputChange} 
-                        placeholder="e.g. 陳李聯婚 / Annual Dinner"
-                      />
-                    <div className="grid grid-cols-4 gap-4">
-                      <FormInput 
-                        label="活動日期" 
-                        name="date" 
-                        type="date" 
-                        required 
-                        className="col-span-1" 
-                        value={formData.date} 
-                        onChange={handleInputChange} 
-                      />
-                      <FormInput 
-                        label="開始時間 (Start)" 
-                        name="startTime" 
-                        type="time" 
-                        required 
-                        className="col-span-1" 
-                        value={formData.startTime} 
-                        onChange={handleInputChange} 
-                      />
-                      
-                      {/* Serving Time Input */}
-                      <div className="col-span-1">
-                         <label className="block text-sm font-bold text-slate-700 mb-1.5 text-red-600">起菜時間 (Serving)</label>
-                         <input
-                           type="time"
-                           name="servingTime"
-                           value={formData.servingTime || ''}
-                           onChange={handleInputChange}
-                           className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all bg-red-50"
-                         />
-                      </div>
-
-                      <FormInput 
-                        label="結束時間 (End)" 
-                        name="endTime" 
-                        type="time" 
-                        required 
-                        className="col-span-1" 
-                        value={formData.endTime} 
-                        onChange={handleInputChange} 
-                      />
-                    </div>
-
-                    {/* Location Selector Component */}
-                    <LocationSelector formData={formData} setFormData={setFormData} />
-
-                    {/* --- INSERT THIS BLOCK HERE --- */}
-                    {minSpendInfo && (
-                      <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row justify-between items-center animate-in slide-in-from-top-2">
-                        <div className="flex items-center text-indigo-900 mb-1 sm:mb-0">
-                            <div className="bg-white p-1 rounded-full shadow-sm mr-2 text-indigo-600">
-                                <DollarSign size={14} />
-                            </div>
-                            <div>
-                                <span className="text-xs font-bold text-indigo-600 block">最低消費要求 (Min Spend Requirement)</span>
-                                <span className="text-lg font-black font-mono tracking-tight">${minSpendInfo.amount.toLocaleString()}</span>
-                            </div>
+                  {/* TAB 1: BASIC INFO (FULL CODE) */}
+                    {formTab === 'basic' && (
+                      <div className="space-y-6 animate-in fade-in">
+                        {/* Row 1: ID, Status, Type */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <FormInput label="訂單編號 (Order ID)" name="orderId" required value={formData.orderId} onChange={handleInputChange} />
+                          <FormSelect 
+                            label="活動狀態 (Status)" 
+                            name="status" 
+                            options={[
+                              { value: 'tentative', label: '暫定 (Tentative)' }, 
+                              { value: 'confirmed', label: '已確認 (Confirmed)' }, 
+                              { value: 'completed', label: '已完成 (Completed)' }, 
+                              { value: 'cancelled', label: '已取消 (Cancelled)' }
+                            ]} 
+                            value={formData.status} 
+                            onChange={handleInputChange} 
+                          />
+                          <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
                         </div>
-                        <div className="text-right">
-                            <span className="text-[10px] font-medium text-indigo-500 bg-white px-2 py-1 rounded border border-indigo-100 block">
-                              {minSpendInfo.ruleName}
-                            </span>
+                        
+                        {/* Event Details Card */}
+                        <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
+                          <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情</h4>
+                          
+                          <FormInput 
+                              label="活動名稱 (Event Name)" 
+                              name="eventName" 
+                              required 
+                              value={formData.eventName} 
+                              onChange={handleInputChange} 
+                              placeholder="e.g. 陳李聯婚 / Annual Dinner"
+                            />
+
+                          <div className="grid grid-cols-4 gap-4">
+                            <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
+                            <FormInput label="開始時間 (Start)" name="startTime" type="time" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
+                            
+                            {/* Serving Time */}
+                            <div className="col-span-1">
+                                <label className="block text-sm font-bold text-slate-700 mb-1.5 text-red-600">起菜時間 (Serving)</label>
+                                <input
+                                  type="time"
+                                  name="servingTime"
+                                  value={formData.servingTime || ''}
+                                  onChange={handleInputChange}
+                                  className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all bg-red-50"
+                                />
+                            </div>
+
+                            <FormInput label="結束時間 (End)" name="endTime" type="time" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
+                          </div>
+
+                          {/* Location & Min Spend Section */}
+                          <div className="pt-4 border-t border-slate-100 mt-2">
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                                  
+                                  {/* LEFT COLUMN: Location & Min Spend (Span 8) */}
+                                  <div className="lg:col-span-8 flex flex-col justify-between">
+                                      <div>
+                                          <LocationSelector formData={formData} setFormData={setFormData} />
+                                          
+                                          {/* MIN SPEND REMINDER (Kept under Location) */}
+                                          {minSpendInfo && (
+                                            <div className="mt-2 p-2 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row justify-between items-center animate-in slide-in-from-top-2">
+                                               <div className="flex items-center text-indigo-900 mb-1 sm:mb-0">
+                                                  <div className="bg-white p-1 rounded-full shadow-sm mr-2 text-indigo-600">
+                                                      <DollarSign size={14} />
+                                                  </div>
+                                                  <div>
+                                                      <span className="text-[10px] font-bold text-indigo-600 block">最低消費 (Min Spend)</span>
+                                                      <span className="text-base font-black font-mono tracking-tight">${minSpendInfo.amount.toLocaleString()}</span>
+                                                  </div>
+                                               </div>
+                                               <div className="text-right">
+                                                  <span className="text-[10px] font-medium text-indigo-500 bg-white px-2 py-0.5 rounded border border-indigo-100 block">
+                                                     {minSpendInfo.ruleName}
+                                                  </span>
+                                               </div>
+                                            </div>
+                                          )}
+                                      </div>
+                                  </div>
+
+                                  {/* RIGHT COLUMN: Counts (Span 4) */}
+                                  <div className="lg:col-span-4">
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <FormInput 
+                                          label="席數 (Tables)" 
+                                          name="tableCount" 
+                                          type="number" 
+                                          value={formData.tableCount} 
+                                          onChange={handleInputChange} 
+                                          placeholder="20"
+                                        />
+                                        <FormInput 
+                                          label="人數 (Guests)" 
+                                          name="guestCount" 
+                                          type="number" 
+                                          value={formData.guestCount} 
+                                          onChange={handleInputChange} 
+                                          placeholder="240"
+                                        />
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                        </div>
+
+                        {/* Client Info Card */}
+                        <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
+                          <h4 className="font-bold text-slate-800">聯絡人資訊</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <FormInput label="客戶姓名" name="clientName" required value={formData.clientName} onChange={handleInputChange} />
+                            <FormInput label="電話" name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
+                            <FormInput label="公司" name="companyName" value={formData.companyName} onChange={handleInputChange} />
+                            <FormInput label="銷售人員" name="salesRep" value={formData.salesRep} onChange={handleInputChange} />
+                            <FormInput label="Email" name="clientEmail" value={formData.clientEmail} onChange={handleInputChange} />
+                            <FormInput label="地址" name="address" value={formData.address} onChange={handleInputChange} />
+                          </div>
                         </div>
                       </div>
                     )}
-                    {/* --- END INSERT --- */}
-                  </div>
 
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
-                    <h4 className="font-bold text-slate-800">聯絡人資訊</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput label="客戶姓名" name="clientName" required value={formData.clientName} onChange={handleInputChange} />
-                      <FormInput label="電話" name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
-                      <FormInput label="公司" name="companyName" value={formData.companyName} onChange={handleInputChange} />
-                      <FormInput label="銷售人員" name="salesRep" value={formData.salesRep} onChange={handleInputChange} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: F&B */}
-              {formTab === 'fnb' && (
-                <div className="space-y-6 animate-in fade-in">
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                      <h4 className="font-bold text-slate-800">餐單設定 (Menus)</h4>
-                      <div className="flex space-x-2">
-                        <button 
-                          type="button" 
-                          onClick={addMenu}
-                          className="text-sm bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-bold flex items-center transition-colors"
-                        >
-                          <Plus size={16} className="mr-1"/> 新增菜單 (Add Menu)
-                        </button>
-                      </div>
-                    </div>
-                    
-{/* Dynamic Menus with Allocation Editor */}
-                    <div className="space-y-4">
-                      {formData.menus && formData.menus.map((menu, index) => (
-                        <div key={menu.id || index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm">
-                          
-                          {/* HEADER: Title & Presets */}
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center flex-1 gap-2">
-                                <input 
-                                  type="text" 
-                                  placeholder="菜單標題 (例如: Main Menu / Vegetarian)"
-                                  value={menu.title}
-                                  onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
-                                  className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
-                                />
-                                {/* LOAD PRESET BUTTON */}
-                                <select 
-                                  className="text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-500 outline-none w-32"
-                                  onChange={(e) => handleApplyMenuPreset(menu.id, e.target.value)}
-                                  value=""
-                                >
-                                  <option value="" disabled>📂 載入預設...</option>
-                                  {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'food').map(m => (
-                                    <option key={m.id} value={m.id}>{m.title}</option>
-                                  ))}
-                                </select>
-                                
-                                {formData.menus.length > 1 && (
-                                  <button 
-                                    type="button" 
-                                    onClick={() => removeMenu(menu.id)}
-                                    className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors ml-2"
-                                    title="移除此菜單"
-                                  >
-                                    <Trash2 size={16}/>
-                                  </button>
-                                )}
-                              </div>
-                          </div>
-
-                          {/* CONTENT: Text Area */}
-                          <textarea
-                            rows={6}
-                            placeholder="請在此輸入詳細菜單內容..."
-                            value={menu.content}
-                            onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3"
-                          />
-
-                          {/* NEW: AD-HOC REVENUE ALLOCATION SECTION */}
-                          <div className="border-t border-slate-200 pt-2">
-                             <button 
+                    {/* TAB 2: F&B */}
+                    {formTab === 'fnb' && (
+                      <div className="space-y-6 animate-in fade-in">
+                        <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <h4 className="font-bold text-slate-800">餐單設定 (Menus)</h4>
+                            <div className="flex space-x-2">
+                              <button 
                                 type="button" 
-                                onClick={() => toggleMenuAllocation(menu.id)}
-                                className="flex items-center text-xs font-bold text-slate-500 hover:text-blue-600 transition-colors"
-                             >
-                                <PieChart size={14} className="mr-1"/> 
-                                {menu.showAllocation ? "隱藏拆帳設定 (Hide Allocation)" : "設定營收拆帳 (Edit Allocation)"}
-                             </button>
-
-                             {menu.showAllocation && (
-                                <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2">
-                                   <div className="flex justify-between items-center mb-2">
-                                      <span className="text-xs font-bold text-slate-700">拆帳金額 (Allocation per Unit)</span>
-                                      <span className="text-[10px] text-slate-400">總單價: ${menu.price || 0}</span>
-                                   </div>
-                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                      {DEPARTMENTS.map(dept => (
-                                         <div key={dept.key}>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
-                                            <div className="relative">
-                                               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                                               <input 
-                                                  type="number" 
-                                                  placeholder="0"
-                                                  value={menu.allocation?.[dept.key] || ''} 
-                                                  onChange={(e) => handleMenuAllocationChange(menu.id, dept.key, e.target.value)}
-                                                  className="w-full pl-4 pr-1 py-1 text-xs border border-slate-300 rounded focus:border-blue-500 outline-none"
-                                               />
-                                            </div>
-                                         </div>
-                                      ))}
-                                   </div>
-                                   <div className="mt-2 text-[10px] text-slate-400 text-right">
-                                      * 未分配金額將自動歸入 Kitchen
-                                   </div>
+                                onClick={addMenu}
+                                className="text-sm bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-bold flex items-center transition-colors"
+                              >
+                                <Plus size={16} className="mr-1"/> 新增菜單 (Add Menu)
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* Dynamic Menus with Allocation Editor */}
+                          <div className="space-y-4">
+                            {formData.menus && formData.menus.map((menu, index) => (
+                              <div key={menu.id || index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm">
+                                
+                                {/* HEADER: Title & Presets */}
+                                <div className="flex justify-between items-center mb-2">
+                                  <div className="flex items-center flex-1 gap-2">
+                                      <input 
+                                        type="text" 
+                                        placeholder="菜單標題 (例如: Main Menu / Vegetarian)"
+                                        value={menu.title}
+                                        onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
+                                        className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
+                                      />
+                                      {/* LOAD PRESET BUTTON */}
+                                      <select 
+                                        className="text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-500 outline-none w-32"
+                                        onChange={(e) => handleApplyMenuPreset(menu.id, e.target.value)}
+                                        value=""
+                                      >
+                                        <option value="" disabled>📂 載入預設...</option>
+                                        {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'food').map(m => (
+                                          <option key={m.id} value={m.id}>{m.title}</option>
+                                        ))}
+                                      </select>
+                                      
+                                      {formData.menus.length > 1 && (
+                                        <button 
+                                          type="button" 
+                                          onClick={() => removeMenu(menu.id)}
+                                          className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors ml-2"
+                                          title="移除此菜單"
+                                        >
+                                          <Trash2 size={16}/>
+                                        </button>
+                                      )}
+                                  </div>
                                 </div>
-                             )}
+
+                                {/* CONTENT: Text Area */}
+                                <textarea
+                                  rows={6}
+                                  placeholder="請在此輸入詳細菜單內容..."
+                                  value={menu.content}
+                                  onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)}
+                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3"
+                                />
+
+                                {/* NEW: AD-HOC REVENUE ALLOCATION SECTION */}
+                                <div className="border-t border-slate-200 pt-2">
+                                   <button 
+                                      type="button" 
+                                      onClick={() => toggleMenuAllocation(menu.id)}
+                                      className="flex items-center text-xs font-bold text-slate-500 hover:text-blue-600 transition-colors"
+                                   >
+                                      <PieChart size={14} className="mr-1"/> 
+                                      {menu.showAllocation ? "隱藏拆帳設定 (Hide Allocation)" : "設定營收拆帳 (Edit Allocation)"}
+                                   </button>
+
+                                   {menu.showAllocation && (
+                                      <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2">
+                                         <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-bold text-slate-700">拆帳金額 (Allocation per Unit)</span>
+                                            <span className="text--[10px] text-slate-400">總單價: ${menu.price || 0}</span>
+                                         </div>
+                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {DEPARTMENTS.map(dept => (
+                                               <div key={dept.key}>
+                                                  <label className="block text-[10px] font-bold text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
+                                                  <div className="relative">
+                                                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                                     <input 
+                                                        type="number" 
+                                                        placeholder="0"
+                                                        value={menu.allocation?.[dept.key] || ''} 
+                                                        onChange={(e) => handleMenuAllocationChange(menu.id, dept.key, e.target.value)}
+                                                        className="w-full pl-4 pr-1 py-1 text-xs border border-slate-300 rounded focus:border-blue-500 outline-none"
+                                                     />
+                                                  </div>
+                                               </div>
+                                            ))}
+                                         </div>
+                                         <div className="mt-2 text-[10px] text-slate-400 text-right">
+                                            * 未分配金額將自動歸入 Kitchen
+                                         </div>
+                                      </div>
+                                   )}
+                                </div>
+
+                              </div>
+                            ))}
                           </div>
 
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            <FormSelect label="上菜方式" name="servingStyle" options={SERVING_STYLES} value={formData.servingStyle} onChange={handleInputChange} />
+                            {/* Updated Drinks Package Logic */}
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排</label>
+                              <select 
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
+                                value={drinkPackageType}
+                                onChange={handleDrinkTypeChange}
+                              >
+                                <option value="">請選擇套餐 (載入預設)</option>
+                                {DEFAULT_DRINK_PACKAGES.map(p => <option key={p} value={p}>{p}</option>)}
+                                {/* Dynamic Drink Presets */}
+                                {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'drink').map(m => (
+                                  <option key={m.id} value={m.title}>📂 {m.title}</option>
+                                ))}
+                                <option value="Other">自訂 / 其他</option>
+                              </select>
+                              <textarea
+                                name="drinksPackage"
+                                rows={4}
+                                value={formData.drinksPackage || ''}
+                                onChange={handleInputChange}
+                                placeholder="酒水內容詳細描述..."
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                              />
+                            </div>
+                          </div>
+                          {/* REMOVED: preDinnerSnacks & staffMeals */}
+                          <FormTextArea label="特殊餐單需求" name="specialMenuReq" value={formData.specialMenuReq} onChange={handleInputChange} />
+                          <FormTextArea label="食物過敏 (Allergies)" name="allergies" rows={2} className="bg-red-50 p-2 rounded-lg" value={formData.allergies} onChange={handleInputChange} />
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                      <FormSelect label="上菜方式" name="servingStyle" options={SERVING_STYLES} value={formData.servingStyle} onChange={handleInputChange} />
-                      {/* Updated Drinks Package Logic */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排</label>
-                        <select 
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
-                          value={drinkPackageType}
-                          onChange={handleDrinkTypeChange}
-                        >
-                          <option value="">請選擇套餐 (載入預設)</option>
-                          {DEFAULT_DRINK_PACKAGES.map(p => <option key={p} value={p}>{p}</option>)}
-                          {/* Dynamic Drink Presets */}
-                          {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'drink').map(m => (
-                            <option key={m.id} value={m.title}>📂 {m.title}</option>
-                          ))}
-                          <option value="Other">自訂 / 其他</option>
-                        </select>
-                        <textarea
-                          name="drinksPackage"
-                          rows={4}
-                          value={formData.drinksPackage || ''}
-                          onChange={handleInputChange}
-                          placeholder="酒水內容詳細描述..."
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                        />
-                      </div>
-                    </div>
-                    <FormTextArea label="特殊餐單需求" name="specialMenuReq" value={formData.specialMenuReq} onChange={handleInputChange} />
-                    <FormTextArea label="食物過敏 (Allergies)" name="allergies" rows={2} className="bg-red-50 p-2 rounded-lg" value={formData.allergies} onChange={handleInputChange} />
-                  </div>
-                </div>
-              )}
+                      </div>
+                    )}
 
               {/* TAB 3: BILLING - FINAL CORRECTED VERSION */}
               {formTab === 'billing' && (

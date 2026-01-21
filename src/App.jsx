@@ -580,17 +580,13 @@ const DepositField = ({ label, prefix, formData, setFormData, onUpload, addToast
 };
 
 // ==========================================
-// SECTION 5: PRINTABLE VIEWS
-// ==========================================
-
-// ==========================================
-// SECTION 5: PRINTABLE VIEWS (CORRECTED)
+// SECTION 5: PRINTABLE VIEWS (UPDATED REVENUE DETAIL)
 // ==========================================
 
 const PrintableEO = ({ data, printMode }) => {
   if (!data) return null;
 
-  // --- Helpers (Reused) ---
+  // --- Helpers ---
   const DetailRow = ({ label, value, widthClass = "w-1/4", highlight = false }) => {
     if (!value) return null;
     return (
@@ -624,15 +620,139 @@ const PrintableEO = ({ data, printMode }) => {
   const decorationMap = { ceremonyService: '證婚桌', ceremonyChairs: '證婚椅子', flowerPillars: '花柱佈置', guestBook: '簽名冊', easel: '畫架', mahjong: '麻雀枱', invites: '喜帖', wreaths: '花圈' };
   const avMap = { ledBig: '大禮堂LED', projBig: '大禮堂Projector', ledSmall: '小禮堂LED', projSmall: '小禮堂Projector', spotlight: '聚光燈', movingHead: '電腦燈', entranceLight: '進場燈', tv60v: '60"TV(直)', tv60h: '60"TV(橫)', mic: '咪', speaker: '喇叭' };
 
-  // Helper: Date with Weekday
+  // Helper: Date
   const formatDateWithDay = (dateStr) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
-    const day = date.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${dateStr} (${day})`;
+    return date.toLocaleDateString('zh-HK', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+  };
+  const formatShortDate = (dateStr) => {
+     if (!dateStr) return '--/--';
+     const date = new Date(dateStr);
+     return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  // Header Component
+  // --- Financial & Allocation Logic ---
+  
+  // 1. Calculate Pure Revenue (Subtotal)
+  const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
+                 + ((data.drinksPrice||0)*(data.drinksQty||1)) 
+                 + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
+  
+  // 2. Calculate Service Charge Base (Only items marked applySC)
+  let scBase = 0;
+  (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
+  if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
+  (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
+  
+  // 3. Calculate Final SC Amount
+  const serviceChargeVal = data.enableServiceCharge !== false ? (parseFloat(data.serviceCharge) || (scBase * 0.1)) : 0; 
+  const scLabel = data.serviceCharge && data.serviceCharge.includes('%') ? data.serviceCharge : 'Fixed';
+
+  const discountVal = parseFloat(data.discount) || 0;
+  const grandTotal = subtotal + serviceChargeVal - discountVal;
+
+  // 4. Breakdown Logic (Groups items by Dept)
+// --- Financial & Allocation Logic (CLEAN MERGE VERSION) ---
+// --- Financial & Allocation Logic (STRUCTURED DATA VERSION) ---
+  const getDetailedAllocation = () => {
+    // 1. Initialize Buckets
+    const allocation = {};
+    DEPARTMENTS.forEach(dept => {
+        allocation[dept.key] = { label: dept.label, total: 0, items: [] };
+    });
+    if(!allocation['other']) allocation['other'] = { label: '其他 (Other)', total: 0, items: [] };
+
+    // Helper: Now accepts specific data points instead of just a string string
+    const addItem = (key, name, subLabel, qty, unitPrice, totalAmount) => {
+        if(totalAmount <= 0) return;
+        let group = allocation[key] ? key : 'other';
+        allocation[group].total += totalAmount;
+        allocation[group].items.push({ 
+            name, 
+            subLabel,
+            qty: parseFloat(qty), 
+            unit: parseFloat(unitPrice), 
+            amount: totalAmount 
+        });
+    };
+
+    // 2. Process Menus (Food)
+    (data.menus || []).forEach(m => {
+        const qty = parseFloat(m.qty) || 1;
+        const price = parseFloat(m.price) || 0;
+        const totalLineAmount = price * qty;
+
+        if (m.allocation && Object.keys(m.allocation).length > 0) {
+            let nonKitchenAllocated = 0;
+
+            // A. Non-Kitchen Departments
+            Object.entries(m.allocation).forEach(([dept, unitVal]) => {
+                if (dept !== 'kitchen') {
+                    const val = parseFloat(unitVal) || 0;
+                    if (val > 0) {
+                        const lineAmt = val * qty;
+                        nonKitchenAllocated += lineAmt;
+                        const deptLabel = DEPARTMENTS.find(d=>d.key===dept)?.label.split(' ')[0]; // e.g. "點心"
+                        addItem(dept, m.title, deptLabel, qty, val, lineAmt);
+                    }
+                }
+            });
+
+            // B. Balance to Kitchen
+            const kitchenTotal = totalLineAmount - nonKitchenAllocated;
+            if (kitchenTotal > 0) {
+                const unitKitchen = price - (nonKitchenAllocated / qty);
+                addItem('kitchen', m.title, '', qty, unitKitchen, kitchenTotal);
+            }
+
+        } else {
+            // No allocation -> 100% to Kitchen
+            addItem('kitchen', m.title, '', qty, price, totalLineAmount);
+        }
+    });
+
+    // 3. Process Drinks (Bar)
+    const dQty = parseFloat(data.drinksQty) || 1;
+    const dPrice = parseFloat(data.drinksPrice) || 0;
+    const dTotal = dPrice * dQty;
+    const dName = data.drinksPackage || 'Drinks Package';
+    
+    if (data.drinkAllocation && Object.keys(data.drinkAllocation).length > 0) {
+         let nonBarAllocated = 0;
+         Object.entries(data.drinkAllocation).forEach(([dept, unitVal]) => {
+             if (dept !== 'bar') {
+                 const val = parseFloat(unitVal) || 0;
+                 if (val > 0) {
+                     const lineAmt = val * dQty;
+                     nonBarAllocated += lineAmt;
+                     addItem(dept, dName, dept, dQty, val, lineAmt);
+                 }
+             }
+         });
+         const barTotal = dTotal - nonBarAllocated;
+         if (barTotal > 0) {
+             const unitBar = dPrice - (nonBarAllocated / dQty);
+             addItem('bar', dName, 'Water Bar', dQty, unitBar, barTotal);
+         }
+    } else {
+         addItem('bar', dName, '', dQty, dPrice, dTotal);
+    }
+
+    // 4. Custom Items
+    (data.customItems || []).forEach(i => {
+        const qty = parseFloat(i.qty) || 1;
+        const price = parseFloat(i.price) || 0;
+        const total = price * qty;
+        addItem(i.category || 'other', i.name, '', qty, price, total);
+    });
+
+    return allocation;
+  };
+
+  const detailedAlloc = getDetailedAllocation();
+
+  // --- Components ---
   const Header = ({ title, copyType, badgeColor = "bg-slate-900" }) => (
     <div className="flex justify-between items-end border-b-4 border-slate-900 pb-2 mb-6">
       <div>
@@ -640,21 +760,28 @@ const PrintableEO = ({ data, printMode }) => {
         <p className="text-slate-500 text-xs mt-1">Order ID: {data.orderId}</p>
       </div>
       <div className="text-right">
-         <div className={`inline-block ${badgeColor} text-white px-3 py-1 text-sm font-bold rounded mb-1 uppercase`}>
-           {copyType}
-         </div>
+         <div className={`inline-block ${badgeColor} text-white px-3 py-1 text-sm font-bold rounded mb-1 uppercase`}>{copyType}</div>
          <div className="text-sm font-bold text-slate-800">{formatDateWithDay(data.date)}</div>
-         <div className="text-xs text-slate-400">Printed: {new Date().toLocaleDateString()}</div>
       </div>
     </div>
   );
 
-  // Summary Component
+// --- Components ---
+  // 更新後的 EventSummary：將日期放在第一位並高亮顯示
   const EventSummary = () => (
     <div className="flex flex-wrap bg-slate-50 p-2 rounded mb-6 border border-slate-100">
-        <DetailRow label="活動名稱" value={data.eventName} widthClass="w-1/3" />
-        <DetailRow label="位置" value={data.venueLocation} widthClass="w-1/3" />
-        <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} widthClass="w-1/3" />
+        {/* NEW: Date Field (Added here prominently) */}
+        <DetailRow 
+            label="日期 (Date)" 
+            value={formatDateWithDay(data.date)} 
+            widthClass="w-1/4" 
+            highlight={true} // 紅色高亮
+        />
+
+        <DetailRow label="活動名稱" value={data.eventName} widthClass="w-1/4" />
+        <DetailRow label="位置" value={data.venueLocation} widthClass="w-1/4" />
+        <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} widthClass="w-1/4" />
+        
         <DetailRow label="起菜時間" value={data.servingTime} widthClass="w-1/4" highlight={true} />
         <DetailRow label="席數" value={`${data.tableCount || 0} 席`} widthClass="w-1/4" />
         <DetailRow label="人數" value={`${data.guestCount || 0} 人`} widthClass="w-1/4" />
@@ -662,27 +789,13 @@ const PrintableEO = ({ data, printMode }) => {
     </div>
   );
 
-  const renderCheckList = (obj, labelMap) => {
-    if (!obj) return '無';
-    const checked = Object.entries(obj).filter(([k, v]) => v).map(([k]) => labelMap[k] || k);
-    return checked.length > 0 ? checked.join(', ') : '無';
-  };
-
-  // Calculations
-  const subtotal = calculateTotalAmount({...data, enableServiceCharge: false, discount: 0});
-  const serviceChargeVal = data.enableServiceCharge !== false ? (parseFloat(data.serviceCharge) || (subtotal * 0.1)) : 0; 
-  const discountVal = parseFloat(data.discount) || 0;
-
-  // ==================================================================================
-  // MODE 1: BRIEFING SHEET (Station Card)
-  // This block was missing in your previous code!
-  // ==================================================================================
+  // ==========================================
+  // VIEW 1: BRIEFING MODE
+  // ==========================================
   if (printMode === 'BRIEFING') {
     return (
       <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm p-4">
         <style>{`@media print { @page { margin: 5mm; size: A4; } }`}</style>
-        
-        {/* Briefing Header */}
         <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
            <div>
               <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">FLOOR STAFF BRIEFING</div>
@@ -693,89 +806,186 @@ const PrintableEO = ({ data, printMode }) => {
                  <span className="text-red-600 border border-red-600 px-2 py-1 rounded">{data.servingTime ? `${data.servingTime} 起菜` : '起菜時間待定'}</span>
               </div>
            </div>
-           <div className="text-right">
-              <div className="text-4xl font-black text-slate-200">BRIEF</div>
-           </div>
+           <div className="text-right"><div className="text-4xl font-black text-slate-200">BRIEF</div></div>
         </div>
-
-        {/* 1. WRITEABLE ASSIGNMENT BOXES */}
         <div className="grid grid-cols-2 gap-6 mb-6">
-           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50">
-              <span className="text-slate-400 text-xs font-bold uppercase mb-2">負責檯號 (Table Numbers)</span>
-              <div className="text-4xl font-black text-slate-200">寫在此處</div>
-           </div>
-           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50">
-              <span className="text-slate-400 text-xs font-bold uppercase mb-2">員工姓名/編號 (Staff Name)</span>
-              <div className="text-4xl font-black text-slate-200">寫在此處</div>
-           </div>
+           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50"><span className="text-slate-400 text-xs font-bold uppercase mb-2">負責檯號 (Table Numbers)</span><div className="text-4xl font-black text-slate-200">寫在此處</div></div>
+           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50"><span className="text-slate-400 text-xs font-bold uppercase mb-2">員工姓名/編號 (Staff Name)</span><div className="text-4xl font-black text-slate-200">寫在此處</div></div>
         </div>
-
-        {/* 2. IMPORTANT ALERTS */}
-        <div className="mb-6">
-           <div className="flex gap-4">
-              {/* Allergy Box */}
-              <div className="flex-1 border-2 border-red-500 rounded-lg p-3 bg-red-50">
-                 <div className="flex justify-between items-start mb-2">
-                    <span className="text-red-700 font-bold flex items-center"><AlertTriangle size={16} className="mr-1"/> 過敏 / 特別餐 (Allergies)</span>
-                    <span className="text-[10px] text-red-400">請填寫檯號</span>
-                 </div>
-                 <div className="min-h-[80px]">
-                    <p className="text-lg font-bold text-red-900 whitespace-pre-wrap">
-                       {data.allergies || data.specialMenuReq || '暫無特別記錄'}
-                    </p>
-                 </div>
-                 {/* Empty lines for writing */}
-                 <div className="border-b border-red-200 mt-6"></div>
-                 <div className="border-b border-red-200 mt-6"></div>
-              </div>
-
-              {/* Drinks Box */}
-              <div className="w-1/3 border-2 border-blue-200 rounded-lg p-3 bg-blue-50">
-                 <span className="text-blue-700 font-bold block mb-2"><Coffee size={16} className="inline mr-1"/> 酒水 (Drinks)</span>
-                 <p className="text-sm font-bold text-blue-900 whitespace-pre-wrap">{data.drinksPackage || '未定'}</p>
-              </div>
-           </div>
-        </div>
-
-        {/* 3. MENU REFERENCE */}
-        <div className="border-2 border-slate-800 rounded-xl overflow-hidden">
-           <div className="bg-slate-800 text-white px-4 py-2 flex justify-between items-center">
-              <span className="font-bold">餐單 (Menu Reference)</span>
-              <span className="text-xs bg-slate-600 px-2 py-1 rounded">{data.servingStyle}</span>
-           </div>
-           <div className="p-4 bg-white min-h-[300px]">
-              <div className="space-y-6">
-                 {data.menus && data.menus.length > 0 ? (
-                    data.menus.map((menu, idx) => (
-                       <div key={idx}>
-                          {menu.title && <h4 className="font-bold underline mb-2 text-lg">{menu.title}</h4>}
-                          <p className="text-base font-medium leading-relaxed whitespace-pre-wrap text-slate-800">{menu.content}</p>
-                       </div>
-                    ))
-                 ) : (
-                    <p className="text-lg font-medium leading-relaxed">{data.menuType}</p>
-                 )}
-              </div>
-           </div>
-        </div>
-
-        {/* 4. FOOTER NOTES */}
-        <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-slate-500">
-           <div>
-              <span className="font-bold block text-slate-700">席前小食:</span> {data.preDinnerSnacks || '無'}
-           </div>
-           <div>
-              <span className="font-bold block text-slate-700">其他備註:</span> {data.otherNotes || '無'}
-           </div>
-        </div>
+        <div className="mb-6"><div className="flex gap-4"><div className="flex-1 border-2 border-red-500 rounded-lg p-3 bg-red-50"><div className="flex justify-between items-start mb-2"><span className="text-red-700 font-bold flex items-center"><AlertTriangle size={16} className="mr-1"/> 過敏 / 特別餐 (Allergies)</span><span className="text-[10px] text-red-400">請填寫檯號</span></div><div className="min-h-[80px]"><p className="text-lg font-bold text-red-900 whitespace-pre-wrap">{data.allergies || data.specialMenuReq || '暫無特別記錄'}</p></div><div className="border-b border-red-200 mt-6"></div><div className="border-b border-red-200 mt-6"></div></div><div className="w-1/3 border-2 border-blue-200 rounded-lg p-3 bg-blue-50"><span className="text-blue-700 font-bold block mb-2"><Coffee size={16} className="inline mr-1"/> 酒水 (Drinks)</span><p className="text-sm font-bold text-blue-900 whitespace-pre-wrap">{data.drinksPackage || '未定'}</p></div></div></div>
+        <div className="border-2 border-slate-800 rounded-xl overflow-hidden"><div className="bg-slate-800 text-white px-4 py-2 flex justify-between items-center"><span className="font-bold">餐單 (Menu Reference)</span><span className="text-xs bg-slate-600 px-2 py-1 rounded">{data.servingStyle}</span></div><div className="p-4 bg-white min-h-[300px]"><div className="space-y-6">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="font-bold underline mb-2 text-lg">{menu.title}</h4>}<p className="text-base font-medium leading-relaxed whitespace-pre-wrap text-slate-800">{menu.content}</p></div>))) : (<p className="text-lg font-medium leading-relaxed">{data.menuType}</p>)}</div></div></div>
+        <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-slate-500"><div><span className="font-bold block text-slate-700">席前小食:</span> {data.preDinnerSnacks || '無'}</div><div><span className="font-bold block text-slate-700">其他備註:</span> {data.otherNotes || '無'}</div></div>
       </div>
     );
   }
 
-  // ==================================================================================
-  // MODE 2: STANDARD EO (Manager, Setup, Kitchen)
-  // This runs if printMode is NOT 'BRIEFING' (e.g., 'EO')
-  // ==================================================================================
+  // ==========================================
+  // VIEW 2: QUOTATION MODE (Client Facing - Compact)
+  // ==========================================
+  if (printMode === 'QUOTATION') {
+    const BRAND_COLOR = '#A57C00'; 
+    const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
+
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 min-h-screen relative flex flex-col">
+        <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+        
+        {/* Header - No Logo */}
+        <div className={`flex justify-between items-start border-b-4 pb-4 mb-6`} style={{ borderColor: BRAND_COLOR }}>
+            <div className="max-w-[70%]">
+                <div className="mb-1" style={{ color: BRAND_COLOR }}>
+                    <span className="text-3xl font-black tracking-tight block leading-none">璟瓏軒</span>
+                    <span className="text-xs font-bold tracking-widest uppercase block mt-1">King Lung Heen</span>
+                </div>
+                <div className="text-[10px] text-slate-500 space-y-0.5 font-medium leading-tight mt-2">
+                    <p>尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
+                    <p>4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon, TST</p>
+                    <div className="flex gap-3 mt-1 text-slate-600 font-bold">
+                        <span>Tel: +852 2788 3939</span>
+                        <span>Banquet Hotline: +852 5222 6066</span>
+                    </div>
+                    <p className="font-bold underline" style={{ color: BRAND_COLOR }}>Email: banquet@kinglungheen.com</p>
+                </div>
+            </div>
+            <div className="text-right">
+                <h1 className="text-3xl font-light text-slate-300 uppercase tracking-widest mb-1">Quotation</h1>
+                <div className="inline-block text-right">
+                    <p className="text-xs font-bold text-slate-700">NO: {data.orderId}</p>
+                    <p className="text-xs text-slate-500">Date: {new Date().toLocaleDateString('en-GB')}</p>
+                </div>
+            </div>
+        </div>
+
+        {/* Client & Event Info Grid */}
+        <div className="grid grid-cols-2 gap-8 mb-6">
+            <div>
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-1 border-b border-slate-200 pb-0.5">Client Info (客戶資料)</h3>
+                <div className="space-y-0.5">
+                    <p className="font-bold text-sm text-slate-900">{data.clientName}</p>
+                    {data.companyName && <p className="text-xs text-slate-600 font-medium">{data.companyName}</p>}
+                    <p className="text-xs text-slate-500">{data.clientPhone}</p>
+                    <p className="text-xs text-slate-500">{data.clientEmail}</p>
+                </div>
+            </div>
+            <div>
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-1 border-b border-slate-200 pb-0.5">Event Details (活動詳情)</h3>
+                <div className="grid grid-cols-2 gap-y-1 text-xs">
+                    <span className="text-slate-500">Event Name:</span>
+                    <span className="font-bold text-slate-900">{data.eventName}</span>
+                    <span className="text-slate-500">Date:</span>
+                    <span className="font-bold text-slate-900">{formatDateWithDay(data.date)}</span>
+                    <span className="text-slate-500">Time:</span>
+                    <span className="font-bold text-slate-900">{data.startTime} - {data.endTime}</span>
+                    <span className="text-slate-500">Venue:</span>
+                    <span className="font-bold text-slate-900">{data.venueLocation}</span>
+                    <span className="text-slate-500">Guests:</span>
+                    <span className="font-bold text-slate-900">{data.guestCount} Pax / {data.tableCount} Tables</span>
+                </div>
+            </div>
+        </div>
+
+        {/* Items Table */}
+        <div className="mb-6 flex-1">
+            <table className="w-full text-xs">
+                <thead>
+                    <tr className="border-b-2 border-slate-800 text-slate-600">
+                        <th className="text-left py-1 w-[55%] uppercase tracking-wider">Description</th>
+                        <th className="text-right py-1 w-[15%] uppercase tracking-wider">Unit Price</th>
+                        <th className="text-center py-1 w-[10%] uppercase tracking-wider">Qty</th>
+                        <th className="text-right py-1 w-[20%] uppercase tracking-wider">Amount (HKD)</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {(data.menus || []).map((m, i) => (
+                        <tr key={`m-${i}`}>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
+                                <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">{m.content}</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(m.price)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{m.qty}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((m.price||0)*(m.qty||1))}</td>
+                        </tr>
+                    ))}
+                    {data.drinksPackage && (
+                        <tr>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900 mb-0.5">Beverage Package</p>
+                                <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">{data.drinksPackage}</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(data.drinksPrice)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{data.drinksQty}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td>
+                        </tr>
+                    )}
+                    {(data.customItems || []).map((item, i) => (
+                        <tr key={`c-${i}`}>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900">{item.name}</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(item.price)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{item.qty}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((item.price||0)*(item.qty||1))}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+
+        {/* Totals Section */}
+        <div className="flex justify-end mb-6">
+            <div className="w-1/2 space-y-2">
+                <div className="flex justify-between text-xs text-slate-600">
+                    <span>Subtotal</span>
+                    <span className="font-mono">${formatMoney(subtotal)}</span>
+                </div>
+                {serviceChargeVal > 0 && (
+                    <div className="flex justify-between text-xs text-slate-600">
+                        <span>Service Charge ({scLabel})</span>
+                        <span className="font-mono">+${formatMoney(serviceChargeVal)}</span>
+                    </div>
+                )}
+                {discountVal > 0 && (
+                    <div className="flex justify-between text-xs font-bold" style={{ color: BRAND_COLOR }}>
+                        <span>Discount</span>
+                        <span className="font-mono">-${formatMoney(discountVal)}</span>
+                    </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                    <span className="font-bold text-sm">Grand Total (HKD)</span>
+                    <span className="font-black text-xl font-mono">${formatMoney(grandTotal)}</span>
+                </div>
+                {totalDeposits > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-100">
+                        <div className="bg-slate-50 p-2 rounded flex justify-between items-center border border-slate-100">
+                            <span className="text-xs font-bold text-slate-600">Deposits Paid: <span className="font-mono ml-1">${formatMoney(totalDeposits)}</span></span>
+                            <span className="text-sm font-black font-mono" style={{ color: BRAND_COLOR }}>${formatMoney(Number(data.totalAmount) - totalDeposits)}</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        {/* Footer - No Overlapping Lines */}
+        <div className="mt-auto pt-12 flex justify-between items-end">
+             <div className="text-[9px] text-slate-400 leading-tight">
+                <p className="mb-1 font-bold text-slate-500">Terms & Conditions:</p>
+                1. This quotation is valid for 14 days.<br/>
+                2. Cheques should be made payable to "best wish investment limited".<br/>
+                3. This document is computer generated. No signature is required from King Lung Heen.
+             </div>
+             <div className="w-1/3">
+                <div className="border-b border-slate-800 mb-2"></div>
+                <p className="font-bold text-xs">Confirmed & Accepted by</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{data.clientName}</p>
+             </div>
+        </div>
+      </div>
+    );
+  }
+  // ==========================================
+  // VIEW 2: STANDARD EO (Manager, Setup, Kitchen)
+  // ==========================================
   return (
     <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
       <style>{`@media print { body, html { height: auto !important; overflow: visible !important; } .no-print, aside, nav, button, .modal-overlay { display: none !important; } .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } @page { margin: 10mm; size: A4; } .break-after-page { page-break-after: always; break-after: page; display: block; height: 1px; width: 100%; margin: 0; } .print-page { page-break-inside: avoid; min-height: 280mm; position: relative; } }`}</style>
@@ -789,6 +999,7 @@ const PrintableEO = ({ data, printMode }) => {
            <DetailRow label="電話" value={data.clientPhone} />
            <DetailRow label="Email" value={data.clientEmail} />
            <DetailRow label="公司/機構" value={data.companyName} />
+           <DetailRow label="銷售人員" value={data.salesRep} />
            {data.secondaryContact && <DetailRow label="第二聯絡人" value={data.secondaryContact} />}
            {data.secondaryPhone && <DetailRow label="第二電話" value={data.secondaryPhone} />}
            {data.address && <DetailRow label="地址" value={data.address} widthClass="w-full" />}
@@ -840,57 +1051,126 @@ const PrintableEO = ({ data, printMode }) => {
                     ))}
                  </tbody>
                  <tfoot>
-                    <tr className="border-t border-slate-300">
-                       <td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (Total):</td>
-                       <td className="text-right font-bold pt-1 font-mono text-sm">${formatMoney(data.totalAmount)}</td>
-                    </tr>
-                    <tr>
-                       <td colSpan="3" className="text-right text-slate-500">已收訂金:</td>
-                       <td className="text-right text-slate-500 font-mono">-${formatMoney((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0))}</td>
-                    </tr>
-                    <tr>
-                       <td colSpan="3" className="text-right font-bold text-red-600">餘額 (Balance):</td>
-                       <td className="text-right font-bold text-red-600 font-mono">${formatMoney(Number(data.totalAmount) - ((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0)))}</td>
-                    </tr>
+                    <tr><td colSpan="3" className="text-right pt-2 text-slate-500">小計 (Subtotal):</td><td className="text-right pt-2 font-mono">${formatMoney(subtotal)}</td></tr>
+                    <tr><td colSpan="3" className="text-right text-slate-500">服務費 ({scLabel}):</td><td className="text-right font-mono text-slate-500">+${formatMoney(serviceChargeVal)}</td></tr>
+                    <tr><td colSpan="3" className="text-right text-slate-500">折扣 (Discount):</td><td className="text-right font-mono text-red-500">-${formatMoney(discountVal)}</td></tr>
+                    <tr className="border-t border-slate-300"><td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (Total):</td><td className="text-right font-bold pt-1 font-mono text-sm">${formatMoney(data.totalAmount)}</td></tr>
+                    <tr><td colSpan="3" className="text-right text-slate-500">已收訂金:</td><td className="text-right text-slate-500 font-mono">-${formatMoney((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0))}</td></tr>
+                    <tr><td colSpan="3" className="text-right font-bold text-red-600">餘額 (Balance):</td><td className="text-right font-bold text-red-600 font-mono">${formatMoney(Number(data.totalAmount) - ((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0)))}</td></tr>
                  </tfoot>
               </table>
            </div>
         </Section>
-        {/* REVENUE ALLOCATION */}
-        <Section title="內部拆帳 (Revenue Allocation / Accounting)">
-           <div className="w-full px-2">
-              <div className="grid grid-cols-2 gap-6">
-                 <div>
-                    <table className="w-full text-xs border-collapse">
-                       <thead><tr className="border-b-2 border-slate-800"><th className="text-left py-1">部門 (Dept)</th><th className="text-right py-1">入帳金額 (Credit)</th></tr></thead>
-                       <tbody>
-                          {Object.entries(calculateDepartmentSplit(data)).map(([key, val]) => (val > 0 && (
-                               <tr key={key} className="border-b border-slate-100">
-                                  <td className="py-1 text-slate-600">{DEPARTMENTS.find(d=>d.key===key)?.label || key}</td>
-                                  <td className="text-right font-mono font-bold text-slate-800">${formatMoney(val)}</td>
-                               </tr>
-                          )))}
-                          {data.enableServiceCharge !== false && (<tr className="border-b border-slate-100 bg-slate-50"><td className="py-1 text-slate-600">服務費 (Service Charge)</td><td className="text-right font-mono font-bold text-slate-800">${formatMoney(serviceChargeVal)}</td></tr>)}
-                       </tbody>
-                    </table>
-                 </div>
-              </div>
-           </div>
+        
+        {/* REVENUE ALLOCATION - SHOWS QTY X UNIT PRICE */}
+        {/* REVENUE ALLOCATION - TABLE VIEW */}
+        <Section title="營收分配明細 (Detailed Revenue Allocation)" color="gray">
+            <div className="w-full px-2">
+                <table className="w-full text-xs border-collapse table-fixed">
+                    <colgroup>
+                        <col className="w-[15%]" /> {/* Dept */}
+                        <col className="w-[40%]" /> {/* Item */}
+                        <col className="w-[15%]" /> {/* Unit Price */}
+                        <col className="w-[10%]" /> {/* Qty */}
+                        <col className="w-[15%]" /> {/* Total */}
+                        <col className="w-[5%]" />  {/* % */}
+                    </colgroup>
+                    <thead>
+                        <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-600">
+                            <th className="text-left py-2 px-2">部門 (Dept)</th>
+                            <th className="text-left py-2 px-2">項目 (Item)</th>
+                            <th className="text-right py-2 px-2">單價 (Unit)</th>
+                            <th className="text-center py-2 px-2">數量 (Qty)</th>
+                            <th className="text-right py-2 px-2">總額 (Total)</th>
+                            <th className="text-right py-2 px-2">%</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {Object.values(detailedAlloc).map((dept, i) => (
+                            dept.total > 0 && (
+                                <React.Fragment key={i}>
+                                    {/* Render rows for each item in the department */}
+                                    {dept.items.map((item, idx) => (
+                                        <tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-100" : ""}>
+                                            {/* Dept Name (Show only on first item) */}
+                                            <td className="py-1 px-2 font-bold text-slate-700 align-top">
+                                                {idx === 0 ? dept.label : ''}
+                                            </td>
+                                            
+                                            {/* Item Name */}
+                                            <td className="py-1 px-2 text-slate-600 align-top">
+                                                <span>{item.name}</span>
+                                                {item.subLabel && <span className="ml-2 text-[9px] bg-slate-100 text-slate-500 px-1 rounded">{item.subLabel}</span>}
+                                            </td>
+
+                                            {/* Unit Price (NEW) */}
+                                            <td className="py-1 px-2 text-right font-mono text-slate-500 align-top">
+                                                ${formatMoney(item.unit)}
+                                            </td>
+
+                                            {/* Qty (NEW) */}
+                                            <td className="py-1 px-2 text-center text-slate-500 align-top">
+                                                {item.qty}
+                                            </td>
+
+                                            {/* Total Line Amount */}
+                                            <td className="py-1 px-2 text-right font-mono font-medium text-slate-800 align-top">
+                                                ${formatMoney(item.amount)}
+                                            </td>
+
+                                            {/* Percentage (Show only on last item of dept or empty) */}
+                                            <td className="py-1 px-2 text-right text-[10px] text-slate-400 align-top">
+                                                {/* Optional: Show line % or Dept % here. Currently showing empty to keep clean, or: */}
+                                                {/* {(item.amount / subtotal * 100).toFixed(1)}% */}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {/* Department Subtotal Row */}
+                                    <tr className="bg-slate-50/50 border-b border-slate-200">
+                                        <td colSpan="4" className="py-1 px-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                            {dept.label.split(' ')[0]} Subtotal
+                                        </td>
+                                        <td className="py-1 px-2 text-right font-mono font-bold text-slate-900 border-t border-slate-300">
+                                            ${formatMoney(dept.total)}
+                                        </td>
+                                        <td className="py-1 px-2 text-right text-[10px] font-bold text-slate-900">
+                                            {subtotal > 0 ? ((dept.total / subtotal) * 100).toFixed(1) : 0}%
+                                        </td>
+                                    </tr>
+                                </React.Fragment>
+                            )
+                        ))}
+                    </tbody>
+                    <tfoot>
+                        <tr className="border-t-2 border-slate-800 bg-slate-100">
+                            <td colSpan="4" className="pt-2 pb-2 px-2 font-black text-right uppercase">
+                                營收總計 (Total Revenue)
+                            </td>
+                            <td className="pt-2 pb-2 px-2 text-right font-mono font-black text-sm">
+                                ${formatMoney(subtotal)}
+                            </td>
+                            <td className="pt-2 pb-2 px-2 text-right font-bold text-xs">
+                                100%
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         </Section>
+
         <Section title="其他資訊 (Other Info)">
            <DetailRow label="物流備註" value={data.deliveryNotes} widthClass="w-full" />
-           <DetailRow label="泊車" value={data.parkingPlates} widthClass="w-full" />
+           <DetailRow label="泊車" value={data.parkingInfo?.plates} widthClass="w-full" />
            <DetailRow label="其他備註" value={data.otherNotes} widthClass="w-full" />
         </Section>
       </div>
       <div className="break-after-page"></div>
 
-      {/* PAGE 2: SETUP & LOGISTICS COPY */}
+      {/* PAGE 2 & 3: SETUP & KITCHEN COPIES (Keep existing code from previous step) */}
+      {/* ... (Previous code for Page 2 and Page 3 is perfect, keeping it here implicitly) ... */}
       <div className="print-page">
         <Header title="活動指示單 (EO)" copyType="Setup & Logistics" badgeColor="bg-indigo-600" />
         <EventSummary />
-
-        {/* SETUP: A. VENUE */}
         <Section title="A. 場地設置 (Venue Setup)" color="indigo">
            <div className="flex flex-wrap w-full bg-slate-50 p-2 rounded mb-4 border border-slate-100">
               <DetailRow label="檯布顏色" value={data.tableClothColor} />
@@ -904,8 +1184,8 @@ const PrintableEO = ({ data, printMode }) => {
               <div className="flex flex-wrap">{Object.keys(equipmentMap).map(key => <CheckItem key={key} label={equipmentMap[key]} checked={data.equipment?.[key]} />)}</div>
            </div>
         </Section>
-
-        {/* SETUP: B. DECORATION */}
+        {/* ... (Section B, C, D omitted for brevity but should be here from previous step) ... */}
+        {/* If you need the full code block for Page 2/3 again, let me know, but they are unchanged from the "Chinese Date" step */}
         <Section title="B. 裝飾佈置 (Decoration)" color="indigo">
            <div className="w-full px-2">
               <div className="flex flex-wrap mb-2">{Object.keys(decorationMap).map(key => <CheckItem key={key} label={decorationMap[key]} checked={data.decoration?.[key]} />)}</div>
@@ -917,24 +1197,18 @@ const PrintableEO = ({ data, printMode }) => {
               {(data.venueDecor || data.venueDecorPhoto) && <div className="mt-3 flex gap-4 border-t border-slate-200 pt-2"><div className="flex-1"><span className="text-xs font-bold text-slate-500 block">場地佈置備註:</span><p className="text-sm whitespace-pre-wrap">{data.venueDecor || '無'}</p></div>{data.venueDecorPhoto && <img src={data.venueDecorPhoto} alt="Decor Ref" className="w-24 h-24 object-cover border rounded bg-white" />}</div>}
            </div>
         </Section>
-
-        {/* SETUP: C. AV */}
         <Section title="C. 影音工程 (AV)" color="indigo">
            <div className="w-full px-2">
               <div className="flex flex-wrap mb-3">{Object.keys(avMap).map(key => <CheckItem key={key} label={avMap[key]} checked={data.avRequirements?.[key]} />)}</div>
               <div className="space-y-2"><DetailRow label="AV 備註" value={data.avNotes} widthClass="w-full" /><DetailRow label="其他器材" value={data.avOther} widthClass="w-full" /></div>
            </div>
         </Section>
-
-        {/* SETUP: D. LOGISTICS */}
         <Section title="D. 物流與泊車 (Logistics)" color="indigo">
            <div className="w-full px-2 space-y-4">
-              {/* Deliveries List */}
               <div className="border border-slate-300 rounded overflow-hidden">
                  <div className="bg-slate-100 px-2 py-1 border-b border-slate-300 flex justify-between items-center"><span className="text-xs font-bold text-slate-700 uppercase">送貨安排</span><span className="text-[10px] bg-white px-1.5 rounded border border-slate-300">共 {data.deliveries?.length || 0} 項</span></div>
-                 {(!data.deliveries || data.deliveries.length === 0) ? (<div className="p-2 text-xs text-slate-400 italic">無送貨登記</div>) : (<div className="divide-y divide-slate-200">{data.deliveries.map((item, i) => (<div key={i} className="p-2 flex gap-4"><div className="w-1/3"><div className="font-bold text-sm text-slate-800">{item.unit || '-'}</div><div className="flex gap-1 mt-1"><span className="text-xs font-mono bg-white px-1 rounded border border-slate-300">{item.date ? new Date(item.date).toLocaleDateString('en-US', {month:'numeric', day:'numeric'}) : '--/--'}</span><span className="text-xs font-mono bg-slate-50 px-1 rounded border border-slate-200">{item.time || '--:--'}</span></div></div><div className="flex-1 text-sm whitespace-pre-wrap border-l border-slate-100 pl-4 text-slate-600">{item.items || '無備註'}</div></div>))}</div>)}
+                 {(!data.deliveries || data.deliveries.length === 0) ? (<div className="p-2 text-xs text-slate-400 italic">無送貨登記</div>) : (<div className="divide-y divide-slate-200">{data.deliveries.map((item, i) => (<div key={i} className="p-2 flex gap-4"><div className="w-1/3"><div className="font-bold text-sm text-slate-800">{item.unit || '-'}</div><div className="flex gap-1 mt-1"><span className="text-xs font-mono bg-white px-1 rounded border border-slate-300">{formatShortDate(item.date)}</span><span className="text-xs font-mono bg-slate-50 px-1 rounded border border-slate-200">{item.time || '--:--'}</span></div></div><div className="flex-1 text-sm whitespace-pre-wrap border-l border-slate-100 pl-4 text-slate-600">{item.items || '無備註'}</div></div>))}</div>)}
               </div>
-              {/* Parking Tickets */}
               <div className="border border-slate-300 rounded p-2 flex gap-4">
                  <div className="w-1/2"><span className="text-xs font-bold text-slate-500 uppercase block mb-1">免費泊車券</span><div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-800">{data.parkingInfo?.ticketQty || '0'}</span><span className="text-xs font-bold text-slate-500">張</span><span className="text-slate-300">x</span><span className="text-xl font-bold text-slate-800">{data.parkingInfo?.ticketHours || '0'}</span><span className="text-xs font-bold text-slate-500">小時</span></div></div>
                  <div className="w-1/2 border-l border-dashed border-slate-300 pl-4"><span className="text-xs font-bold text-slate-500 uppercase block mb-1">車牌登記</span><p className="font-mono text-sm font-bold whitespace-pre-wrap">{data.parkingInfo?.plates || '無'}</p></div>
@@ -948,23 +1222,23 @@ const PrintableEO = ({ data, printMode }) => {
       {/* PAGE 3: KITCHEN COPY */}
       <div className="print-page">
         <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-6">
-           <div><h1 className="text-4xl font-black tracking-tight uppercase">廚房出品單</h1><p className="text-xl font-bold mt-2">{data.venueLocation || '未定位置'}</p></div>
-           <div className="text-right"><div className="inline-block bg-black text-white px-4 py-2 text-xl font-bold rounded mb-2">KITCHEN</div><div className="text-3xl font-mono font-bold">{data.date}</div><div className="text-4xl font-black text-red-600 mt-2 border-2 border-red-600 px-2 py-1 rounded inline-block">{data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}</div></div>
+           <div><h1 className="text-5xl font-black tracking-tight uppercase">廚房出品單</h1><p className="text-2xl font-bold mt-2">{data.venueLocation || '未定位置'}</p></div>
+           <div className="text-right"><div className="inline-block bg-black text-white px-6 py-2 text-2xl font-bold rounded mb-2">KITCHEN</div><div className="text-3xl font-mono font-bold">{formatDateWithDay(data.date)}</div><div className="text-5xl font-black text-red-600 mt-4 border-4 border-red-600 px-4 py-2 rounded-lg inline-block bg-white shadow-sm">{data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}</div></div>
         </div>
         <div className="flex gap-4 mb-8">
-           <div className="flex-1 bg-slate-100 p-4 border-l-8 border-slate-800"><span className="block text-slate-500 text-sm font-bold uppercase">活動名稱</span><span className="block text-2xl font-bold">{data.eventName}</span></div>
-           <div className="flex-1 bg-slate-100 p-4 border-l-8 border-black"><span className="block text-slate-500 text-sm font-bold uppercase">席數 (Tables)</span><span className="block text-4xl font-black">{data.tableCount || '-'}</span></div>
-           <div className="flex-1 bg-slate-100 p-4 border-l-8 border-slate-600"><span className="block text-slate-500 text-sm font-bold uppercase">人數 (Pax)</span><span className="block text-4xl font-black">{data.guestCount || '-'}</span></div>
+           <div className="flex-1 bg-slate-100 p-6 border-l-[12px] border-slate-800"><span className="block text-slate-500 text-lg font-bold uppercase">活動</span><span className="block text-3xl font-bold mt-1">{data.eventName}</span></div>
+           <div className="flex-1 bg-slate-100 p-6 border-l-[12px] border-black"><span className="block text-slate-500 text-lg font-bold uppercase">席數</span><span className="block text-6xl font-black mt-1">{data.tableCount || '-'}</span></div>
+           <div className="flex-1 bg-slate-100 p-6 border-l-[12px] border-slate-600"><span className="block text-slate-500 text-lg font-bold uppercase">人數</span><span className="block text-6xl font-black mt-1">{data.guestCount || '-'}</span></div>
         </div>
-        <div className="mb-8 p-4 border-2 border-black rounded-lg">
-           <div className="flex justify-between items-center mb-4 border-b-2 border-gray-300 pb-2"><h3 className="text-3xl font-bold">餐單 (Menu)</h3><span className="text-xl font-bold bg-gray-200 px-3 py-1 rounded">{data.servingStyle}</span></div>
-           <div className="space-y-6">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="text-2xl font-bold underline mb-2">{menu.title}</h4>}<p className="text-2xl font-medium leading-relaxed whitespace-pre-wrap">{menu.content}</p></div>))) : (<p className="text-2xl font-medium leading-relaxed">{data.menuType}</p>)}</div>
+        <div className="mb-8 p-6 border-4 border-black rounded-xl">
+           <div className="flex justify-between items-center mb-6 border-b-2 border-gray-300 pb-4"><h3 className="text-4xl font-bold">餐單內容</h3><span className="text-2xl font-bold bg-gray-200 px-4 py-2 rounded">{data.servingStyle}</span></div>
+           <div className="space-y-8">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="text-3xl font-bold underline mb-3">{menu.title}</h4>}<p className="text-3xl font-semibold leading-relaxed whitespace-pre-wrap">{menu.content}</p></div>))) : (<p className="text-3xl font-semibold leading-relaxed">{data.menuType}</p>)}</div>
         </div>
-        {(data.specialMenuReq || data.allergies) && (<div className="mb-8 p-4 border-4 border-red-600 rounded-lg bg-red-50"><h3 className="text-2xl font-black text-red-600 mb-2 underline">⚠️ 特殊飲食 & 過敏 (ALLERGIES)</h3><p className="text-2xl font-bold text-red-800 whitespace-pre-wrap">{data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}</p></div>)}
-        <div className="grid grid-cols-2 gap-6 border-t-4 border-gray-300 pt-6">
-           <div><span className="block text-gray-500 font-bold uppercase mb-1">席前小食 (Snacks)</span><span className="text-2xl font-bold block">{data.preDinnerSnacks || '無'}</span></div>
-           <div><span className="block text-gray-500 font-bold uppercase mb-1">員工餐 (Staff Meal)</span><span className="text-2xl font-bold block">{data.staffMeals || '無'}</span></div>
-           <div className="col-span-2"><span className="block text-gray-500 font-bold uppercase mb-1">送貨/食材備註 (Delivery/Notes)</span><span className="text-xl font-bold block">{data.deliveryNotes || '無'}</span></div>
+        {(data.specialMenuReq || data.allergies) && (<div className="mb-8 p-6 border-8 border-red-600 rounded-xl bg-red-50"><h3 className="text-3xl font-black text-red-600 mb-4 underline flex items-center"><AlertTriangle size={48} className="mr-4"/> 特殊飲食 & 過敏</h3><p className="text-4xl font-bold text-red-800 whitespace-pre-wrap leading-snug">{data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}</p></div>)}
+        <div className="grid grid-cols-2 gap-8 border-t-4 border-gray-300 pt-8">
+           <div className="bg-slate-50 p-4 border border-slate-200 rounded"><span className="block text-gray-500 text-xl font-bold uppercase mb-2">席前小食</span><span className="text-3xl font-bold block">{data.preDinnerSnacks || '無'}</span></div>
+           <div className="bg-slate-50 p-4 border border-slate-200 rounded"><span className="block text-gray-500 text-xl font-bold uppercase mb-2">員工餐</span><span className="text-3xl font-bold block">{data.staffMeals || '無'}</span></div>
+           <div className="col-span-2 bg-slate-50 p-4 border border-slate-200 rounded"><span className="block text-gray-500 text-xl font-bold uppercase mb-2">送貨/食材備註</span><span className="text-2xl font-bold block">{data.deliveryNotes || '無'}</span></div>
         </div>
       </div>
     </div>
@@ -1055,538 +1329,320 @@ const LoginView = ({ onLogin, onGuestLogin, error }) => {
 };
 
 const SettingsView = ({ settings, onSave, addToast }) => {
-  const [localSettings, setLocalSettings] = useState({
-    minSpendRules: [],
-    defaultMenus: [],
-    paymentRules: [],
-    ...settings
-  });
-  
+  const [localSettings, setLocalSettings] = useState({ minSpendRules: [], defaultMenus: [], paymentRules: [], ...settings });
   const [activeSubTab, setActiveSubTab] = useState('minSpend'); 
-
-  // --- 1. MIN SPEND STATE ---
-  const [editingRule, setEditingRule] = useState({
-    id: null,
-    locations: [],
-    prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' }
+  
+  // UPDATED: Min Spend now holds objects { lunch: '', dinner: '' }
+  const [editingRule, setEditingRule] = useState({ 
+      id: null, 
+      locations: [], 
+      prices: { 
+        Mon: {lunch:'', dinner:''}, Tue: {lunch:'', dinner:''}, Wed: {lunch:'', dinner:''}, 
+        Thu: {lunch:'', dinner:''}, Fri: {lunch:'', dinner:''}, Sat: {lunch:'', dinner:''}, Sun: {lunch:'', dinner:''} 
+      } 
   });
 
-  // --- 2. MENU STATE ---
-  const [editingMenu, setEditingMenu] = useState({ 
-    id: null, title: '', content: '', type: 'food', price: '', allocation: {} 
-  });
+  // UPDATED: Menu now has priceWeekday and priceWeekend
+  const [editingMenu, setEditingMenu] = useState({ id: null, title: '', content: '', type: 'food', priceWeekday: '', priceWeekend: '', allocation: {} });
+  
+  const [editingPaymentRule, setEditingPaymentRule] = useState({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 });
 
-  // --- 3. PAYMENT RULE STATE ---
-  const [editingPaymentRule, setEditingPaymentRule] = useState({
-    id: null,
-    name: '',
-    minMonthsInAdvance: 0,
-    deposit1: 30, deposit1Offset: 0,
-    deposit2: 30, deposit2Offset: 3,
-    deposit3: 30, deposit3Offset: 6
-  });
-
-  // ==========================
-  // HANDLERS (With Auto-Save)
-  // ==========================
-
-  // Min Spend Handlers
-  const handleLocationToggle = (loc) => {
-    setEditingRule(prev => {
-      const exists = prev.locations.includes(loc);
-      return {
-        ...prev,
-        locations: exists ? prev.locations.filter(l => l !== loc) : [...prev.locations, loc]
-      };
-    });
-  };
-
-  const handlePriceChange = (day, value) => {
-    setEditingRule(prev => ({
-      ...prev,
-      prices: { ...prev.prices, [day]: value }
-    }));
-  };
-
+  // Handlers
   const handleSaveRule = () => {
     if (editingRule.locations.length === 0) return addToast("請至少選擇一個區域", "error");
-    
     const newRules = [...(localSettings.minSpendRules || [])];
-    if (editingRule.id) {
-      const idx = newRules.findIndex(r => r.id === editingRule.id);
-      if (idx !== -1) newRules[idx] = editingRule;
-    } else {
-      newRules.push({ ...editingRule, id: Date.now() });
-    }
-    
-    const updatedSettings = { ...localSettings, minSpendRules: newRules };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings); // Auto-save to backend
-    
-    setEditingRule({ id: null, locations: [], prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' } });
+    if (editingRule.id) { const idx = newRules.findIndex(r => r.id === editingRule.id); if (idx !== -1) newRules[idx] = editingRule; } else { newRules.push({ ...editingRule, id: Date.now() }); }
+    const updatedSettings = { ...localSettings, minSpendRules: newRules }; setLocalSettings(updatedSettings); onSave(updatedSettings); 
+    // Reset
+    setEditingRule({ id: null, locations: [], prices: { Mon: {lunch:'', dinner:''}, Tue: {lunch:'', dinner:''}, Wed: {lunch:'', dinner:''}, Thu: {lunch:'', dinner:''}, Fri: {lunch:'', dinner:''}, Sat: {lunch:'', dinner:''}, Sun: {lunch:'', dinner:''} } }); 
     addToast("規則已儲存", "success");
   };
-
-  const handleDeleteRule = (id) => {
-    const updatedSettings = { 
-        ...localSettings, 
-        minSpendRules: localSettings.minSpendRules.filter(r => r.id !== id) 
-    };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings); // Auto-save
-  };
-
-  const handleEditRule = (rule) => setEditingRule(rule);
-
-  // Menu Handlers
+  const handleDeleteRule = (id) => { const updatedSettings = { ...localSettings, minSpendRules: localSettings.minSpendRules.filter(r => r.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
+  
   const handleSaveMenu = () => {
     if (!editingMenu.title) return addToast("請輸入標題", "error");
-    
     const newMenus = [...(localSettings.defaultMenus || [])];
-    if (editingMenu.id) {
-       const idx = newMenus.findIndex(m => m.id === editingMenu.id);
-       if (idx !== -1) newMenus[idx] = editingMenu;
-    } else {
-       newMenus.push({ ...editingMenu, id: Date.now() });
-    }
-    
-    const updatedSettings = { ...localSettings, defaultMenus: newMenus };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings); // Auto-save
-    
-    setEditingMenu({ id: null, title: '', content: '', type: 'food', price: '', allocation: {} });
+    if (editingMenu.id) { const idx = newMenus.findIndex(m => m.id === editingMenu.id); if (idx !== -1) newMenus[idx] = editingMenu; } else { newMenus.push({ ...editingMenu, id: Date.now() }); }
+    const updatedSettings = { ...localSettings, defaultMenus: newMenus }; setLocalSettings(updatedSettings); onSave(updatedSettings); 
+    setEditingMenu({ id: null, title: '', content: '', type: 'food', priceWeekday: '', priceWeekend: '', allocation: {} }); 
     addToast("菜單已儲存", "success");
   };
+  const handleDeleteMenu = (id) => { const updatedSettings = { ...localSettings, defaultMenus: localSettings.defaultMenus.filter(m => m.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
+  const handleSavePaymentRule = () => { /* (Keep existing logic) */ if (!editingPaymentRule.name) return addToast("請輸入規則名稱", "error"); const totalPercent = editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3; if(totalPercent > 100) return addToast("錯誤：訂金總比例不能超過 100%", "error"); const newRules = [...(localSettings.paymentRules || [])]; if (editingPaymentRule.id) { const idx = newRules.findIndex(r => r.id === editingPaymentRule.id); if (idx !== -1) newRules[idx] = editingPaymentRule; } else { newRules.push({ ...editingPaymentRule, id: Date.now() }); } newRules.sort((a, b) => b.minMonthsInAdvance - a.minMonthsInAdvance); const updatedSettings = { ...localSettings, paymentRules: newRules }; setLocalSettings(updatedSettings); onSave(updatedSettings); setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 }); addToast("付款規則已儲存", "success"); };
+  const handleDeletePaymentRule = (id) => { const updatedSettings = { ...localSettings, paymentRules: localSettings.paymentRules.filter(r => r.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
 
-  const handleDeleteMenu = (id) => {
-    const updatedSettings = { 
-        ...localSettings, 
-        defaultMenus: localSettings.defaultMenus.filter(m => m.id !== id) 
-    };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings); // Auto-save
+  // Helper to safely get nested price
+  const getPriceVal = (rule, day, type) => {
+      if(typeof rule.prices[day] === 'object') return rule.prices[day][type];
+      return type === 'dinner' ? rule.prices[day] : ''; // Fallback for old data
   };
-
-  const handleEditMenu = (menu) => setEditingMenu(menu);
-
-  // Payment Rule Handlers
-  const handleSavePaymentRule = () => {
-     if (!editingPaymentRule.name) return addToast("請輸入規則名稱", "error");
-     
-     const totalPercent = editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3;
-     if(totalPercent > 100) return addToast("錯誤：訂金總比例不能超過 100%", "error");
-
-     const newRules = [...(localSettings.paymentRules || [])];
-     if (editingPaymentRule.id) {
-        const idx = newRules.findIndex(r => r.id === editingPaymentRule.id);
-        if (idx !== -1) newRules[idx] = editingPaymentRule;
-     } else {
-        newRules.push({ ...editingPaymentRule, id: Date.now() });
-     }
-     newRules.sort((a, b) => b.minMonthsInAdvance - a.minMonthsInAdvance);
-     
-     const updatedSettings = { ...localSettings, paymentRules: newRules };
-     setLocalSettings(updatedSettings);
-     onSave(updatedSettings); // Auto-save
-     
-     setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 });
-     addToast("付款規則已儲存", "success");
-  };
-
-  const handleDeletePaymentRule = (id) => {
-     const updatedSettings = { 
-         ...localSettings, 
-         paymentRules: localSettings.paymentRules.filter(r => r.id !== id) 
-     };
-     setLocalSettings(updatedSettings);
-     onSave(updatedSettings); // Auto-save
-  };
-
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20">
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">系統設定 (Settings)</h2>
-          <p className="text-slate-500">管理場地規則、預設餐單與付款條款</p>
-        </div>
-        {/* Save All button removed. Actions now save automatically. */}
-      </div>
-
+      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div><h2 className="text-2xl font-bold text-slate-800">系統設定 (Settings)</h2><p className="text-slate-500">管理場地規則、預設餐單與付款條款</p></div></div>
       <div className="flex space-x-1 border-b border-slate-200">
         <button onClick={() => setActiveSubTab('minSpend')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>場地低消 (Min Spend)</button>
         <button onClick={() => setActiveSubTab('menus')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>餐飲預設 (Presets)</button>
         <button onClick={() => setActiveSubTab('payment')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'payment' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>付款規則 (Payment Rules)</button>
       </div>
-
-      {/* TAB 1: MIN SPEND RULES */}
+      
+      {/* Min Spend Tab - UPDATED with Dual Inputs */}
       {activeSubTab === 'minSpend' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 space-y-4">
-              <Card className="p-5 border-l-4 border-l-blue-500">
-                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-                  {editingRule.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
-                  {editingRule.id ? "編輯規則 (Edit Rule)" : "新增規則 (New Rule)"}
-                </h3>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">1. 選擇區域組合 (Locations)</label>
-                  <div className="flex flex-wrap gap-2">
-                    {LOCATION_CHECKBOXES.map(loc => (
-                      <button
-                        key={loc}
-                        onClick={() => handleLocationToggle(loc)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                          editingRule.locations.includes(loc) 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
-                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {loc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">2. 設定每日低消 (Min Spend)</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {DAYS_OF_WEEK.map(day => (
-                      <div key={day} className="flex items-center">
-                        <span className="w-12 text-xs font-bold text-slate-500 uppercase">{day}</span>
-                        <div className="relative flex-1">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                          <input 
-                            type="number"
-                            value={editingRule.prices[day]}
-                            onChange={(e) => handlePriceChange(day, e.target.value)}
-                            className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 outline-none"
-                            placeholder="0"
-                          />
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div className="md:col-span-5 space-y-4">
+                    <Card className="p-5 border-l-4 border-l-blue-500">
+                        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">{editingRule.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}{editingRule.id ? "編輯規則" : "新增規則"}</h3>
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold text-slate-700 mb-2">1. 選擇區域組合</label>
+                            <div className="flex flex-wrap gap-2">{LOCATION_CHECKBOXES.map(loc => (<button key={loc} onClick={() => setEditingRule(p => ({...p, locations: p.locations.includes(loc)?p.locations.filter(l=>l!==loc):[...p.locations, loc]}))} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${editingRule.locations.includes(loc) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300'}`}>{loc}</button>))}</div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button onClick={handleSaveRule} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors">{editingRule.id ? "更新" : "新增"}</button>
-                  {editingRule.id && <button onClick={() => setEditingRule({ id: null, locations: [], prices: { Mon: '', Tue: '', Wed: '', Thu: '', Fri: '', Sat: '', Sun: '' } })} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-bold hover:bg-slate-200">取消</button>}
-                </div>
-              </Card>
-            </div>
-
-            <div className="md:col-span-7">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">規則列表</h3></div>
-                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                  {(!localSettings.minSpendRules || localSettings.minSpendRules.length === 0) ? (
-                    <div className="p-8 text-center text-slate-400">尚無設定</div>
-                  ) : (
-                    localSettings.minSpendRules.map((rule) => (
-                      <div key={rule.id} className="p-4 hover:bg-blue-50/50 transition-colors group">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex flex-wrap gap-1">{rule.locations.map(l => <span key={l} className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded font-bold">{l}</span>)}</div>
-                          <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEditRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
-                            <button onClick={() => handleDeleteRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-y-1 gap-x-2 text-xs text-slate-600">
-                          {DAYS_OF_WEEK.map(day => (
-                            <div key={day} className={`flex justify-between ${rule.prices[day] ? 'font-medium' : 'text-slate-300'}`}>
-                              <span>{day}:</span><span>{rule.prices[day] ? `$${parseInt(rule.prices[day]).toLocaleString()}` : '-'}</span>
+                        <div className="mb-6">
+                            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>2. 設定每日低消</span><span className="flex gap-8 mr-4"><span>午市 (Lunch)</span><span>晚市 (Dinner)</span></span></div>
+                            <div className="space-y-2">
+                                {DAYS_OF_WEEK.map(day => (
+                                    <div key={day} className="flex items-center gap-2">
+                                        <span className="w-8 text-xs font-bold text-slate-500 uppercase">{day}</span>
+                                        {/* Lunch Input */}
+                                        <div className="relative flex-1">
+                                            <input type="number" 
+                                                value={editingRule.prices[day]?.lunch || ''} 
+                                                onChange={(e) => setEditingRule(p=>({...p, prices:{...p.prices, [day]:{...p.prices[day], lunch: e.target.value}}}))} 
+                                                className="w-full px-2 py-1 text-sm border border-slate-300 rounded outline-none focus:border-blue-500 text-center" 
+                                                placeholder="Lunch"
+                                            />
+                                        </div>
+                                        {/* Dinner Input */}
+                                        <div className="relative flex-1">
+                                            <input type="number" 
+                                                value={editingRule.prices[day]?.dinner || ''} 
+                                                onChange={(e) => setEditingRule(p=>({...p, prices:{...p.prices, [day]:{...p.prices[day], dinner: e.target.value}}}))} 
+                                                className="w-full px-2 py-1 text-sm border border-slate-300 rounded outline-none focus:border-blue-500 text-center bg-blue-50/30" 
+                                                placeholder="Dinner"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                          ))}
                         </div>
-                      </div>
-                    ))
-                  )}
+                        <div className="flex gap-2"><button onClick={handleSaveRule} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">更新/新增</button>{editingRule.id && <button onClick={() => setEditingRule({ id: null, locations: [], prices: { Mon: {lunch:'',dinner:''}, Tue: {lunch:'',dinner:''}, Wed: {lunch:'',dinner:''}, Thu: {lunch:'',dinner:''}, Fri: {lunch:'',dinner:''}, Sat: {lunch:'',dinner:''}, Sun: {lunch:'',dinner:''} } })} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-bold">取消</button>}</div>
+                    </Card>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: MENUS PRESETS */}
-      {activeSubTab === 'menus' && (
-        <div className="space-y-6 animate-in fade-in">
-           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-             <div className="md:col-span-5 space-y-4">
-                <Card className="p-5 border-l-4 border-l-emerald-500">
-                   <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-                     {editingMenu.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
-                     {editingMenu.id ? "編輯預設" : "新增預設"}
-                   </h3>
-                   <div className="space-y-4">
-                     <div className="flex space-x-2">
-                        <button onClick={() => setEditingMenu(p => ({...p, type: 'food'}))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'food' ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-white border-slate-300'}`}><Utensils size={14} className="inline mr-1"/> Menu</button>
-                        <button onClick={() => setEditingMenu(p => ({...p, type: 'drink'}))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'drink' ? 'bg-blue-100 border-blue-500 text-blue-800' : 'bg-white border-slate-300'}`}><Coffee size={14} className="inline mr-1"/> Drink</button>
-                     </div>
-                     <FormInput label="標題 (Title)" value={editingMenu.title} onChange={e => setEditingMenu(p => ({...p, title: e.target.value}))} placeholder="例如: 2024 春季菜單"/>
-                     <MoneyInput label="預設價格 (Default Price)" name="price" value={editingMenu.price} onChange={e => setEditingMenu(p => ({...p, price: e.target.value}))}/>
-                     
-                     <div className="mt-4 border-t border-slate-100 pt-4">
-                        <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center"><PieChart size={14} className="mr-1.5"/> 部門拆帳 (Revenue Allocation)</h4>
-                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
-                            {DEPARTMENTS.map(dept => (
-                                <div key={dept.key}>
-                                    <label className="block text-xs font-medium text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
-                                    <div className="relative">
-                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                                        <input type="number" value={editingMenu.allocation?.[dept.key] || ''} onChange={e => setEditingMenu(prev => ({ ...prev, allocation: { ...prev.allocation, [dept.key]: e.target.value } }))} className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" placeholder="0"/>
+                <div className="md:col-span-7">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">規則列表</h3></div>
+                        <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                            {localSettings.minSpendRules.map((rule) => (
+                                <div key={rule.id} className="p-4 hover:bg-blue-50/50 transition-colors group">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex flex-wrap gap-1">{rule.locations.map(l => <span key={l} className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded font-bold">{l}</span>)}</div>
+                                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditingRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button><button onClick={() => handleDeleteRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button></div>
+                                    </div>
+                                    <div className="grid grid-cols-7 gap-1 text-[10px] text-slate-600 text-center">
+                                        {DAYS_OF_WEEK.map(day => (
+                                            <div key={day} className="flex flex-col border rounded bg-slate-50 p-1">
+                                                <span className="font-bold mb-1">{day}</span>
+                                                <span className="text-slate-400">L: {getPriceVal(rule, day, 'lunch') ? `$${parseInt(getPriceVal(rule, day, 'lunch')/1000)}k` : '-'}</span>
+                                                <span className="text-blue-600 font-bold">D: {getPriceVal(rule, day, 'dinner') ? `$${parseInt(getPriceVal(rule, day, 'dinner')/1000)}k` : '-'}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             ))}
                         </div>
-                     </div>
-
-                     {editingMenu.type === 'food' ? (
-                       <FormTextArea label="內容 (Content)" value={editingMenu.content} onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))} rows={6} placeholder="輸入詳細菜色..."/>
-                     ) : (
-                       <FormInput label="酒水內容" value={editingMenu.content} onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))} placeholder="例如: 紅白酒 + 汽水任飲"/>
-                     )}
-                     
-                     <div className="flex gap-2">
-                       <button onClick={handleSaveMenu} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold hover:bg-emerald-700 transition-colors">儲存</button>
-                       {editingMenu.id && <button onClick={() => setEditingMenu({id:null, title:'', content:'', type:'food', price: '', allocation: {}})} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold hover:bg-slate-200">取消</button>}
-                     </div>
-                   </div>
-                </Card>
-             </div>
-
-             <div className="md:col-span-7">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                   <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">預設列表</h3></div>
-                   <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                     {(!localSettings.defaultMenus || localSettings.defaultMenus.length === 0) ? (
-                       <div className="p-8 text-center text-slate-400">尚無預設項目</div>
-                     ) : (
-                       localSettings.defaultMenus.map(m => (
-                           <div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group">
-                             <div className="flex justify-between items-start mb-1">
-                                 <div className="flex items-center">
-                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase mr-2 ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{m.type === 'food' ? 'MENU' : 'DRINK'}</span>
-                                    <span className="font-bold text-slate-800">{m.title}</span>
-                                    {m.price && <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${formatMoney(m.price)}</span>}
-                                 </div>
-                                 <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => handleEditMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
-                                    <button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
-                                 </div>
-                             </div>
-                             {m.allocation && (
-                                <div className="flex gap-2 text-[10px] text-slate-400 mt-1 mb-1">
-                                    {Object.entries(m.allocation).map(([k, v]) => v > 0 && <span key={k}>{DEPARTMENTS.find(d=>d.key===k)?.label.split(' ')[0]}:${v}</span>)}
-                                </div>
-                             )}
-                             <p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p>
-                           </div>
-                       ))
-                     )}
-                   </div>
+                    </div>
                 </div>
-             </div>
-           </div>
+            </div>
         </div>
       )}
 
-      {/* TAB 3: PAYMENT RULES (VISUAL BUILDER) */}
+      {/* Menu Tab - UPDATED with Dual Pricing */}
+      {activeSubTab === 'menus' && (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div className="md:col-span-5 space-y-4">
+                    <Card className="p-5 border-l-4 border-l-emerald-500">
+                        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">{editingMenu.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}{editingMenu.id ? "編輯預設" : "新增預設"}</h3>
+                        <div className="space-y-4">
+                            <div className="flex space-x-2"><button onClick={() => setEditingMenu(p => ({...p, type: 'food'}))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'food' ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-white border-slate-300'}`}><Utensils size={14} className="inline mr-1"/> Menu</button><button onClick={() => setEditingMenu(p => ({...p, type: 'drink'}))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'drink' ? 'bg-blue-100 border-blue-500 text-blue-800' : 'bg-white border-slate-300'}`}><Coffee size={14} className="inline mr-1"/> Drink</button></div>
+                            <FormInput label="標題" value={editingMenu.title} onChange={e => setEditingMenu(p => ({...p, title: e.target.value}))}/>
+                            
+                            {/* DUAL PRICES */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <MoneyInput label="平日價 (Mon-Thu)" name="priceWeekday" value={editingMenu.priceWeekday} onChange={e => setEditingMenu(p => ({...p, priceWeekday: e.target.value}))}/>
+                                <MoneyInput label="週末價 (Fri-Sun)" name="priceWeekend" value={editingMenu.priceWeekend} onChange={e => setEditingMenu(p => ({...p, priceWeekend: e.target.value}))}/>
+                            </div>
+
+                            <div className="mt-4 border-t border-slate-100 pt-4">
+                                <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center"><PieChart size={14} className="mr-1.5"/> 部門拆帳 (金額)</h4>
+                                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
+                                    {DEPARTMENTS.map(dept => (
+                                        <div key={dept.key}>
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
+                                            <div className="relative">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                                <input type="number" value={editingMenu.allocation?.[dept.key] || ''} onChange={e => setEditingMenu(prev => ({ ...prev, allocation: { ...prev.allocation, [dept.key]: e.target.value } }))} className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded outline-none" placeholder="0"/>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            {editingMenu.type === 'food' ? (<FormTextArea label="內容" value={editingMenu.content} onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))} rows={6} placeholder="輸入詳細菜色..."/>) : (<FormInput label="酒水內容" value={editingMenu.content} onChange={e => setEditingMenu(p => ({...p, content: e.target.value}))}/>)}
+                            <div className="flex gap-2"><button onClick={handleSaveMenu} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold">儲存</button>{editingMenu.id && <button onClick={() => setEditingMenu({id:null, title:'', content:'', type:'food', priceWeekday: '', priceWeekend: '', allocation: {}})} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold">取消</button>}</div>
+                        </div>
+                    </Card>
+                </div>
+                <div className="md:col-span-7">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">預設列表</h3></div>
+                        <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">{localSettings.defaultMenus.map(m => (<div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group"><div className="flex justify-between items-start mb-1"><div className="flex items-center"><span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase mr-2 ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{m.type === 'food' ? 'MENU' : 'DRINK'}</span><span className="font-bold text-slate-800">{m.title}</span><span className="ml-2 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">平日 ${formatMoney(m.priceWeekday)} / 週末 ${formatMoney(m.priceWeekend)}</span></div><div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditingMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button><button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button></div></div>{m.allocation && (<div className="flex gap-2 text-[10px] text-slate-400 mt-1 mb-1">{Object.entries(m.allocation).map(([k, v]) => v > 0 && <span key={k}>{DEPARTMENTS.find(d=>d.key===k)?.label.split(' ')[0]}:${v}</span>)}</div>)}<p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p></div>))}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+      
+      {/* Payment Rules Tab */}
       {activeSubTab === 'payment' && (
         <div className="space-y-6 animate-in fade-in">
-           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              
-              {/* LEFT: EDITOR */}
-              <div className="md:col-span-5 space-y-4">
-                 <Card className="border-l-4 border-l-violet-500 overflow-hidden">
-                    <div className="bg-violet-50 p-4 border-b border-violet-100">
-                        <h3 className="font-bold text-lg text-violet-900 flex items-center">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Left Column: Editor Form */}
+                <div className="md:col-span-5 space-y-4">
+                    <Card className="p-5 border-l-4 border-l-violet-500">
+                        <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
                            {editingPaymentRule.id ? <Edit2 size={18} className="mr-2"/> : <Plus size={18} className="mr-2"/>}
-                           {editingPaymentRule.id ? "編輯規則 (Edit)" : "新增規則 (New)"}
+                           {editingPaymentRule.id ? "編輯付款規則" : "新增付款規則"}
                         </h3>
-                        <input 
-                          type="text" 
-                          className="w-full mt-2 bg-white border border-violet-200 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
-                          placeholder="規則名稱 (e.g. 6個月前預訂 / Long Term)"
-                          value={editingPaymentRule.name} 
-                          onChange={e => setEditingPaymentRule({...editingPaymentRule, name: e.target.value})}
-                        />
+                        
+                        <div className="space-y-4">
+                            <FormInput 
+                                label="規則名稱 (Rule Name)" 
+                                placeholder="e.g. Standard Wedding, Last Minute"
+                                value={editingPaymentRule.name} 
+                                onChange={e => setEditingPaymentRule(p => ({...p, name: e.target.value}))}
+                            />
+                            
+                            <FormInput 
+                                label="最少提前月數 (Min Months in Advance)" 
+                                type="number"
+                                placeholder="0 = 適用於所有"
+                                value={editingPaymentRule.minMonthsInAdvance} 
+                                onChange={e => setEditingPaymentRule(p => ({...p, minMonthsInAdvance: parseInt(e.target.value) || 0}))}
+                            />
+
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
+                                <div className="text-xs font-bold text-slate-500 uppercase border-b border-slate-200 pb-1 mb-2">分期設定 (Installments)</div>
+                                
+                                {/* Deposit 1 */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600">訂金 1 (%)</label>
+                                        <div className="relative">
+                                            <input type="number" value={editingPaymentRule.deposit1} onChange={e => setEditingPaymentRule(p => ({...p, deposit1: parseFloat(e.target.value)||0}))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none"/>
+                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600">付款限期 (Offset)</label>
+                                        <select value={editingPaymentRule.deposit1Offset} onChange={e => setEditingPaymentRule(p => ({...p, deposit1Offset: parseInt(e.target.value)}))} className="w-full py-1 text-sm border rounded outline-none bg-white">
+                                            <option value={0}>即時 (Immediate)</option>
+                                            <option value={1}>+1 個月</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Deposit 2 */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600">訂金 2 (%)</label>
+                                        <div className="relative">
+                                            <input type="number" value={editingPaymentRule.deposit2} onChange={e => setEditingPaymentRule(p => ({...p, deposit2: parseFloat(e.target.value)||0}))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none"/>
+                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600">付款限期 (Offset)</label>
+                                        <select value={editingPaymentRule.deposit2Offset} onChange={e => setEditingPaymentRule(p => ({...p, deposit2Offset: parseInt(e.target.value)}))} className="w-full py-1 text-sm border rounded outline-none bg-white">
+                                            <option value={1}>+1 個月</option>
+                                            <option value={3}>+3 個月</option>
+                                            <option value={6}>+6 個月</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Deposit 3 */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600">訂金 3 (%)</label>
+                                        <div className="relative">
+                                            <input type="number" value={editingPaymentRule.deposit3} onChange={e => setEditingPaymentRule(p => ({...p, deposit3: parseFloat(e.target.value)||0}))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none"/>
+                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-600">付款限期 (Offset)</label>
+                                        <select value={editingPaymentRule.deposit3Offset} onChange={e => setEditingPaymentRule(p => ({...p, deposit3Offset: parseInt(e.target.value)}))} className="w-full py-1 text-sm border rounded outline-none bg-white">
+                                            <option value={3}>+3 個月</option>
+                                            <option value={6}>+6 個月</option>
+                                            <option value={9}>+9 個月</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button onClick={handleSavePaymentRule} className="flex-1 bg-violet-600 text-white py-2 rounded-lg font-bold hover:bg-violet-700 transition-colors">儲存規則</button>
+                                {editingPaymentRule.id && <button onClick={() => setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 })} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold">取消</button>}
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* Right Column: Rules List */}
+                <div className="md:col-span-7">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="p-4 border-b border-slate-100 bg-slate-50">
+                            <h3 className="font-bold text-slate-700">現有規則 (Active Rules)</h3>
+                        </div>
+                        <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                            {localSettings.paymentRules.length === 0 ? (
+                                <div className="p-8 text-center text-slate-400 text-sm">暫無付款規則</div>
+                            ) : (
+                                localSettings.paymentRules.map(rule => (
+                                    <div key={rule.id} className="p-4 hover:bg-violet-50/50 transition-colors group">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <span className="font-bold text-slate-800 block">{rule.name}</span>
+                                                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                                    適用於: {rule.minMonthsInAdvance > 0 ? `提前 ${rule.minMonthsInAdvance} 個月或以上` : '所有訂單 (預設)'}
+                                                </span>
+                                            </div>
+                                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => setEditingPaymentRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
+                                                <button onClick={() => handleDeletePaymentRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Visual Timeline Bar */}
+                                        <div className="flex h-2 w-full rounded-full overflow-hidden bg-slate-100 mt-3">
+                                            <div style={{width: `${rule.deposit1}%`}} className="bg-emerald-400" title={`1st Deposit: ${rule.deposit1}%`}></div>
+                                            <div style={{width: `${rule.deposit2}%`}} className="bg-emerald-300" title={`2nd Deposit: ${rule.deposit2}%`}></div>
+                                            <div style={{width: `${rule.deposit3}%`}} className="bg-emerald-200" title={`3rd Deposit: ${rule.deposit3}%`}></div>
+                                        </div>
+                                        <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                                            <span>Dep 1: {rule.deposit1}%</span>
+                                            <span>Dep 2: {rule.deposit2}%</span>
+                                            <span>Dep 3: {rule.deposit3}%</span>
+                                            <span className="text-red-400 font-bold">Bal: {100 - (rule.deposit1+rule.deposit2+rule.deposit3)}%</span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
-                    
-                    <div className="p-5 space-y-6">
-                       {/* 1. TRIGGER CONDITION */}
-                       <div>
-                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
-                             <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs">1</span>
-                             觸發條件 (Condition)
-                          </div>
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm flex items-center flex-wrap gap-2">
-                             <span>當活動日期在</span>
-                             <input 
-                               type="number" 
-                               value={editingPaymentRule.minMonthsInAdvance} 
-                               onChange={e => setEditingPaymentRule({...editingPaymentRule, minMonthsInAdvance: parseFloat(e.target.value)})}
-                               className="w-16 text-center border-b-2 border-violet-500 bg-transparent font-bold outline-none text-violet-700"
-                             />
-                             <span>個月之後 (Months Ahead)</span>
-                          </div>
-                       </div>
-
-                       {/* 2. DEPOSIT SPLIT */}
-                       <div>
-                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
-                             <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs">2</span>
-                             付款拆分 (Payment Split)
-                          </div>
-                          
-                          <div className="space-y-3">
-                             {/* Deposit 1 */}
-                             <div className="flex items-center gap-3 text-sm">
-                                <span className="font-bold text-slate-500 w-12">訂金 1</span>
-                                <div className="flex-1 bg-white border border-slate-200 rounded-md flex items-center px-2 py-1.5 shadow-sm">
-                                   <span className="text-xs text-slate-400 mr-2">即時收取</span>
-                                   <input 
-                                      type="number" 
-                                      value={editingPaymentRule.deposit1} 
-                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit1: parseFloat(e.target.value)})}
-                                      className="flex-1 outline-none text-right font-bold text-slate-700"
-                                   />
-                                   <span className="ml-1 text-slate-400">%</span>
-                                </div>
-                             </div>
-
-                             {/* Deposit 2 */}
-                             <div className="flex items-center gap-3 text-sm">
-                                <span className="font-bold text-slate-500 w-12">訂金 2</span>
-                                <div className="flex-1 bg-white border border-slate-200 rounded-md flex items-center px-2 py-1.5 shadow-sm">
-                                   <span className="text-xs text-slate-400 mr-1">下單後</span>
-                                   <input 
-                                      type="number" 
-                                      value={editingPaymentRule.deposit2Offset} 
-                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit2Offset: parseFloat(e.target.value)})}
-                                      className="w-8 text-center border-b border-dashed border-slate-300 outline-none text-blue-600 font-bold mx-1"
-                                   />
-                                   <span className="text-xs text-slate-400 mr-auto">個月</span>
-                                   <input 
-                                      type="number" 
-                                      value={editingPaymentRule.deposit2} 
-                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit2: parseFloat(e.target.value)})}
-                                      className="w-12 outline-none text-right font-bold text-slate-700"
-                                   />
-                                   <span className="ml-1 text-slate-400">%</span>
-                                </div>
-                             </div>
-
-                             {/* Deposit 3 */}
-                             <div className="flex items-center gap-3 text-sm">
-                                <span className="font-bold text-slate-500 w-12">訂金 3</span>
-                                <div className="flex-1 bg-white border border-slate-200 rounded-md flex items-center px-2 py-1.5 shadow-sm">
-                                   <span className="text-xs text-slate-400 mr-1">下單後</span>
-                                   <input 
-                                      type="number" 
-                                      value={editingPaymentRule.deposit3Offset} 
-                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit3Offset: parseFloat(e.target.value)})}
-                                      className="w-8 text-center border-b border-dashed border-slate-300 outline-none text-blue-600 font-bold mx-1"
-                                   />
-                                   <span className="text-xs text-slate-400 mr-auto">個月</span>
-                                   <input 
-                                      type="number" 
-                                      value={editingPaymentRule.deposit3} 
-                                      onChange={e => setEditingPaymentRule({...editingPaymentRule, deposit3: parseFloat(e.target.value)})}
-                                      className="w-12 outline-none text-right font-bold text-slate-700"
-                                   />
-                                   <span className="ml-1 text-slate-400">%</span>
-                                </div>
-                             </div>
-                          </div>
-                       </div>
-
-                       {/* 3. VISUAL SUMMARY BAR */}
-                       <div className="pt-2">
-                          <div className="flex justify-between text-xs font-bold text-slate-500 mb-1">
-                             <span>總預付: {editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3}%</span>
-                             <span>尾數: {100 - (editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3)}%</span>
-                          </div>
-                          <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex border border-slate-200">
-                             <div style={{ width: `${editingPaymentRule.deposit1}%` }} className="h-full bg-blue-400" title="Deposit 1"></div>
-                             <div style={{ width: `${editingPaymentRule.deposit2}%` }} className="h-full bg-blue-500" title="Deposit 2"></div>
-                             <div style={{ width: `${editingPaymentRule.deposit3}%` }} className="h-full bg-blue-600" title="Deposit 3"></div>
-                             {(editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3) > 100 && (
-                                <div className="flex-1 bg-red-500 animate-pulse" title="Error: > 100%"></div>
-                             )}
-                          </div>
-                          {(editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3) > 100 && (
-                             <p className="text-xs text-red-500 font-bold mt-1 text-right">⚠️ 總比例超過 100%</p>
-                          )}
-                       </div>
-
-                       <div className="flex gap-2 pt-2">
-                          <button onClick={handleSavePaymentRule} className="flex-1 bg-violet-600 text-white py-2 rounded-lg font-bold hover:bg-violet-700 transition-colors shadow-md">儲存規則</button>
-                          {editingPaymentRule.id && <button onClick={() => setEditingPaymentRule({id:null, name:'', minMonthsInAdvance:0, deposit1:0, deposit1Offset:0, deposit2:0, deposit2Offset:0, deposit3:0, deposit3Offset:0})} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold hover:bg-slate-200">取消</button>}
-                       </div>
-                    </div>
-                 </Card>
-              </div>
-
-              {/* RIGHT: LIST */}
-              <div className="md:col-span-7">
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                       <div>
-                          <h3 className="font-bold text-slate-700">規則列表 (Priority Order)</h3>
-                          <p className="text-xs text-slate-400">系統將依順序檢查條件 (System checks top-down)</p>
-                       </div>
-                       <span className="bg-violet-100 text-violet-700 text-xs px-2 py-1 rounded-full font-bold">
-                          {localSettings.paymentRules?.length || 0} Rules
-                       </span>
-                    </div>
-                    <div className="divide-y divide-slate-100 overflow-y-auto flex-1">
-                       {(!localSettings.paymentRules || localSettings.paymentRules.length === 0) ? (
-                          <div className="p-10 text-center text-slate-400 flex flex-col items-center">
-                             <AlertCircle size={32} className="mb-2 opacity-20"/>
-                             <p>尚未設定規則</p>
-                             <p className="text-xs">請在左側新增您的第一條付款規則</p>
-                          </div>
-                       ) : (
-                          localSettings.paymentRules.map((rule, idx) => (
-                             <div key={rule.id} className="p-4 hover:bg-violet-50/50 transition-colors group flex items-start gap-3">
-                                <div className="mt-1 w-6 h-6 rounded-full bg-slate-100 text-slate-500 font-bold text-xs flex items-center justify-center border border-slate-200">
-                                   {idx + 1}
-                                </div>
-                                <div className="flex-1">
-                                   <div className="flex justify-between items-start">
-                                      <span className="font-bold text-slate-800 text-sm">{rule.name}</span>
-                                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                         <button onClick={() => setEditingPaymentRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1.5 rounded"><Edit2 size={14}/></button>
-                                         <button onClick={() => handleDeletePaymentRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1.5 rounded"><Trash2 size={14}/></button>
-                                      </div>
-                                   </div>
-                                   
-                                   <div className="text-xs text-violet-700 bg-violet-50 inline-block px-2 py-0.5 rounded font-medium mt-1 mb-2">
-                                      早於 {rule.minMonthsInAdvance} 個月前預訂
-                                   </div>
-
-                                   {/* Mini Progress Bar */}
-                                   <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex max-w-[200px]">
-                                       <div style={{ width: `${rule.deposit1}%` }} className="h-full bg-blue-300"></div>
-                                       <div style={{ width: `${rule.deposit2}%` }} className="h-full bg-blue-400"></div>
-                                       <div style={{ width: `${rule.deposit3}%` }} className="h-full bg-blue-500"></div>
-                                   </div>
-                                   <div className="text-[10px] text-slate-400 mt-1 flex gap-2">
-                                      <span>D1: {rule.deposit1}%</span>
-                                      {rule.deposit2 > 0 && <span>D2: {rule.deposit2}% (+{rule.deposit2Offset}m)</span>}
-                                      {rule.deposit3 > 0 && <span>D3: {rule.deposit3}% (+{rule.deposit3Offset}m)</span>}
-                                   </div>
-                                </div>
-                             </div>
-                          ))
-                       )}
-                    </div>
-                 </div>
-              </div>
-           </div>
+                </div>
+            </div>
         </div>
       )}
     </div>
@@ -2239,6 +2295,12 @@ export default function App() {
     }
   };
 
+  // --- Quotation Handler ---
+    const handlePrintQuotation = () => {
+      setPrintMode('QUOTATION');
+      setTimeout(() => window.print(), 100);
+    };
+
   const handleSaveSettings = async (newSettings) => {
     try {
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
@@ -2376,31 +2438,57 @@ export default function App() {
       menus: prev.menus.map(m => m.id === id ? { ...m, [field]: value } : m)
     }));
   };
+// NEW: Handle changes to specific menu allocation
+  const handleMenuAllocationChange = (menuId, deptKey, value) => {
+    setFormData(prev => ({
+      ...prev,
+      menus: prev.menus.map(m => {
+        if (m.id !== menuId) return m;
+        // Update the specific allocation key
+        const newAllocation = { ...m.allocation, [deptKey]: value };
+        return { ...m, allocation: newAllocation };
+      })
+    }));
+  };
 
+  // NEW: Toggle visibility of allocation section for a menu
+  const toggleMenuAllocation = (menuId) => {
+     setFormData(prev => ({
+       ...prev,
+       menus: prev.menus.map(m => m.id === menuId ? { ...m, showAllocation: !m.showAllocation } : m)
+     }));
+  };
   // Apply a preset to a specific menu
     const handleApplyMenuPreset = (menuId, presetId) => {
-        if (!presetId) return;
-        const preset = appSettings.defaultMenus.find(m => m.id.toString() === presetId.toString());
-        
-        if (preset) {
-          setFormData(prev => {
-            const newMenus = prev.menus.map(m => m.id === menuId ? { 
-                ...m, 
-                title: preset.title, 
-                content: preset.content,
-                price: preset.price || m.price || 0, 
-                // Keep existing type/qty, or default to perTable if missing
-                priceType: m.priceType || 'perTable', 
-                qty: m.qty || prev.tableCount || 1,
-                allocation: preset.allocation || {} 
-            } : m);
+    const preset = appSettings.defaultMenus.find(m => m.id.toString() === presetId.toString());
+    
+    if (preset) {
+      setFormData(prev => {
+        // Determine Day of Week (0=Sun, 6=Sat)
+        const dateObj = new Date(prev.date);
+        const dayNum = dateObj.getDay();
+        // Definition: Fri(5), Sat(6), Sun(0) are Weekend. Mon-Thu are Weekday.
+        const isWeekend = dayNum === 0 || dayNum >= 5;
 
-            const newData = { ...prev, menus: newMenus };
-            return { ...newData, totalAmount: calculateTotalAmount(newData) }; 
-          });
-          addToast(`已載入: ${preset.title}`, "success");
-        }
-      };
+        // Select correct price
+        const finalPrice = isWeekend ? (preset.priceWeekend || preset.priceWeekday) : (preset.priceWeekday || preset.priceWeekend);
+
+        const newMenus = prev.menus.map(m => m.id === menuId ? { 
+            ...m, 
+            title: preset.title, 
+            content: preset.content,
+            price: finalPrice || 0, 
+            priceType: m.priceType || 'perTable', 
+            qty: m.qty || prev.tableCount || 1,
+            allocation: preset.allocation || {} 
+        } : m);
+
+        const newData = { ...prev, menus: newMenus };
+        return { ...newData, totalAmount: calculateTotalAmount(newData) }; 
+      });
+      addToast(`已載入: ${preset.title}`, "success");
+    }
+  };
 
   const addMenu = () => {
       setFormData(prev => {
@@ -2469,48 +2557,78 @@ export default function App() {
       };
 
   // --- MIN SPEND CALCULATION ---
-  const minSpendInfo = useMemo(() => {
-    if (!formData.date || formData.selectedLocations.length === 0 || !appSettings.minSpendRules) return null;
-    
-    const date = new Date(formData.date);
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dayStr = days[date.getDay()];
-    
-    const selectedSorted = [...formData.selectedLocations].sort();
-    
-    const exactRule = appSettings.minSpendRules.find(r => {
-      const ruleSorted = [...r.locations].sort();
-      return JSON.stringify(ruleSorted) === JSON.stringify(selectedSorted);
-    });
-    
-    if (exactRule) {
-      return { 
-        amount: parseInt(exactRule.prices[dayStr] || 0), 
-        ruleName: `精確符合 (Exact Match): ${selectedSorted.join('+')}` 
-      };
-    }
+// --- MIN SPEND CALCULATION (FIXED) ---
+  const minSpendInfo = useMemo(() => {
+    if (!formData.date || formData.selectedLocations.length === 0 || !appSettings.minSpendRules) return null;
+    
+    const date = new Date(formData.date);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayStr = days[date.getDay()];
+    
+    // 1. Determine Session (Lunch vs Dinner) based on Start Time
+    // Default to Dinner if no time set, or if starts 16:00 or later
+    let timeOfDay = 'dinner'; 
+    if (formData.startTime) {
+        const hour = parseInt(formData.startTime.split(':')[0], 10);
+        if (hour < 16) timeOfDay = 'lunch';
+    }
 
-    let sum = 0;
-    let applicableRules = [];
-    
-    formData.selectedLocations.forEach(loc => {
-       const rule = appSettings.minSpendRules.find(r => r.locations.length === 1 && r.locations[0] === loc);
-       if (rule) {
-         const price = parseInt(rule.prices[dayStr] || 0);
-         sum += price;
-         applicableRules.push(`${loc} ($${price.toLocaleString()})`);
-       }
-    });
-    
-    if (applicableRules.length > 0) {
-      return { 
-        amount: sum, 
-        ruleName: `組合加總 (Sum): ${applicableRules.join(' + ')}` 
-      };
-    }
-    
-    return null;
-  }, [formData.date, formData.selectedLocations, appSettings.minSpendRules]);
+    const selectedSorted = [...formData.selectedLocations].sort();
+    
+    // Helper to safely extract price (handles both old simple numbers and new lunch/dinner objects)
+    const getPrice = (rule) => {
+        const priceEntry = rule.prices?.[dayStr];
+        if (!priceEntry) return 0;
+        
+        // New Format: Object { lunch: '...', dinner: '...' }
+        if (typeof priceEntry === 'object') {
+            return parseInt(priceEntry[timeOfDay] || 0);
+        }
+        // Old Format: Direct Number/String
+        return parseInt(priceEntry || 0);
+    };
+
+    // 2. Find Exact Match Rule
+    const exactRule = appSettings.minSpendRules.find(r => {
+      const ruleSorted = [...r.locations].sort();
+      return JSON.stringify(ruleSorted) === JSON.stringify(selectedSorted);
+    });
+    
+    if (exactRule) {
+      const amount = getPrice(exactRule);
+      if (amount > 0) {
+        return { 
+          amount: amount, 
+          ruleName: `精確符合: ${selectedSorted.join('+')} (${timeOfDay === 'lunch' ? '午市' : '晚市'})` 
+        };
+      }
+    }
+
+    // 3. Fallback: Sum of Individual Rules
+    let sum = 0;
+    let applicableRules = [];
+    
+    formData.selectedLocations.forEach(loc => {
+       const rule = appSettings.minSpendRules.find(r => r.locations.length === 1 && r.locations[0] === loc);
+       if (rule) {
+         const price = getPrice(rule);
+         if (price > 0) {
+            sum += price;
+            applicableRules.push(`${loc} ($${price.toLocaleString()})`);
+         }
+       }
+    });
+    
+    if (applicableRules.length > 0) {
+      return { 
+        amount: sum, 
+        ruleName: `組合加總: ${applicableRules.join(' + ')} (${timeOfDay === 'lunch' ? '午市' : '晚市'})` 
+      };
+    }
+    
+    return null;
+  }, [formData.date, formData.startTime, formData.selectedLocations, appSettings.minSpendRules]);
+
 
   const openNewEventModal = () => {
     setEditingEvent(null);
@@ -2937,31 +3055,29 @@ export default function App() {
                       />
                     </div>
 
-                    {/* 2. Location & Counts Row (Restored) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-50 mt-2">
-                       {/* Location Selector Component */}
-                       <LocationSelector formData={formData} setFormData={setFormData} />
-                       
-                       {/* Table & Guest Counts */}
-                       <div className="grid grid-cols-2 gap-4">
-                          <FormInput 
-                            label="席數 (Tables)" 
-                            name="tableCount" 
-                            type="number" 
-                            value={formData.tableCount} 
-                            onChange={handleInputChange} 
-                            placeholder="20"
-                          />
-                          <FormInput 
-                            label="人數 (Guests)" 
-                            name="guestCount" 
-                            type="number" 
-                            value={formData.guestCount} 
-                            onChange={handleInputChange} 
-                            placeholder="240"
-                          />
-                       </div>
-                    </div>
+                    {/* Location Selector Component */}
+                    <LocationSelector formData={formData} setFormData={setFormData} />
+
+                    {/* --- INSERT THIS BLOCK HERE --- */}
+                    {minSpendInfo && (
+                      <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row justify-between items-center animate-in slide-in-from-top-2">
+                        <div className="flex items-center text-indigo-900 mb-1 sm:mb-0">
+                            <div className="bg-white p-1 rounded-full shadow-sm mr-2 text-indigo-600">
+                                <DollarSign size={14} />
+                            </div>
+                            <div>
+                                <span className="text-xs font-bold text-indigo-600 block">最低消費要求 (Min Spend Requirement)</span>
+                                <span className="text-lg font-black font-mono tracking-tight">${minSpendInfo.amount.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-[10px] font-medium text-indigo-500 bg-white px-2 py-1 rounded border border-indigo-100 block">
+                              {minSpendInfo.ruleName}
+                            </span>
+                        </div>
+                      </div>
+                    )}
+                    {/* --- END INSERT --- */}
                   </div>
 
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -2993,7 +3109,7 @@ export default function App() {
                       </div>
                     </div>
                     
-                    {/* Dynamic Menus (Content Only) */}
+{/* Dynamic Menus with Allocation Editor */}
                     <div className="space-y-4">
                       {formData.menus && formData.menus.map((menu, index) => (
                         <div key={menu.id || index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm">
@@ -3003,7 +3119,7 @@ export default function App() {
                             <div className="flex items-center flex-1 gap-2">
                                 <input 
                                   type="text" 
-                                  placeholder="菜單標題 (例如: 席前小食 / 員工餐)"
+                                  placeholder="菜單標題 (例如: Main Menu / Vegetarian)"
                                   value={menu.title}
                                   onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
                                   className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
@@ -3019,18 +3135,18 @@ export default function App() {
                                     <option key={m.id} value={m.id}>{m.title}</option>
                                   ))}
                                 </select>
-                            </div>
-                            
-                            {formData.menus.length > 1 && (
-                              <button 
-                                type="button" 
-                                onClick={() => removeMenu(menu.id)}
-                                className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors ml-2"
-                                title="移除此菜單"
-                              >
-                                <Trash2 size={16}/>
-                              </button>
-                            )}
+                                
+                                {formData.menus.length > 1 && (
+                                  <button 
+                                    type="button" 
+                                    onClick={() => removeMenu(menu.id)}
+                                    className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors ml-2"
+                                    title="移除此菜單"
+                                  >
+                                    <Trash2 size={16}/>
+                                  </button>
+                                )}
+                              </div>
                           </div>
 
                           {/* CONTENT: Text Area */}
@@ -3039,8 +3155,50 @@ export default function App() {
                             placeholder="請在此輸入詳細菜單內容..."
                             value={menu.content}
                             onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3"
                           />
+
+                          {/* NEW: AD-HOC REVENUE ALLOCATION SECTION */}
+                          <div className="border-t border-slate-200 pt-2">
+                             <button 
+                                type="button" 
+                                onClick={() => toggleMenuAllocation(menu.id)}
+                                className="flex items-center text-xs font-bold text-slate-500 hover:text-blue-600 transition-colors"
+                             >
+                                <PieChart size={14} className="mr-1"/> 
+                                {menu.showAllocation ? "隱藏拆帳設定 (Hide Allocation)" : "設定營收拆帳 (Edit Allocation)"}
+                             </button>
+
+                             {menu.showAllocation && (
+                                <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2">
+                                   <div className="flex justify-between items-center mb-2">
+                                      <span className="text-xs font-bold text-slate-700">拆帳金額 (Allocation per Unit)</span>
+                                      <span className="text-[10px] text-slate-400">總單價: ${menu.price || 0}</span>
+                                   </div>
+                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                      {DEPARTMENTS.map(dept => (
+                                         <div key={dept.key}>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
+                                            <div className="relative">
+                                               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                               <input 
+                                                  type="number" 
+                                                  placeholder="0"
+                                                  value={menu.allocation?.[dept.key] || ''} 
+                                                  onChange={(e) => handleMenuAllocationChange(menu.id, dept.key, e.target.value)}
+                                                  className="w-full pl-4 pr-1 py-1 text-xs border border-slate-300 rounded focus:border-blue-500 outline-none"
+                                               />
+                                            </div>
+                                         </div>
+                                      ))}
+                                   </div>
+                                   <div className="mt-2 text-[10px] text-slate-400 text-right">
+                                      * 未分配金額將自動歸入 Kitchen
+                                   </div>
+                                </div>
+                             )}
+                          </div>
+
                         </div>
                       ))}
                     </div>
@@ -3977,6 +4135,13 @@ export default function App() {
                       className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm"
                     >
                       <Users size={16} className="mr-2" /> 樓面簡報 (Briefing)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePrintQuotation}
+                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm"
+                    >
+                      <FileText size={16} className="mr-2" /> 報價單 (Quotation)
                     </button>
                   </>
                  )}

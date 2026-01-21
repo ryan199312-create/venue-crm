@@ -217,15 +217,25 @@ const calculateTotalAmount = (data) => {
   let menusTotal = 0;
   (data.menus || []).forEach(m => {
     const p = parseFloat(m.price) || 0;
-    const q = parseFloat(m.qty) || 1; // Now uses specific Menu Qty
+    const q = parseFloat(m.qty) || 1; 
     const line = p * q;
     menusTotal += line;
     if (m.applySC !== false) baseForSC += line; 
   });
 
+  // NEW: Plating Fee Calculation (位上服務費)
+  let platingTotal = 0;
+  if (data.servingStyle === '位上') {
+      const pFee = parseFloat(data.platingFee) || 0;
+      const tables = parseFloat(data.tableCount) || 0; // 以席數計算
+      platingTotal = pFee * tables;
+      // 假設位上費也需要加收服務費 (通常視為餐飲服務的一部分)
+      baseForSC += platingTotal;
+  }
+
   // 2. Drinks
   const dPrice = parseFloat(data.drinksPrice) || 0;
-  const dQty = parseFloat(data.drinksQty) || 1; // Now uses specific Drinks Qty
+  const dQty = parseFloat(data.drinksQty) || 1; 
   const drinksTotal = dPrice * dQty;
   if (data.drinksApplySC !== false) baseForSC += drinksTotal;
 
@@ -239,19 +249,27 @@ const calculateTotalAmount = (data) => {
     if (item.applySC) baseForSC += amt;
   });
 
-  // 4. SC & Discount
+  // 4. Service Charge
   let sc = 0;
   if (data.enableServiceCharge !== false) {
-      const scStr = (data.serviceCharge || '10%').toString();
-      if (scStr.includes('%')) {
-          sc = baseForSC * (parseFloat(scStr) / 100);
+      const scStr = (data.serviceCharge || '10%').toString().trim();
+      const val = parseFloat(scStr.replace(/[^0-9.]/g, '')) || 0;
+      const isExplicitPercent = scStr.includes('%');
+
+      if (isExplicitPercent) {
+          sc = baseForSC * (val / 100);
       } else {
-          sc = parseFloat(scStr) || 0;
+          if (val > 0 && val <= 100) {
+             sc = baseForSC * (val / 100);
+          } else {
+             sc = val;
+          }
       }
   }
   const disc = parseFloat(data.discount) || 0;
   
-  return Math.round(menusTotal + drinksTotal + customTotal + sc - disc);
+  // Add platingTotal to the final sum
+  return Math.round(menusTotal + platingTotal + drinksTotal + customTotal + sc - disc);
 };
 
 // ==========================================
@@ -633,17 +651,46 @@ const PrintableEO = ({ data, printMode }) => {
   };
 
   // --- Financial Logic ---
+  // --- Financial Logic (Updated for Plating Fee) ---
+  const platingTotal = (data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0;
+
   const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
+                 + platingTotal // Add here
                  + ((data.drinksPrice||0)*(data.drinksQty||1)) 
                  + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
   
   let scBase = 0;
   (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
+  if (platingTotal > 0) scBase += platingTotal; // Add Plating Fee to SC Base
   if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
-  (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
-  
-  const serviceChargeVal = data.enableServiceCharge !== false ? (parseFloat(data.serviceCharge) || (scBase * 0.1)) : 0; 
-  const scLabel = data.serviceCharge && data.serviceCharge.includes('%') ? data.serviceCharge : 'Fixed';
+  (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });  
+  // Calculate Service Charge (Smart Logic matching App)
+  let serviceChargeVal = 0;
+  let scLabel = 'Fixed';
+
+  if (data.enableServiceCharge !== false) {
+      const scStr = (data.serviceCharge || '10%').toString().trim();
+      const val = parseFloat(scStr.replace(/[^0-9.]/g, '')) || 0;
+      const isExplicitPercent = scStr.includes('%');
+
+      if (isExplicitPercent) {
+          // Case A: Explicit % (e.g. "10%")
+          serviceChargeVal = scBase * (val / 100);
+          scLabel = scStr;
+      } else {
+          // Case B: Number only
+          if (val > 0 && val <= 100) {
+             // Treat small numbers (<=100) as percentage automatically
+             serviceChargeVal = scBase * (val / 100);
+             scLabel = `${val}%`; 
+          } else {
+             // Treat large numbers (>100) as fixed amount
+             serviceChargeVal = val;
+             scLabel = 'Fixed';
+          }
+      }
+  }
+
   const discountVal = parseFloat(data.discount) || 0;
   const grandTotal = subtotal + serviceChargeVal - discountVal;
 
@@ -689,7 +736,9 @@ const PrintableEO = ({ data, printMode }) => {
             addItem('kitchen', m.title, '', qty, price, totalLineAmount);
         }
     });
-
+    if (platingTotal > 0) {
+        addItem('kitchen', '位上服務費 (Plating Service)', `${data.tableCount}席 @ $${formatMoney(data.platingFee)}`, data.tableCount, data.platingFee, platingTotal);
+    }
     const dQty = parseFloat(data.drinksQty) || 1;
     const dPrice = parseFloat(data.drinksPrice) || 0;
     const dTotal = dPrice * dQty;
@@ -868,6 +917,16 @@ const PrintableEO = ({ data, printMode }) => {
                             <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((m.price||0)*(m.qty||1))}</td>
                         </tr>
                     ))}
+                    {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (
+                        <tr>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900">Plating Service Charge (位上服務費)</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(data.platingFee)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{data.tableCount}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney(platingTotal)}</td>
+                        </tr>
+                    )}
                     {data.drinksPackage && (
                         <tr>
                             <td className="py-2 pr-4 align-top">
@@ -994,12 +1053,21 @@ const PrintableEO = ({ data, printMode }) => {
                           <td className="text-right px-1 font-mono">${formatMoney((m.price||0)*(m.qty||1))}</td>
                        </tr>
                     ))}
+                    {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (
+                        <tr className="border-b border-slate-100 bg-blue-50/30">
+                           <td className="py-1 px-1">位上服務費 (Plating Service Fee)</td>
+                           <td className="text-right px-1">${formatMoney(data.platingFee)}</td>
+                           <td className="text-center px-1">{data.tableCount}</td>
+                           <td className="text-right px-1 font-mono">${formatMoney(platingTotal)}</td>
+                        </tr>
+                    )}
                     <tr className="border-b border-slate-100">
                        <td className="py-1 px-1">酒水 ({data.drinksPackage || 'Standard'})</td>
                        <td className="text-right px-1">${formatMoney(data.drinksPrice)}</td>
                        <td className="text-center px-1">{data.drinksQty}</td>
                        <td className="text-right px-1 font-mono">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td>
                     </tr>
+                    
                     {(data.customItems || []).map((item, i) => (
                        <tr key={`c-${i}`} className="border-b border-slate-100">
                           <td className="py-1 px-1">{item.name}</td>
@@ -2028,6 +2096,7 @@ export default function App() {
       preDinnerSnacks: '',
       allergies: '',
       servingStyle: '圍餐',
+      platingFee:'',
       drinkAllocation: {},
       
       // 3. Billing - UPDATED STRUCTURE
@@ -2457,28 +2526,46 @@ export default function App() {
   };
 
   // Handle Drink Package Selection
-  const handleDrinkTypeChange = (e) => {
-    const val = e.target.value;
-    setDrinkPackageType(val);
-    
-    const preset = appSettings.defaultMenus.find(m => m.type === 'drink' && m.title === val);
-    
-    if (preset) {
-        setFormData(prev => {
-          const newData = { 
-            ...prev, 
-            drinksPackage: preset.content,
-            drinksPrice: preset.price || prev.drinksPrice,
-            drinkAllocation: preset.allocation || {} // Load Allocation for Drink
-          };
-          return { ...newData, totalAmount: calculateTotalAmount(newData) };
-        }); 
-    } else if (val !== 'Other') {
-        setFormData(prev => ({ ...prev, drinksPackage: val }));
-    } else {
-        setFormData(prev => ({ ...prev, drinksPackage: '' })); 
-    }
-  };
+// Handle Drink Package Selection (FIXED)
+  const handleDrinkTypeChange = (e) => {
+    const val = e.target.value;
+    setDrinkPackageType(val);
+    
+    // Find the matching preset from settings
+    const preset = appSettings.defaultMenus.find(m => m.type === 'drink' && m.title === val);
+    
+    setFormData(prev => {
+        let newData = { ...prev };
+
+        if (preset) {
+            // Case A: User selected a valid preset
+            newData = { 
+                ...newData, 
+                drinksPackage: preset.content,
+                // Use preset price if available, otherwise keep existing
+                drinksPrice: preset.priceWeekday || preset.price || prev.drinksPrice, 
+                // Default to 'perPerson' for drinks usually, or keep existing logic
+                drinksPriceType: 'perPerson', 
+                // Auto-sync Qty to Guest Count if perPerson
+                drinksQty: prev.guestCount || 1,
+                drinkAllocation: preset.allocation || {} 
+            };
+        } else if (val === 'Other') {
+            // Case B: User selected "Custom / Other"
+            // Don't change price/qty, just set a flag or keep as is
+            newData = { ...newData, drinksPackage: '' }; 
+        } else {
+            // Case C: User cleared selection
+            newData = { ...newData, drinksPackage: '', drinksPrice: '', drinkAllocation: {} }; 
+        }
+
+        // CRITICAL FIX: Recalculate total immediately with the new data
+        return { 
+            ...newData, 
+            totalAmount: calculateTotalAmount(newData) 
+        };
+    });
+  };
 
   // --- Auto Payment Schedule Handler (Dynamic Version) ---
     const applyStandardPaymentTerms = () => {
@@ -3039,10 +3126,12 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* TAB 2: F&B */}
+{/* TAB 2: F&B (Full Code) */}
                     {formTab === 'fnb' && (
                       <div className="space-y-6 animate-in fade-in">
                         <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                          
+                          {/* Section Header */}
                           <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                             <h4 className="font-bold text-slate-800">餐單設定 (Menus)</h4>
                             <div className="flex space-x-2">
@@ -3056,12 +3145,12 @@ export default function App() {
                             </div>
                           </div>
                           
-                          {/* Dynamic Menus with Allocation Editor */}
+                          {/* Dynamic Menus List */}
                           <div className="space-y-4">
                             {formData.menus && formData.menus.map((menu, index) => (
                               <div key={menu.id || index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm">
                                 
-                                {/* HEADER: Title & Presets */}
+                                {/* Menu Header: Title & Presets */}
                                 <div className="flex justify-between items-center mb-2">
                                   <div className="flex items-center flex-1 gap-2">
                                       <input 
@@ -3071,7 +3160,7 @@ export default function App() {
                                         onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
                                         className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
                                       />
-                                      {/* LOAD PRESET BUTTON */}
+                                      {/* Load Preset Button */}
                                       <select 
                                         className="text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-500 outline-none w-32"
                                         onChange={(e) => handleApplyMenuPreset(menu.id, e.target.value)}
@@ -3083,6 +3172,7 @@ export default function App() {
                                         ))}
                                       </select>
                                       
+                                      {/* Delete Menu Button */}
                                       {formData.menus.length > 1 && (
                                         <button 
                                           type="button" 
@@ -3096,7 +3186,7 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                {/* CONTENT: Text Area */}
+                                {/* Menu Content Text Area */}
                                 <textarea
                                   rows={6}
                                   placeholder="請在此輸入詳細菜單內容..."
@@ -3105,7 +3195,7 @@ export default function App() {
                                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3"
                                 />
 
-                                {/* NEW: AD-HOC REVENUE ALLOCATION SECTION */}
+                                {/* Menu Revenue Allocation Section */}
                                 <div className="border-t border-slate-200 pt-2">
                                    <button 
                                       type="button" 
@@ -3120,7 +3210,7 @@ export default function App() {
                                       <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2">
                                          <div className="flex justify-between items-center mb-2">
                                             <span className="text-xs font-bold text-slate-700">拆帳金額 (Allocation per Unit)</span>
-                                            <span className="text--[10px] text-slate-400">總單價: ${menu.price || 0}</span>
+                                            <span className="text-[10px] text-slate-400">總單價: ${menu.price || 0}</span>
                                          </div>
                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                             {DEPARTMENTS.map(dept => (
@@ -3150,11 +3240,50 @@ export default function App() {
                             ))}
                           </div>
 
+                          {/* Serving Style & Drinks Grid */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                            <FormSelect label="上菜方式" name="servingStyle" options={SERVING_STYLES} value={formData.servingStyle} onChange={handleInputChange} />
-                            {/* Updated Drinks Package Logic */}
+                            
+                            {/* Left Col: Serving Style + Plating Fee */}
+                            <div className="space-y-3">
+                                <FormSelect 
+                                    label="上菜方式 (Serving Style)" 
+                                    name="servingStyle" 
+                                    options={SERVING_STYLES} 
+                                    value={formData.servingStyle} 
+                                    onChange={(e) => {
+                                        // Reset fee if user switches away from '位上'
+                                        const newStyle = e.target.value;
+                                        setFormData(prev => {
+                                            const newData = { 
+                                                ...prev, 
+                                                servingStyle: newStyle,
+                                                platingFee: newStyle !== '位上' ? '' : prev.platingFee 
+                                            };
+                                            return { ...newData, totalAmount: calculateTotalAmount(newData) };
+                                        });
+                                    }} 
+                                />
+                                
+                                {/* CONDITIONAL: Plating Fee Input */}
+                                {formData.servingStyle === '位上' && (
+                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 animate-in fade-in slide-in-from-top-2">
+                                        <MoneyInput 
+                                            label="位上服務費 (每席計算)" 
+                                            name="platingFee"
+                                            value={formData.platingFee}
+                                            onChange={handlePriceChange}
+                                            required
+                                        />
+                                        <div className="text-right text-xs text-blue-600 font-mono mt-1 font-bold">
+                                            = ${formatMoney((parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Col: Drinks Package */}
                             <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排</label>
+                              <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排 (Drinks)</label>
                               <select 
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
                                 value={drinkPackageType}
@@ -3178,8 +3307,9 @@ export default function App() {
                               />
                             </div>
                           </div>
-                          {/* REMOVED: preDinnerSnacks & staffMeals */}
-                          <FormTextArea label="特殊餐單需求" name="specialMenuReq" value={formData.specialMenuReq} onChange={handleInputChange} />
+
+                          {/* Requests & Allergies */}
+                          <FormTextArea label="特殊餐單需求 (Special Req)" name="specialMenuReq" value={formData.specialMenuReq} onChange={handleInputChange} />
                           <FormTextArea label="食物過敏 (Allergies)" name="allergies" rows={2} className="bg-red-50 p-2 rounded-lg" value={formData.allergies} onChange={handleInputChange} />
                         </div>
                       </div>

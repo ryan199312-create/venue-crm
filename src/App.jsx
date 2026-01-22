@@ -1448,7 +1448,584 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     );
   }
+  // ==========================================
+  // VIEW 5: CHINESE CONTRACT MODE (New)
+  // ==========================================
+  if (printMode === 'CONTRACT_CN') {
+    const BRAND_COLOR = '#A57C00'; 
+    const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
+    const minSpendInfo = data.minSpendInfo || null;
 
+    // Calculate Breakdown
+    const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
+                   + ((data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0)
+                   + ((data.drinksPrice||0)*(data.drinksQty||1))
+                   + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
+
+    // Re-calculate Service Charge for Contract View
+    let scBase = 0;
+    (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
+    if ((data.servingStyle === '位上') && data.platingFeeApplySC !== false) {
+       scBase += (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0);
+    }
+    if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
+    (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
+
+    let serviceChargeVal = 0;
+    let scLabel = 'Fixed';
+    if (data.enableServiceCharge !== false) {
+       const scStr = (data.serviceCharge || '10%').toString().trim();
+       const val = parseFloat(scStr.replace(/[^0-9.]/g, '')) || 0;
+       if (scStr.includes('%') || (val > 0 && val <= 100)) {
+           serviceChargeVal = scBase * (val / 100);
+           scLabel = `${val}%`;
+       } else {
+           serviceChargeVal = val;
+       }
+    }
+    const discountVal = parseFloat(data.discount) || 0;
+    const grandTotal = subtotal + serviceChargeVal - discountVal;
+
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white min-h-screen relative flex flex-col text-xs leading-tight">
+        <style>{`
+          @media print { 
+            @page { margin: 15mm; size: A4; } 
+            body { -webkit-print-color-adjust: exact; } 
+            .page-break { page-break-before: always; }
+            .legal-text { font-size: 9px; text-align: justify; line-height: 1.4; }
+            .legal-header { font-weight: bold; margin-top: 10px; margin-bottom: 2px; font-size: 10px; }
+          }
+        `}</style>
+
+        {/* --- PAGE 1: PARTICULARS & DETAILS --- */}
+        
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-4 pb-4 mb-6" style={{ borderColor: BRAND_COLOR }}>
+            <div className="max-w-[70%]">
+                <div className="mb-1" style={{ color: BRAND_COLOR }}>
+                    <span className="text-2xl font-black tracking-tight block leading-none">璟瓏軒</span>
+                    <span className="text-xs font-bold tracking-widest uppercase block mt-1">King Lung Heen</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium mt-2">
+                    <p>尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
+                    <p className="mt-1">Tel: +852 2788 3939 | Hotline: +852 5222 6066 | Email: banquet@kinglungheen.com</p>
+                </div>
+            </div>
+            <div className="text-right">
+                <h1 className="text-3xl font-bold text-slate-800 uppercase tracking-widest mb-1">宴會合約</h1>
+                <p className="text-xs font-bold text-slate-700">合約編號: {data.orderId}</p>
+                <p className="text-xs text-slate-500">日期: {new Date().toLocaleDateString('zh-HK')}</p>
+            </div>
+        </div>
+
+        {/* Section 1: Event Particulars */}
+        <div className="mb-6 border border-slate-300">
+            <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">活動資料 (EVENT PARTICULARS)</div>
+            <div className="grid grid-cols-2">
+                <div className="p-2 border-r border-slate-300 border-b">
+                    <span className="block text-[9px] text-slate-500">客戶名稱 (Client Name)</span>
+                    <span className="font-bold text-sm">{data.clientName}</span>
+                </div>
+                <div className="p-2 border-b border-slate-300">
+                    <span className="block text-[9px] text-slate-500">公司/機構 (Company)</span>
+                    <span className="font-bold text-sm">{data.companyName || '-'}</span>
+                </div>
+                <div className="p-2 border-r border-slate-300 border-b">
+                    <span className="block text-[9px] text-slate-500">聯絡電話 / 電郵 (Contact)</span>
+                    <span className="font-bold text-sm">{data.clientPhone} / {data.clientEmail}</span>
+                </div>
+                <div className="p-2 border-b border-slate-300">
+                    <span className="block text-[9px] text-slate-500">活動名稱 (Event Name)</span>
+                    <span className="font-bold text-sm">{data.eventName}</span>
+                </div>
+                <div className="p-2 border-r border-slate-300 border-b">
+                    <span className="block text-[9px] text-slate-500">日期及時間 (Date & Time)</span>
+                    <span className="font-bold text-sm">
+                        {formatDateWithDay(data.date)} | {data.startTime} - {data.endTime}
+                    </span>
+                </div>
+                <div className="p-2 border-b border-slate-300">
+                    <span className="block text-[9px] text-slate-500">場地及人數 (Venue & Attendance)</span>
+                    <span className="font-bold text-sm">{data.venueLocation} | {data.tableCount} 席 / {data.guestCount} 人</span>
+                </div>
+            </div>
+        </div>
+
+        {/* Section 2: Financials & Payment Schedule */}
+        <div className="mb-6 flex gap-6">
+            
+            {/* LEFT: Charges Detail */}
+            <div className="w-1/2 border border-slate-300 flex flex-col">
+                <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">費用明細 (CHARGES DETAIL)</div>
+                <div className="p-2 flex flex-col flex-1">
+                    <div className="flex text-[9px] font-bold text-slate-400 border-b border-slate-200 pb-1 mb-1">
+                        <div className="flex-1">項目 (ITEM)</div>
+                        <div className="w-14 text-right">單價</div>
+                        <div className="w-8 text-center">數量</div>
+                        <div className="w-16 text-right">金額 ($)</div>
+                    </div>
+
+                    {/* Items Loop */}
+                    {(data.menus || []).map((m, i) => (
+                        <div key={`m-${i}`} className="flex text-xs mb-1.5 items-baseline">
+                            <div className="flex-1 pr-1 font-medium text-slate-800 leading-tight">{m.title}</div>
+                            <div className="w-14 text-right font-mono text-[10px] text-slate-500">${formatMoney(m.price)}</div>
+                            <div className="w-8 text-center text-[10px] text-slate-500">{m.qty}</div>
+                            <div className="w-16 text-right font-mono font-bold text-slate-700">${formatMoney((m.price||0)*(m.qty||1))}</div>
+                        </div>
+                    ))}
+                    
+                    {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (
+                        <div className="flex text-xs mb-1.5 items-baseline text-blue-800">
+                            <div className="flex-1 pr-1 font-medium leading-tight">位上服務費 (Plating Fee)</div>
+                            <div className="w-14 text-right font-mono text-[10px]">${formatMoney(data.platingFee)}</div>
+                            <div className="w-8 text-center text-[10px]">{data.tableCount}</div>
+                            <div className="w-16 text-right font-mono font-bold">${formatMoney((parseFloat(data.platingFee)||0)*(parseFloat(data.tableCount)||0))}</div>
+                        </div>
+                    )}
+
+                    <div className="flex text-xs mb-1.5 items-baseline">
+                        <div className="flex-1 pr-1 font-medium text-slate-800 leading-tight">酒水套餐 ({data.drinksPackage || 'Standard'})</div>
+                        <div className="w-14 text-right font-mono text-[10px] text-slate-500">${formatMoney(data.drinksPrice)}</div>
+                        <div className="w-8 text-center text-[10px] text-slate-500">{data.drinksQty}</div>
+                        <div className="w-16 text-right font-mono font-bold text-slate-700">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</div>
+                    </div>
+
+                    {(data.customItems || []).map((item, i) => (
+                        <div key={`c-${i}`} className="flex text-xs mb-1.5 items-baseline">
+                            <div className="flex-1 pr-1 font-medium text-slate-800 leading-tight">{item.name}</div>
+                            <div className="w-14 text-right font-mono text-[10px] text-slate-500">${formatMoney(item.price)}</div>
+                            <div className="w-8 text-center text-[10px] text-slate-500">{item.qty}</div>
+                            <div className="w-16 text-right font-mono font-bold text-slate-700">${formatMoney((item.price||0)*(item.qty||1))}</div>
+                        </div>
+                    ))}
+
+                    <div className="flex-1 min-h-[10px]"></div>
+
+                    {/* Totals */}
+                    <div className="mt-2 border-t border-slate-300 pt-2 space-y-1 bg-slate-50/50 -mx-2 px-2 pb-1">
+                        <div className="flex justify-between text-[10px] text-slate-500">
+                            <span>小計 (Subtotal):</span>
+                            <span className="font-mono">${formatMoney(subtotal)}</span>
+                        </div>
+                        {serviceChargeVal > 0 && (
+                            <div className="flex justify-between text-[10px] text-slate-500">
+                                <span>服務費 ({scLabel}):</span>
+                                <span className="font-mono">+${formatMoney(serviceChargeVal)}</span>
+                            </div>
+                        )}
+                        {discountVal > 0 && (
+                            <div className="flex justify-between text-[10px] text-red-600 font-bold">
+                                <span>折扣 (Discount):</span>
+                                <span className="font-mono">-${formatMoney(discountVal)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-1 mt-1 text-slate-900">
+                            <span>合約總金額 (TOTAL):</span>
+                            <span className="font-mono">${formatMoney(grandTotal)}</span>
+                        </div>
+                        <div className="text-[9px] text-slate-400 text-right italic">
+                            * 最低消費: ${minSpendInfo ? formatMoney(minSpendInfo.amount) : 'N/A'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {/* RIGHT: Payment Schedule */}
+            <div className="w-1/2 border border-slate-300 flex flex-col">
+                <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">付款時間表 (PAYMENT SCHEDULE)</div>
+                <div className="p-2 space-y-1 flex-1 flex flex-col">
+                    {[
+                        { l: '第一期訂金', a: data.deposit1, d: data.deposit1Date },
+                        { l: '第二期訂金', a: data.deposit2, d: data.deposit2Date },
+                        { l: '第三期訂金', a: data.deposit3, d: data.deposit3Date },
+                    ].map((item, i) => Number(item.a) > 0 && (
+                        <div key={i} className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-600 font-medium">{item.l} <span className="text-[9px] text-slate-400">({item.d || '待定'})</span>:</span>
+                            <span className="font-mono font-bold">${formatMoney(item.a)}</span>
+                        </div>
+                    ))}
+                    
+                    <div className="flex justify-between border-t border-slate-200 pt-2 mt-1 mb-4">
+                        <span className="font-bold text-slate-900 text-xs">
+                            尾數餘額 (Balance) <span className="text-[9px] font-normal text-slate-500 block">({data.balanceDueDateType === '10daysPrior' ? '活動前10天' : '活動當日'})</span>
+                        </span>
+                        <span className="font-mono font-black text-sm">${formatMoney(Number(data.totalAmount) - totalDeposits)}</span>
+                    </div>
+
+                    <div className="mt-auto">
+                        <div className="bg-blue-50/50 border border-blue-100 rounded p-2 text-[10px] text-slate-600">
+                            <p className="font-bold text-blue-800 mb-1 uppercase text-[9px] tracking-wider border-b border-blue-100 pb-0.5">銀行轉賬資料 (Bank Info)</p>
+                            <div className="grid grid-cols-[50px_1fr] gap-x-1 gap-y-0.5 leading-tight">
+                                <span className="text-slate-400">銀行:</span>
+                                <span>中國銀行 (香港)</span>
+                                <span className="text-slate-400">戶口名稱:</span>
+                                <span className="font-bold text-slate-800">King Lung Heen</span>
+                                <span className="text-slate-400">戶口號碼:</span>
+                                <span className="font-mono font-bold text-slate-900 text-sm">012-875-2-082180-1</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Section 3: Menu & Arrangements */}
+        <div className="mb-6 border border-slate-300">
+             <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">餐單與佈置安排 (MENU & ARRANGEMENTS)</div>
+             <div className="p-4 grid grid-cols-2 gap-8">
+                
+                {/* LEFT COL */}
+                <div>
+                    <h4 className="font-bold underline mb-2 text-xs text-slate-800">餐飲內容 (Food & Beverage)</h4>
+                    {data.menus && data.menus.map((m, i) => (
+                        <div key={i} className="mb-3">
+                            <p className="font-bold text-sm text-slate-900">{m.title}</p>
+                            <p className="text-[10px] text-slate-600 whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                        </div>
+                    ))}
+                    {data.drinksPackage && (
+                        <div className="mt-2 border-t border-slate-100 pt-2">
+                            <p className="font-bold text-sm text-slate-900">酒水套餐</p>
+                            <p className="text-[10px] text-slate-600 whitespace-pre-wrap">{data.drinksPackage}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* RIGHT COL */}
+                <div>
+                    <h4 className="font-bold underline mb-2 text-xs text-slate-800">場地設置 (Setup & Logistics)</h4>
+                    <div className="space-y-2 text-[10px] text-slate-700">
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <p><span className="font-bold">檯布顏色:</span> {data.tableClothColor || '標準'} | <span className="font-bold">椅套顏色:</span> {data.chairCoverColor || '標準'}</p>
+                            {data.venueDecor && <p className="mt-1"><span className="font-bold">場地佈置備註:</span> {data.venueDecor}</p>}
+                        </div>
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <p>
+                                <span className="font-bold">新娘房: </span> 
+                                {data.bridalRoom ? <span className="font-semibold">使用 {data.bridalRoomHours ? `(${data.bridalRoomHours})` : ''}</span> : '不適用'}
+                            </p>
+                        </div>
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <span className="font-bold block">器材與佈置 (Equipment):</span>
+                            <p className="leading-tight text-slate-600">
+                                {(() => {
+                                    const items = [];
+                                    Object.keys(equipmentMap).forEach(k => { if(data.equipment?.[k]) items.push(equipmentMap[k]); });
+                                    if(data.equipment?.nameSign && data.nameSignText) items.push(`字牌: ${data.nameSignText}`);
+                                    Object.keys(decorationMap).forEach(k => { if(data.decoration?.[k]) items.push(decorationMap[k]); });
+                                    return items.length > 0 ? items.join(', ') : '標準設置';
+                                })()}
+                            </p>
+                        </div>
+                        <div>
+                            <p><span className="font-bold">泊車優惠:</span> {data.parkingInfo?.ticketQty || 0} 張 x {data.parkingInfo?.ticketHours || 0} 小時</p>
+                            {data.parkingInfo?.plates && <p><span className="font-bold">車牌登記:</span> {data.parkingInfo.plates}</p>}
+                            {data.otherNotes && <p className="mt-2 text-red-600"><span className="font-bold">其他備註:</span> {data.otherNotes}</p>}
+                        </div>
+                    </div>
+                </div>
+             </div>
+        </div>
+
+        <div className="page-break"></div>
+        
+        {/* --- PAGE 2: TERMS & CONDITIONS (CHINESE) --- */}
+        <div className="mt-8">
+            <h3 className="text-center font-bold uppercase text-sm mb-6 underline tracking-widest">條款及細則 (Terms and Conditions)</h3>
+            
+            <div className="columns-2 gap-8 legal-text text-slate-700">
+                
+                <div className="legal-header">1. 付款條款</div>
+                <p className="mb-3">
+                    <strong>付款方式:</strong> 現金、信用卡、本票或銀行轉賬。<br/>
+                    <strong>銀行資料:</strong> 中國銀行 (香港) | King Lung Heen | 012-875-2-082180-1<br/>
+                    <strong>期限:</strong> 訂金必須於指定日期前支付。尾數必須於活動當日或之前全數結清。<br/>
+                    <u>注意：活動當日支付尾數恕不接受個人支票。</u>
+                </p>
+
+                <div className="legal-header">2. 取消及延期政策</div>
+                <p className="mb-3">
+                    <strong>延期:</strong> 如遇不可預見之情況，活動可延期<u>一次</u>。如於活動前3個月以上通知，訂金可全數保留轉至新展期（必須為原定日期起計3個月內）。如通知期少於3個月，可能需收取行政費。<br/>
+                    <strong>取消罰款:</strong> 取消費用將根據通知期計算：<br/>
+                    • 確認期外取消：沒收第一期訂金<br/>
+                    • 確認期內取消：沒收第一及第二期訂金<br/>
+                    • 活動前1個月內：最低消費額之 90%<br/>
+                    • 活動前1週內：最低消費額之 100%
+                </p>
+
+                <div className="legal-header">3. 天氣安排 (颱風/暴雨)</div>
+                <p className="mb-3">
+                    <strong>8號風球 / 黑色暴雨:</strong> 如活動當日懸掛以上信號，客戶可於3個月內更改活動日期（視乎場地供應），不另收費。惟已預訂之鮮活食品（如鮮花、海鮮）之費用可能需由客戶承擔。<br/>
+                    <strong>3號風球 / 紅色或黃色暴雨:</strong> 活動將如常舉行。如客戶在此情況下取消，將視作自行取消處理。
+                </p>
+
+                <div className="legal-header">4. 場地規則</div>
+                <p className="mb-3">
+                    <strong>飲食:</strong> 未經許可，嚴禁攜帶外來食物或飲品。切餅費及開瓶費另計。<br/>
+                    <strong>佈置:</strong> 牆身佈置只可使用 "Blu-tack" (寶貼)。嚴禁使用釘、釘槍、雙面膠紙或強力膠紙。更衣室內嚴禁明火。<br/>
+                    <strong>儲存:</strong> 場地提供有限度儲存（最多4箱，限活動前24小時內）。如有遺失或損壞，場地恕不負責。<br/>
+                    <strong>行為:</strong> 全場禁煙。進行博彩活動需持有有效牌照（第148A章）。場地保留終止任何不安全活動之權利。
+                </p>
+
+                <div className="legal-header">5. 責任與賠償</div>
+                <p className="mb-3">
+                    <strong>損壞:</strong> 客戶需對其賓客或承辦商造成之任何場地設施損壞負全責，並照價賠償。<br/>
+                    <strong>安全:</strong> 除因場地嚴重疏忽引致外，客戶同意保障 King Lung Heen 免受因活動引起之索償或損失。
+                </p>
+
+                <div className="legal-header">6. 不可抗力</div>
+                <p className="mb-3">
+                    如因政府防疫禁令、天災或不可抗力因素導致活動無法舉行，場地將安排<u>全數退還訂金</u>或免費延期。
+                </p>
+
+                <div className="legal-header">7. 一般事項</div>
+                <p className="mb-3">
+                    本合約受香港法律管轄。合約內容及價格均為保密。如客戶未能在指定日期前簽署回傳本合約及支付訂金，場地保留釋放預留檔期之權利。
+                </p>
+            </div>
+        </div>
+
+        {/* --- SIGNATURE SECTION --- */}
+        <div className="mt-8 border-t-2 border-slate-800 pt-6 break-inside-avoid">
+            <p className="text-xs font-bold mb-4">確認條款及簽署 (ACKNOWLEDGEMENT):</p>
+            <p className="text-[10px] mb-6">簽署本合約即代表閣下已閱讀並同意以上所有條款及細則。請於每頁右下角簡簽，並簽署下方欄位後交回璟瓏軒。</p>
+            
+            <div className="grid grid-cols-2 gap-16">
+                <div>
+                    <div className="border-b border-slate-800 h-20 mb-2"></div>
+                    <p className="font-bold text-xs">璟瓏軒 代表<br/>
+                        <span className="text-slate-900">KING LUNG HEEN</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">Authorized Signature & Chop</p>
+                </div>
+                <div>
+                    <div className="border-b border-slate-800 h-20 mb-2"></div>
+                    <p className="font-bold text-xs">客戶確認<br/><span>{data.clientName}</span></p>
+                    <p className="text-[10px] text-slate-500 mt-1">Client Signature / Company Chop</p>
+                    <p className="text-[10px] text-slate-500 mt-4">日期: ________________________</p>
+                </div>
+            </div>
+        </div>
+
+      </div>
+    );
+  }
+  // ==========================================
+  // VIEW 6: CHINESE QUOTATION MODE (New)
+  // ==========================================
+  if (printMode === 'QUOTATION_CN') {
+    const BRAND_COLOR = '#A57C00'; 
+    const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
+
+    // Calculate Financials (Same logic as English version)
+    const platingTotal = (data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0;
+    const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
+                   + platingTotal 
+                   + ((data.drinksPrice||0)*(data.drinksQty||1)) 
+                   + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
+    
+    let scBase = 0;
+    (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
+    if (platingTotal > 0 && data.platingFeeApplySC !== false) scBase += platingTotal;
+    if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
+    (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
+
+    let serviceChargeVal = 0;
+    let scLabel = '固定';
+    if (data.enableServiceCharge !== false) {
+       const scStr = (data.serviceCharge || '10%').toString().trim();
+       const val = parseFloat(scStr.replace(/[^0-9.]/g, '')) || 0;
+       if (scStr.includes('%') || (val > 0 && val <= 100)) {
+           serviceChargeVal = scBase * (val / 100);
+           scLabel = `${val}%`; 
+       } else {
+           serviceChargeVal = val;
+       }
+    }
+    const discountVal = parseFloat(data.discount) || 0;
+    const grandTotal = subtotal + serviceChargeVal - discountVal;
+
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 min-h-screen relative flex flex-col">
+        <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+        
+        {/* Header */}
+        <div className={`flex justify-between items-start border-b-4 pb-4 mb-6`} style={{ borderColor: BRAND_COLOR }}>
+            <div className="max-w-[70%]">
+                <div className="mb-1" style={{ color: BRAND_COLOR }}>
+                    <span className="text-3xl font-black tracking-tight block leading-none">璟瓏軒</span>
+                    <span className="text-xs font-bold tracking-widest uppercase block mt-1">King Lung Heen</span>
+                </div>
+                <div className="text-[10px] text-slate-500 space-y-0.5 font-medium leading-tight mt-2">
+                    <p>尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
+                    <div className="flex gap-3 mt-1 text-slate-600 font-bold">
+                        <span>電話: +852 2788 3939</span>
+                        <span>宴會熱線: +852 5222 6066</span>
+                    </div>
+                    <p className="font-bold underline" style={{ color: BRAND_COLOR }}>Email: banquet@kinglungheen.com</p>
+                </div>
+            </div>
+            <div className="text-right">
+                <h1 className="text-3xl font-light text-slate-300 uppercase tracking-widest mb-1">報價單</h1>
+                <div className="inline-block text-right">
+                    <p className="text-xs font-bold text-slate-700">編號: {data.orderId}</p>
+                    <p className="text-xs text-slate-500">日期: {new Date().toLocaleDateString('zh-HK')}</p>
+                </div>
+            </div>
+        </div>
+
+        {/* Info Grid */}
+        <div className="grid grid-cols-2 gap-8 mb-6">
+            <div>
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-1 border-b border-slate-200 pb-0.5">客戶資料 (Client Info)</h3>
+                <div className="space-y-0.5">
+                    <p className="font-bold text-sm text-slate-900">{data.clientName}</p>
+                    {data.companyName && <p className="text-xs text-slate-600 font-medium">{data.companyName}</p>}
+                    <p className="text-xs text-slate-500">{data.clientPhone}</p>
+                    <p className="text-xs text-slate-500">{data.clientEmail}</p>
+                </div>
+            </div>
+            <div>
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-1 border-b border-slate-200 pb-0.5">活動詳情 (Event Details)</h3>
+                <div className="grid grid-cols-2 gap-y-1 text-xs">
+                    <span className="text-slate-500">活動名稱:</span>
+                    <span className="font-bold text-slate-900">{data.eventName}</span>
+                    <span className="text-slate-500">日期:</span>
+                    <span className="font-bold text-slate-900">{formatDateWithDay(data.date)}</span>
+                    <span className="text-slate-500">時間:</span>
+                    <span className="font-bold text-slate-900">{data.startTime} - {data.endTime}</span>
+                    <span className="text-slate-500">地點:</span>
+                    <span className="font-bold text-slate-900">{data.venueLocation}</span>
+                    <span className="text-slate-500">人數/席數:</span>
+                    <span className="font-bold text-slate-900">{data.guestCount} 人 / {data.tableCount} 席</span>
+                </div>
+            </div>
+        </div>
+
+        {/* Table */}
+        <div className="mb-6 flex-1">
+            <table className="w-full text-xs">
+                <thead>
+                    <tr className="border-b-2 border-slate-800 text-slate-600">
+                        <th className="text-left py-1 w-[55%]">項目說明 (Description)</th>
+                        <th className="text-right py-1 w-[15%]">單價</th>
+                        <th className="text-center py-1 w-[10%]">數量</th>
+                        <th className="text-right py-1 w-[20%]">金額 (HKD)</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {(data.menus || []).map((m, i) => (
+                        <tr key={`m-${i}`}>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
+                                <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">{m.content}</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(m.price)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{m.qty}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((m.price||0)*(m.qty||1))}</td>
+                        </tr>
+                    ))}
+                    {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (
+                        <tr>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900">位上服務費 (Plating Fee)</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(data.platingFee)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{data.tableCount}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney(platingTotal)}</td>
+                        </tr>
+                    )}
+                    {data.drinksPackage && (
+                        <tr>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900 mb-0.5">酒水套餐</p>
+                                <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">{data.drinksPackage}</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(data.drinksPrice)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{data.drinksQty}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td>
+                        </tr>
+                    )}
+                    {(data.customItems || []).map((item, i) => (
+                        <tr key={`c-${i}`}>
+                            <td className="py-2 pr-4 align-top">
+                                <p className="font-bold text-slate-900">{item.name}</p>
+                            </td>
+                            <td className="py-2 text-right align-top font-mono text-slate-600">${formatMoney(item.price)}</td>
+                            <td className="py-2 text-center align-top text-slate-600">{item.qty}</td>
+                            <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney((item.price||0)*(item.qty||1))}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+
+        {/* Totals */}
+        <div className="flex justify-end mb-6">
+            <div className="w-1/2 space-y-2">
+                <div className="flex justify-between text-xs text-slate-600">
+                    <span>小計 (Subtotal)</span>
+                    <span className="font-mono">${formatMoney(subtotal)}</span>
+                </div>
+                {serviceChargeVal > 0 && (
+                    <div className="flex justify-between text-xs text-slate-600">
+                        <span>服務費 ({scLabel})</span>
+                        <span className="font-mono">+${formatMoney(serviceChargeVal)}</span>
+                    </div>
+                )}
+                {discountVal > 0 && (
+                    <div className="flex justify-between text-xs font-bold" style={{ color: BRAND_COLOR }}>
+                        <span>折扣 (Discount)</span>
+                        <span className="font-mono">-${formatMoney(discountVal)}</span>
+                    </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                    <span className="font-bold text-sm">總金額 (Grand Total)</span>
+                    <span className="font-black text-xl font-mono">${formatMoney(grandTotal)}</span>
+                </div>
+
+                {Number(data.totalAmount) > 0 && (
+                    <div className="mt-4 pt-2 border-t border-slate-100">
+                        <div className="space-y-1 bg-slate-50 p-3 rounded border border-slate-100">
+                            {[
+                                { label: '第一期訂金', amount: data.deposit1, date: data.deposit1Date },
+                                { label: '第二期訂金', amount: data.deposit2, date: data.deposit2Date },
+                                { label: '第三期訂金', amount: data.deposit3, date: data.deposit3Date },
+                            ].map((item, idx) => Number(item.amount) > 0 && (
+                                <div key={idx} className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-600">{item.label} ({item.date || '待定'}):</span>
+                                    <span className="font-mono font-bold text-slate-700">${formatMoney(item.amount)}</span>
+                                </div>
+                            ))}
+                            <div className={`flex justify-between items-center text-xs ${totalDeposits > 0 ? 'border-t border-slate-200 pt-2 mt-1' : ''}`}>
+                                <span className="font-bold text-slate-800">{totalDeposits > 0 ? '尾數餘額 (Balance)' : '應付總額'}</span>
+                                <span className="font-mono font-black text-sm text-slate-900">${formatMoney(Number(data.totalAmount) - totalDeposits)}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-auto pt-12 flex justify-between items-end">
+             <div className="text-[9px] text-slate-400 leading-tight">
+                <p className="mb-1 font-bold text-slate-500">條款及細則:</p>
+                1. 本報價單有效期為 14 天。<br/>
+                2. 支票抬頭請寫 "best wish investment limited"。<br/>
+                3. 本文件為電腦生成，無需簽署。
+             </div>
+             <div className="w-1/3">
+                <div className="border-b border-slate-800 mb-2"></div>
+                <p className="font-bold text-xs">客戶確認簽署</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{data.clientName}</p>
+             </div>
+        </div>
+      </div>
+    );
+  }
   // ==========================================
   // VIEW 3: STANDARD EO (Manager, Setup, Kitchen)
   // ==========================================
@@ -5007,12 +5584,32 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
+                          setPrintMode('QUOTATION_CN');
+                          setTimeout(() => window.print(), 100);
+                      }}
+                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm whitespace-nowrap ml-2"
+                    >
+                      <FileText size={16} className="mr-2" /> 報價單
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
                           setPrintMode('CONTRACT');
                           setTimeout(() => window.print(), 100);
                       }}
                       className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap"
                     >
                       <FileText size={16} className="mr-2" /> Contract
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                          setPrintMode('CONTRACT_CN');
+                          setTimeout(() => window.print(), 100);
+                      }}
+                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap ml-2"
+                    >
+                      <FileText size={16} className="mr-2" /> 中文合約
                     </button>
                   </>
                  )}

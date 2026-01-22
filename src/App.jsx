@@ -1,40 +1,43 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Calendar as CalendarIcon, 
-  LayoutDashboard,
-  Plus, 
-  Search, 
-  MapPin, 
-  DollarSign, 
-  AlertCircle, 
-  X, 
-  Trash2, 
+import { 
+  Calendar as CalendarIcon, 
+  LayoutDashboard,
+  Plus, 
+  Search, 
+  MapPin, 
+  DollarSign, 
+  AlertCircle, 
+  X, 
+  Trash2, 
   Users,
-  Edit2, 
-  FileText, 
-  Utensils, 
-  Truck, 
-  Monitor, 
-  CreditCard, 
-  Loader2, 
-  Printer, 
-  LogOut, 
-  Mail, 
-  Key, 
-  Upload, 
-  Image as ImageIcon, 
-  AlertTriangle, 
-  Settings, 
-  Save, 
-  Info, 
-  Coffee,
-  Bell,
-  CheckCircle,
-  TrendingUp,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
-  PieChart // Added for Revenue Allocation UI
+  Edit2, 
+  FileText, 
+  Utensils, 
+  Truck, 
+  Monitor, 
+  CreditCard, 
+  Printer, 
+  LogOut, 
+  Mail, 
+  Key, 
+  Upload, 
+  Image as ImageIcon, 
+  AlertTriangle, 
+  Settings, 
+  Save, 
+  Info, 
+  Coffee, 
+  Bell, 
+  CheckCircle, 
+  TrendingUp, 
+  Clock, 
+  ChevronLeft, 
+  ChevronRight, 
+  PieChart,
+  Sparkles,
+  MessageCircle,
+  Loader2,
+  Send // Added for AI
 } from 'lucide-react';
 
 // Firebase Imports
@@ -227,10 +230,13 @@ const calculateTotalAmount = (data) => {
   let platingTotal = 0;
   if (data.servingStyle === '位上') {
       const pFee = parseFloat(data.platingFee) || 0;
-      const tables = parseFloat(data.tableCount) || 0; // 以席數計算
+      const tables = parseFloat(data.tableCount) || 0;
       platingTotal = pFee * tables;
-      // 假設位上費也需要加收服務費 (通常視為餐飲服務的一部分)
-      baseForSC += platingTotal;
+      
+      // CHECK TOGGLE: Only add to base if applySC is true (or undefined/default)
+      if (data.platingFeeApplySC !== false) {
+          baseForSC += platingTotal;
+      }
   }
 
   // 2. Drinks
@@ -650,21 +656,26 @@ const PrintableEO = ({ data, printMode }) => {
      return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  // --- Financial Logic ---
-  // --- Financial Logic (Updated for Plating Fee) ---
+  // --- Financial Logic (Unified) ---
   const platingTotal = (data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0;
 
   const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
-                 + platingTotal // Add here
+                 + platingTotal 
                  + ((data.drinksPrice||0)*(data.drinksQty||1)) 
                  + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
   
   let scBase = 0;
   (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
-  if (platingTotal > 0) scBase += platingTotal; // Add Plating Fee to SC Base
+  
+  // Plating Fee SC Logic
+  if (platingTotal > 0 && data.platingFeeApplySC !== false) {
+      scBase += platingTotal;
+  }
+
   if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
-  (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });  
-  // Calculate Service Charge (Smart Logic matching App)
+  (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
+  
+  // Smart Service Charge Calculation
   let serviceChargeVal = 0;
   let scLabel = 'Fixed';
 
@@ -674,17 +685,13 @@ const PrintableEO = ({ data, printMode }) => {
       const isExplicitPercent = scStr.includes('%');
 
       if (isExplicitPercent) {
-          // Case A: Explicit % (e.g. "10%")
           serviceChargeVal = scBase * (val / 100);
           scLabel = scStr;
       } else {
-          // Case B: Number only
           if (val > 0 && val <= 100) {
-             // Treat small numbers (<=100) as percentage automatically
              serviceChargeVal = scBase * (val / 100);
              scLabel = `${val}%`; 
           } else {
-             // Treat large numbers (>100) as fixed amount
              serviceChargeVal = val;
              scLabel = 'Fixed';
           }
@@ -694,7 +701,7 @@ const PrintableEO = ({ data, printMode }) => {
   const discountVal = parseFloat(data.discount) || 0;
   const grandTotal = subtotal + serviceChargeVal - discountVal;
 
-  // --- Allocation Logic ---
+  // --- Allocation Logic (Rigid Balancing) ---
   const getDetailedAllocation = () => {
     const allocation = {};
     DEPARTMENTS.forEach(dept => {
@@ -703,12 +710,13 @@ const PrintableEO = ({ data, printMode }) => {
     if(!allocation['other']) allocation['other'] = { label: '其他 (Other)', total: 0, items: [] };
 
     const addItem = (key, name, subLabel, qty, unitPrice, totalAmount) => {
-        if(totalAmount <= 0) return;
+        if(totalAmount === 0) return; // Ignore pure zero, but allow negative
         let group = allocation[key] ? key : 'other';
         allocation[group].total += totalAmount;
         allocation[group].items.push({ name, subLabel, qty: parseFloat(qty), unit: parseFloat(unitPrice), amount: totalAmount });
     };
 
+    // 1. Menus
     (data.menus || []).forEach(m => {
         const qty = parseFloat(m.qty) || 1;
         const price = parseFloat(m.price) || 0;
@@ -719,7 +727,7 @@ const PrintableEO = ({ data, printMode }) => {
             Object.entries(m.allocation).forEach(([dept, unitVal]) => {
                 if (dept !== 'kitchen') {
                     const val = parseFloat(unitVal) || 0;
-                    if (val > 0) {
+                    if (val !== 0) {
                         const lineAmt = val * qty;
                         nonKitchenAllocated += lineAmt;
                         const deptLabel = DEPARTMENTS.find(d=>d.key===dept)?.label.split(' ')[0];
@@ -728,17 +736,22 @@ const PrintableEO = ({ data, printMode }) => {
                 }
             });
             const kitchenTotal = totalLineAmount - nonKitchenAllocated;
-            if (kitchenTotal > 0) {
+            // Allow negative balance to ensure balancing
+            if (kitchenTotal !== 0) {
                 const unitKitchen = price - (nonKitchenAllocated / qty);
-                addItem('kitchen', m.title, '', qty, unitKitchen, kitchenTotal);
+                addItem('kitchen', m.title, 'Balance', qty, unitKitchen, kitchenTotal);
             }
         } else {
             addItem('kitchen', m.title, '', qty, price, totalLineAmount);
         }
     });
+
+    // 2. Plating Fee (To Kitchen)
     if (platingTotal > 0) {
-        addItem('kitchen', '位上服務費 (Plating Service)', `${data.tableCount}席 @ $${formatMoney(data.platingFee)}`, data.tableCount, data.platingFee, platingTotal);
+        addItem('kitchen', '位上服務費', `${data.tableCount}席 @ $${data.platingFee}`, data.tableCount, data.platingFee, platingTotal);
     }
+
+    // 3. Drinks
     const dQty = parseFloat(data.drinksQty) || 1;
     const dPrice = parseFloat(data.drinksPrice) || 0;
     const dTotal = dPrice * dQty;
@@ -749,7 +762,7 @@ const PrintableEO = ({ data, printMode }) => {
          Object.entries(data.drinkAllocation).forEach(([dept, unitVal]) => {
              if (dept !== 'bar') {
                  const val = parseFloat(unitVal) || 0;
-                 if (val > 0) {
+                 if (val !== 0) {
                      const lineAmt = val * dQty;
                      nonBarAllocated += lineAmt;
                      addItem(dept, dName, dept, dQty, val, lineAmt);
@@ -757,7 +770,7 @@ const PrintableEO = ({ data, printMode }) => {
              }
          });
          const barTotal = dTotal - nonBarAllocated;
-         if (barTotal > 0) {
+         if (barTotal !== 0) {
              const unitBar = dPrice - (nonBarAllocated / dQty);
              addItem('bar', dName, 'Water Bar', dQty, unitBar, barTotal);
          }
@@ -765,6 +778,7 @@ const PrintableEO = ({ data, printMode }) => {
          addItem('bar', dName, '', dQty, dPrice, dTotal);
     }
 
+    // 4. Custom Items
     (data.customItems || []).forEach(i => {
         const qty = parseFloat(i.qty) || 1;
         const price = parseFloat(i.price) || 0;
@@ -803,7 +817,9 @@ const PrintableEO = ({ data, printMode }) => {
     </div>
   );
 
+  // ==========================================
   // VIEW 1: BRIEFING MODE
+  // ==========================================
   if (printMode === 'BRIEFING') {
     return (
       <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm p-4">
@@ -831,7 +847,9 @@ const PrintableEO = ({ data, printMode }) => {
     );
   }
 
-  // VIEW 2: QUOTATION MODE (Client Facing - Compact)
+  // ==========================================
+  // VIEW 2: QUOTATION MODE
+  // ==========================================
   if (printMode === 'QUOTATION') {
     const BRAND_COLOR = '#A57C00'; 
     const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
@@ -975,11 +993,57 @@ const PrintableEO = ({ data, printMode }) => {
                     <span className="font-bold text-sm">Grand Total (HKD)</span>
                     <span className="font-black text-xl font-mono">${formatMoney(grandTotal)}</span>
                 </div>
-                {totalDeposits > 0 && (
-                    <div className="mt-2 pt-2 border-t border-slate-100">
-                        <div className="bg-slate-50 p-2 rounded flex justify-between items-center border border-slate-100">
-                            <span className="text-xs font-bold text-slate-600">Deposits Paid: <span className="font-mono ml-1">${formatMoney(totalDeposits)}</span></span>
-                            <span className="text-sm font-black font-mono" style={{ color: BRAND_COLOR }}>${formatMoney(Number(data.totalAmount) - totalDeposits)}</span>
+
+                {/* Payment Schedule */}
+                {Number(data.totalAmount) > 0 && (
+                    <div className="mt-4 pt-2 border-t border-slate-100">
+                        <div className="flex justify-between items-end mb-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Payment Schedule</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Due Date</span>
+                        </div>
+                        <div className="space-y-1 bg-slate-50 p-3 rounded border border-slate-100">
+                            {[
+                                { label: '1st Deposit', amount: data.deposit1, date: data.deposit1Date, paid: data.deposit1Received },
+                                { label: '2nd Deposit', amount: data.deposit2, date: data.deposit2Date, paid: data.deposit2Received },
+                                { label: '3rd Deposit', amount: data.deposit3, date: data.deposit3Date, paid: data.deposit3Received },
+                            ].map((item, idx) => (
+                                Number(item.amount) > 0 && (
+                                    <div key={idx} className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-600 font-medium">
+                                            {item.label}
+                                            {item.paid && <span className="ml-1 text-emerald-600 font-bold text-[10px]">(PAID)</span>}
+                                        </span>
+                                        <div className="text-right">
+                                            <span className="font-mono font-bold mr-4 text-slate-700">${formatMoney(item.amount)}</span>
+                                            <span className="text-[10px] text-slate-500 min-w-[70px] inline-block text-right tabular-nums">
+                                                {item.date || 'TBC'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )
+                            ))}
+                            
+                            {/* Balance Line */}
+                            <div className={`flex justify-between items-center text-xs ${totalDeposits > 0 ? 'border-t border-slate-200 pt-2 mt-1' : ''}`}>
+                                <span className="font-bold text-slate-800">
+                                    {totalDeposits > 0 ? 'Balance Amount' : 'Total Payable Amount'}
+                                </span>
+                                <div className="text-right">
+                                    <span className="font-mono font-black mr-4 text-sm text-slate-900">
+                                        ${formatMoney(Number(data.totalAmount) - totalDeposits)}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 min-w-[70px] inline-block text-right tabular-nums">
+                                        {(() => {
+                                            if (!data.date) return 'TBC';
+                                            const d = new Date(data.date);
+                                            if (data.balanceDueDateType === '10daysPrior') {
+                                                d.setDate(d.getDate() - 10);
+                                            }
+                                            return d.toISOString().split('T')[0];
+                                        })()}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1004,7 +1068,390 @@ const PrintableEO = ({ data, printMode }) => {
     );
   }
 
+  // ==========================================
+  // VIEW 4: CONTRACT MODE (Legal Agreement)
+  // ==========================================
+  if (printMode === 'CONTRACT') {
+    const BRAND_COLOR = '#A57C00'; 
+    const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
+    const minSpendInfo = data.minSpendInfo || null;
+
+    // Calculate Breakdown for Charges Summary
+    const menusTotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0);
+    const drinksTotal = (data.drinksPrice||0)*(data.drinksQty||1);
+    const miscTotal = (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0) 
+                    + ((data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0);
+
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white min-h-screen relative flex flex-col text-xs leading-tight">
+        <style>{`
+          @media print { 
+            @page { margin: 15mm; size: A4; } 
+            body { -webkit-print-color-adjust: exact; } 
+            .page-break { page-break-before: always; }
+            .legal-text { font-size: 8px; text-align: justify; line-height: 1.3; }
+            .legal-header { font-weight: bold; margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; font-size: 9px; }
+          }
+        `}</style>
+
+        {/* --- PAGE 1: PARTICULARS & DETAILS --- */}
+        
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-4 pb-4 mb-6" style={{ borderColor: BRAND_COLOR }}>
+            <div className="max-w-[70%]">
+                <div className="mb-1" style={{ color: BRAND_COLOR }}>
+                    <span className="text-2xl font-black tracking-tight block leading-none">璟瓏軒</span>
+                    <span className="text-xs font-bold tracking-widest uppercase block mt-1">King Lung Heen</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium mt-2">
+                    <p>4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon, TST</p>
+                    <p className="mt-1">Tel: +852 2788 3939 | Hotline: +852 5222 6066 | Email: banquet@kinglungheen.com</p>
+                </div>
+            </div>
+            <div className="text-right">
+                <h1 className="text-2xl font-bold text-slate-800 uppercase tracking-widest mb-1">Banquet Agreement</h1>
+                <p className="text-xs font-bold text-slate-700">Agreement No: {data.orderId}</p>
+                <p className="text-xs text-slate-500">Date: {new Date().toLocaleDateString('en-GB')}</p>
+            </div>
+        </div>
+
+        {/* Section 1: Event Particulars */}
+        <div className="mb-6 border border-slate-300">
+            <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">EVENT PARTICULARS (活動資料)</div>
+            <div className="grid grid-cols-2">
+                <div className="p-2 border-r border-slate-300 border-b">
+                    <span className="block text-[9px] text-slate-500 uppercase">Client Name</span>
+                    <span className="font-bold text-sm">{data.clientName}</span>
+                </div>
+                <div className="p-2 border-b border-slate-300">
+                    <span className="block text-[9px] text-slate-500 uppercase">Company</span>
+                    <span className="font-bold text-sm">{data.companyName || '-'}</span>
+                </div>
+                <div className="p-2 border-r border-slate-300 border-b">
+                    <span className="block text-[9px] text-slate-500 uppercase">Contact / Email</span>
+                    <span className="font-bold text-sm">{data.clientPhone} / {data.clientEmail}</span>
+                </div>
+                <div className="p-2 border-b border-slate-300">
+                    <span className="block text-[9px] text-slate-500 uppercase">Event Name</span>
+                    <span className="font-bold text-sm">{data.eventName}</span>
+                </div>
+                <div className="p-2 border-r border-slate-300 border-b">
+                    <span className="block text-[9px] text-slate-500 uppercase">Date & Time</span>
+                    <span className="font-bold text-sm">
+                        {formatDateWithDay(data.date)} | {data.startTime} - {data.endTime}
+                    </span>
+                </div>
+                <div className="p-2 border-b border-slate-300">
+                    <span className="block text-[9px] text-slate-500 uppercase">Venue & Attendance</span>
+                    <span className="font-bold text-sm">{data.venueLocation} | {data.tableCount} Tables / {data.guestCount} Pax</span>
+                </div>
+            </div>
+        </div>
+
+        {/* Section 2: Financials & Payment Schedule */}
+        <div className="mb-6 flex gap-6">
+            
+            {/* LEFT: Charges Detail (Detailed Item Breakdown) */}
+            <div className="w-1/2 border border-slate-300 flex flex-col">
+                <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">CHARGES DETAIL (費用明細)</div>
+                <div className="p-2 flex flex-col flex-1">
+                    {/* Table Header */}
+                    <div className="flex text-[9px] font-bold text-slate-400 border-b border-slate-200 pb-1 mb-1">
+                        <div className="flex-1">ITEM (項目)</div>
+                        <div className="w-14 text-right">UNIT ($)</div>
+                        <div className="w-8 text-center">QTY</div>
+                        <div className="w-16 text-right">TOTAL ($)</div>
+                    </div>
+
+                    {/* 1. Menus */}
+                    {(data.menus || []).map((m, i) => (
+                        <div key={`m-${i}`} className="flex text-xs mb-1.5 items-baseline">
+                            <div className="flex-1 pr-1 font-medium text-slate-800 leading-tight">{m.title}</div>
+                            <div className="w-14 text-right font-mono text-[10px] text-slate-500">${formatMoney(m.price)}</div>
+                            <div className="w-8 text-center text-[10px] text-slate-500">{m.qty}</div>
+                            <div className="w-16 text-right font-mono font-bold text-slate-700">${formatMoney((m.price||0)*(m.qty||1))}</div>
+                        </div>
+                    ))}
+
+                    {/* 2. Plating Fee (If applicable) */}
+                    {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (
+                        <div className="flex text-xs mb-1.5 items-baseline text-blue-800">
+                            <div className="flex-1 pr-1 font-medium leading-tight">Plating Fee (位上服務費)</div>
+                            <div className="w-14 text-right font-mono text-[10px]">${formatMoney(data.platingFee)}</div>
+                            <div className="w-8 text-center text-[10px]">{data.tableCount}</div>
+                            <div className="w-16 text-right font-mono font-bold">${formatMoney((parseFloat(data.platingFee)||0)*(parseFloat(data.tableCount)||0))}</div>
+                        </div>
+                    )}
+
+                    {/* 3. Drinks */}
+                    <div className="flex text-xs mb-1.5 items-baseline">
+                        <div className="flex-1 pr-1 font-medium text-slate-800 leading-tight">{data.drinksPackage || 'Beverage Package'}</div>
+                        <div className="w-14 text-right font-mono text-[10px] text-slate-500">${formatMoney(data.drinksPrice)}</div>
+                        <div className="w-8 text-center text-[10px] text-slate-500">{data.drinksQty}</div>
+                        <div className="w-16 text-right font-mono font-bold text-slate-700">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</div>
+                    </div>
+
+                    {/* 4. Custom Items */}
+                    {(data.customItems || []).map((item, i) => (
+                        <div key={`c-${i}`} className="flex text-xs mb-1.5 items-baseline">
+                            <div className="flex-1 pr-1 font-medium text-slate-800 leading-tight">{item.name}</div>
+                            <div className="w-14 text-right font-mono text-[10px] text-slate-500">${formatMoney(item.price)}</div>
+                            <div className="w-8 text-center text-[10px] text-slate-500">{item.qty}</div>
+                            <div className="w-16 text-right font-mono font-bold text-slate-700">${formatMoney((item.price||0)*(item.qty||1))}</div>
+                        </div>
+                    ))}
+
+                    {/* Flexible Spacer (pushes totals to bottom) */}
+                    <div className="flex-1 min-h-[10px]"></div>
+
+                    {/* Totals Block */}
+                    <div className="mt-2 border-t border-slate-300 pt-2 space-y-1 bg-slate-50/50 -mx-2 px-2 pb-1">
+                        <div className="flex justify-between text-[10px] text-slate-500">
+                            <span>Subtotal:</span>
+                            <span className="font-mono">${formatMoney(subtotal)}</span>
+                        </div>
+                        {serviceChargeVal > 0 && (
+                            <div className="flex justify-between text-[10px] text-slate-500">
+                                <span>Service Charge ({scLabel}):</span>
+                                <span className="font-mono">${formatMoney(serviceChargeVal)}</span>
+                            </div>
+                        )}
+                        {discountVal > 0 && (
+                            <div className="flex justify-between text-[10px] text-red-600 font-bold">
+                                <span>Discount:</span>
+                                <span className="font-mono">-${formatMoney(discountVal)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-1 mt-1 text-slate-900">
+                            <span>TOTAL ESTIMATED:</span>
+                            <span className="font-mono">${formatMoney(grandTotal)}</span>
+                        </div>
+                        <div className="text-[9px] text-slate-400 text-right italic">
+                            * Min. Spend: ${minSpendInfo ? formatMoney(minSpendInfo.amount) : 'N/A'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {/* RIGHT: Payment Schedule (With Bank Info) */}
+            <div className="w-1/2 border border-slate-300 flex flex-col">
+                <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">PAYMENT SCHEDULE (付款時間表)</div>
+                <div className="p-2 space-y-1 flex-1 flex flex-col">
+                    {[
+                        { l: '1st Deposit', a: data.deposit1, d: data.deposit1Date },
+                        { l: '2nd Deposit', a: data.deposit2, d: data.deposit2Date },
+                        { l: '3rd Deposit', a: data.deposit3, d: data.deposit3Date },
+                    ].map((item, i) => Number(item.a) > 0 && (
+                        <div key={i} className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-600 font-medium">{item.l} <span className="text-[9px] text-slate-400">({item.d || 'TBC'})</span>:</span>
+                            <span className="font-mono font-bold">${formatMoney(item.a)}</span>
+                        </div>
+                    ))}
+                    
+                    <div className="flex justify-between border-t border-slate-200 pt-2 mt-1 mb-4">
+                        <span className="font-bold text-slate-900 text-xs">
+                            Balance Due <span className="text-[9px] font-normal text-slate-500 block">({data.balanceDueDateType === '10daysPrior' ? '10 Days Prior' : 'Event Day'})</span>
+                        </span>
+                        <span className="font-mono font-black text-sm">${formatMoney(Number(data.totalAmount) - totalDeposits)}</span>
+                    </div>
+
+                    {/* Bank Info Box (Pushed to bottom) */}
+                    <div className="mt-auto">
+                        <div className="bg-blue-50/50 border border-blue-100 rounded p-2 text-[10px] text-slate-600">
+                            <p className="font-bold text-blue-800 mb-1 uppercase text-[9px] tracking-wider border-b border-blue-100 pb-0.5">Bank Transfer Info</p>
+                            <div className="grid grid-cols-[50px_1fr] gap-x-1 gap-y-0.5 leading-tight">
+                                <span className="text-slate-400">Bank:</span>
+                                <span>Bank of China (HK)</span>
+                                <span className="text-slate-400">Name:</span>
+                                <span className="font-bold text-slate-800">King Lung Heen</span>
+                                <span className="text-slate-400">Acc No:</span>
+                                <span className="font-mono font-bold text-slate-900 text-sm">012-875-2-082180-1</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Section 3: Menu & Arrangements */}
+        <div className="mb-6 border border-slate-300">
+             <div className="bg-slate-100 px-2 py-1 font-bold border-b border-slate-300 text-slate-700">MENU & ARRANGEMENTS (餐單與佈置)</div>
+             <div className="p-4 grid grid-cols-2 gap-8">
+                
+                {/* LEFT COL: F&B */}
+                <div>
+                    <h4 className="font-bold underline mb-2 text-xs uppercase">Food & Beverage</h4>
+                    {data.menus && data.menus.map((m, i) => (
+                        <div key={i} className="mb-2">
+                            <p className="font-bold text-sm">{m.title}</p>
+                            <p className="text-[10px] text-slate-600 whitespace-pre-wrap">{m.content}</p>
+                        </div>
+                    ))}
+                    {data.drinksPackage && (
+                        <div className="mt-2">
+                            <p className="font-bold text-sm">Beverage Package</p>
+                            <p className="text-[10px] text-slate-600 whitespace-pre-wrap">{data.drinksPackage}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* RIGHT COL: SETUP, EQUIPMENT, AV, BRIDAL */}
+                <div>
+                    <h4 className="font-bold underline mb-2 text-xs uppercase">Setup & Logistics</h4>
+                    <div className="space-y-2 text-[10px] text-slate-700">
+                        
+                        {/* 1. Basic Setup */}
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <p><span className="font-bold">Table Cloth:</span> {data.tableClothColor || 'Standard'} | <span className="font-bold">Chair Cover:</span> {data.chairCoverColor || 'Standard'}</p>
+                            {data.venueDecor && <p><span className="font-bold">Venue Decor:</span> {data.venueDecor}</p>}
+                        </div>
+
+                        {/* 2. Bridal Room */}
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <p>
+                                <span className="font-bold">Bridal Room (新娘房): </span> 
+                                {data.bridalRoom ? (
+                                    <span className="font-semibold text-slate-900">Used {data.bridalRoomHours ? `(${data.bridalRoomHours})` : ''}</span>
+                                ) : (
+                                    <span className="text-slate-400">Not Required</span>
+                                )}
+                            </p>
+                        </div>
+
+                        {/* 3. Equipment & Decor List (Dynamic) */}
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <span className="font-bold block">Equipment & Decor (物資):</span>
+                            <p className="leading-tight text-slate-600">
+                                {(() => {
+                                    const items = [];
+                                    // Equipment
+                                    Object.keys(equipmentMap).forEach(k => { if(data.equipment?.[k]) items.push(equipmentMap[k]); });
+                                    if(data.equipment?.nameSign && data.nameSignText) items.push(`字牌: ${data.nameSignText}`);
+                                    
+                                    // Decoration
+                                    Object.keys(decorationMap).forEach(k => { if(data.decoration?.[k]) items.push(decorationMap[k]); });
+                                    if(data.decoration?.invites && data.invitesQty) items.push(`喜帖(${data.invitesQty})`);
+                                    if(data.decoration?.ceremonyChairs && data.decorationChairsQty) items.push(`證婚椅(${data.decorationChairsQty})`);
+                                    
+                                    return items.length > 0 ? items.join(', ') : 'Standard Setup';
+                                })()}
+                            </p>
+                        </div>
+
+                        {/* 4. AV Requirements (Dynamic) */}
+                        <div className="border-b border-slate-100 pb-1 mb-1">
+                            <span className="font-bold block">AV Equipment (影音):</span>
+                            <p className="leading-tight text-slate-600">
+                                {(() => {
+                                    const items = [];
+                                    Object.keys(avMap).forEach(k => { if(data.avRequirements?.[k]) items.push(avMap[k]); });
+                                    if(data.avOther) items.push(data.avOther);
+                                    if(data.avNotes) items.push(`(${data.avNotes})`);
+                                    
+                                    return items.length > 0 ? items.join(', ') : 'Standard PA System';
+                                })()}
+                            </p>
+                        </div>
+
+                        {/* 5. Logistics */}
+                        <div>
+                            <p><span className="font-bold">Free Parking:</span> {data.parkingInfo?.ticketQty || 0} tickets x {data.parkingInfo?.ticketHours || 0} hrs</p>
+                            {data.parkingInfo?.plates && <p><span className="font-bold">License Plates:</span> {data.parkingInfo.plates}</p>}
+                            {data.otherNotes && <p className="mt-1"><span className="font-bold">Remarks:</span> {data.otherNotes}</p>}
+                        </div>
+
+                    </div>
+                </div>
+             </div>
+        </div>
+
+{/* --- PAGE 2: TERMS & CONDITIONS (SIMPLIFIED) --- */}
+
+        <div className="page-break"></div>
+        
+        <div className="mt-8">
+            <h3 className="text-center font-bold uppercase text-sm mb-6 underline tracking-widest">Terms and Conditions</h3>
+            
+            <div className="columns-2 gap-8 legal-text text-slate-700">
+                
+                <div className="legal-header">1. Payment Terms</div>
+                <p className="mb-3">
+                    <strong>Payment Methods:</strong> Cash, Credit Card, Bank Draft, or Bank Transfer.<br/>
+                    <strong>Bank Details:</strong> Bank of China (HK) | King Lung Heen | 012-875-2-082180-1<br/>
+                    <strong>Deadlines:</strong> Deposits must be paid by the due dates specified. The final balance must be settled immediately upon the conclusion of the event. <u>No personal cheques are accepted for final payment on the event day.</u>
+                </p>
+
+                <div className="legal-header">2. Cancellation & Postponement Policy</div>
+                <p className="mb-3">
+                    <strong>Postponement:</strong> Events may be postponed <u>one time</u> due to unforeseen circumstances. If rescheduled &gt;3 months prior, deposits are transferred. If &lt;3 months, fees may apply. Rescheduled dates must be within 3 months of original date.<br/>
+                    <strong>Cancellation Fees:</strong> Fees are based on the notice period given:<br/>
+                    • Outside confirmed period: Forfeit 1st Deposit<br/>
+                    • Within confirmation period: Forfeit 1st & 2nd Deposit<br/>
+                    • Within 1 month of Event: 90% of Minimum Charge<br/>
+                    • Within 1 week of Event: 100% of Minimum Charge
+                </p>
+
+                <div className="legal-header">3. Weather Contingency (Typhoons)</div>
+                <p className="mb-3">
+                    <strong>Signal 8 / Black Rain:</strong> If hoisted on the event day, the Client may reschedule the event to a new date within 3 months (subject to availability) without penalty. Pre-ordered perishable items (flowers, fresh food) may still be charged.<br/>
+                    <strong>Signal 3 / Red Rain:</strong> The event will proceed as scheduled. Cancellation under these signals will be treated as a standard cancellation.
+                </p>
+
+                <div className="legal-header">4. House Rules & Logistics</div>
+                <p className="mb-3">
+                    <strong>F&B:</strong> No outside food or beverages allowed without prior consent. Corkage/Cake cutting fees may apply.<br/>
+                    <strong>Decorations:</strong> "Blu-tack" only for walls. No nails, staples, or strong tape. No open flames (candles) in dressing rooms.<br/>
+                    <strong>Storage:</strong> Limited to 4 boxes (max 24hrs prior). The Venue is not responsible for loss or damage to stored items.<br/>
+                    <strong>Conduct:</strong> No smoking. Gambling requires a valid license (Cap. 148A). The Venue reserves the right to stop unsafe activities.
+                </p>
+
+                <div className="legal-header">5. Liability & Indemnity</div>
+                <p className="mb-3">
+                    <strong>Damages:</strong> The Client is fully responsible for any damage to the Venue's property caused by their guests or contractors.<br/>
+                    <strong>Safety:</strong> The Client agrees to indemnify King Lung Heen against any claims, injuries, or losses arising from the event, except where caused by the Venue's gross negligence.
+                </p>
+
+                <div className="legal-header">6. Force Majeure</div>
+                <p className="mb-3">
+                    If the event cannot proceed due to Government Restrictions (e.g., Pandemic Bans), Acts of God, or circumstances beyond control, the Venue will allow a <strong>full refund of deposits</strong> or free rescheduling.
+                </p>
+
+                <div className="legal-header">7. General</div>
+                <p className="mb-3">
+                    This Agreement is governed by the laws of Hong Kong. Rates and terms are confidential. Failure to return this signed agreement by the Option Date may result in the release of the venue booking.
+                </p>
+            </div>
+        </div>
+{/* --- SIGNATURE SECTION --- */}
+        <div className="mt-8 border-t-2 border-slate-800 pt-6 break-inside-avoid">
+            <p className="text-xs font-bold mb-4">ACKNOWLEDGEMENT OF TERMS AND CONDITIONS:</p>
+            <p className="text-[10px] mb-6">Please indicate your acceptance of the terms and conditions of this Agreement by endorsing the bottom right corner of each page, signing this Agreement, and returning it in its entirety to King Lung Heen.</p>
+            
+            <div className="grid grid-cols-2 gap-16">
+                <div>
+                    <div className="border-b border-slate-800 h-20 mb-2"></div>
+                    <p className="font-bold text-xs">For and on behalf of<br/>
+                        {/* UPDATED: Removed golden color, changed to standard slate-900 */}
+                        <span className="text-slate-900">KING LUNG HEEN</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">Authorized Signature & Chop</p>
+                </div>
+                <div>
+                    <div className="border-b border-slate-800 h-20 mb-2"></div>
+                    <p className="font-bold text-xs">Confirmed & Accepted by<br/><span>{data.clientName}</span></p>
+                    <p className="text-[10px] text-slate-500 mt-1">Client Signature / Company Chop</p>
+                    <p className="text-[10px] text-slate-500 mt-4">Date: ________________________</p>
+                </div>
+            </div>
+        </div>
+
+      </div>
+    );
+  }
+
+  // ==========================================
   // VIEW 3: STANDARD EO (Manager, Setup, Kitchen)
+  // ==========================================
   return (
     <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
       <style>{`@media print { body, html { height: auto !important; overflow: visible !important; } .no-print, aside, nav, button, .modal-overlay { display: none !important; } .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } @page { margin: 10mm; size: A4; } .break-after-page { page-break-after: always; break-after: page; display: block; height: 1px; width: 100%; margin: 0; } .print-page { page-break-inside: avoid; min-height: 280mm; position: relative; } }`}</style>
@@ -1026,7 +1473,6 @@ const PrintableEO = ({ data, printMode }) => {
         <Section title="餐飲安排 (F&B)">
            <DetailRow label="上菜方式" value={data.servingStyle} widthClass="w-1/4" />
            <DetailRow label="酒水安排" value={data.drinksPackage} widthClass="w-3/4" />
-           {/* REMOVED: preDinnerSnacks & staffMeals */}
            <div className="w-full px-2 mb-2 mt-2">
               <span className="text-slate-500 text-[10px] block uppercase font-bold mb-1">餐單內容</span>
               <div className="text-sm font-medium whitespace-pre-wrap leading-relaxed bg-slate-50 p-2 rounded border border-slate-100">{data.menus?.map(m => `${m.title}:\n${m.content}`).join('\n\n') || data.menuType}</div>
@@ -1113,42 +1559,40 @@ const PrintableEO = ({ data, printMode }) => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {Object.values(detailedAlloc).map((dept, i) => (
-                            dept.total > 0 && (
-                                <React.Fragment key={i}>
-                                    {dept.items.map((item, idx) => (
-                                        <tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-100" : ""}>
-                                            <td className="py-1 px-2 font-bold text-slate-700 align-top">
-                                                {idx === 0 ? dept.label : ''}
-                                            </td>
-                                            <td className="py-1 px-2 text-slate-600 align-top">
-                                                <span>{item.name}</span>
-                                                {item.subLabel && <span className="ml-2 text-[9px] bg-slate-100 text-slate-500 px-1 rounded">{item.subLabel}</span>}
-                                            </td>
-                                            <td className="py-1 px-2 text-right font-mono text-slate-500 align-top">
-                                                ${formatMoney(item.unit)}
-                                            </td>
-                                            <td className="py-1 px-2 text-center text-slate-500 align-top">
-                                                {item.qty}
-                                            </td>
-                                            <td className="py-1 px-2 text-right font-mono font-medium text-slate-800 align-top">
-                                                ${formatMoney(item.amount)}
-                                            </td>
-                                            <td className="py-1 px-2 text-right text-[10px] text-slate-400 align-top"></td>
-                                        </tr>
-                                    ))}
-                                    <tr className="bg-slate-50/50 border-b border-slate-200">
-                                        <td colSpan="4" className="py-1 px-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                            {dept.label.split(' ')[0]} Subtotal
+                            <React.Fragment key={i}>
+                                {dept.items.map((item, idx) => (
+                                    <tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-100" : ""}>
+                                        <td className="py-1 px-2 font-bold text-slate-700 align-top">
+                                            {idx === 0 ? dept.label : ''}
                                         </td>
-                                        <td className="py-1 px-2 text-right font-mono font-bold text-slate-900 border-t border-slate-300">
-                                            ${formatMoney(dept.total)}
+                                        <td className="py-1 px-2 text-slate-600 align-top">
+                                            <span>{item.name}</span>
+                                            {item.subLabel && <span className="ml-2 text-[9px] bg-slate-100 text-slate-500 px-1 rounded">{item.subLabel}</span>}
                                         </td>
-                                        <td className="py-1 px-2 text-right text-[10px] font-bold text-slate-900">
-                                            {subtotal > 0 ? ((dept.total / subtotal) * 100).toFixed(1) : 0}%
+                                        <td className="py-1 px-2 text-right font-mono text-slate-500 align-top">
+                                            ${formatMoney(item.unit)}
                                         </td>
+                                        <td className="py-1 px-2 text-center text-slate-500 align-top">
+                                            {item.qty}
+                                        </td>
+                                        <td className="py-1 px-2 text-right font-mono font-medium text-slate-800 align-top">
+                                            ${formatMoney(item.amount)}
+                                        </td>
+                                        <td className="py-1 px-2 text-right text-[10px] text-slate-400 align-top"></td>
                                     </tr>
-                                </React.Fragment>
-                            )
+                                ))}
+                                <tr className="bg-slate-50/50 border-b border-slate-200">
+                                    <td colSpan="4" className="py-1 px-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        {dept.label.split(' ')[0]} Subtotal
+                                    </td>
+                                    <td className={`py-1 px-2 text-right font-mono font-bold border-t border-slate-300 ${dept.total === 0 ? 'text-slate-300' : 'text-slate-900'}`}>
+                                        ${formatMoney(dept.total)}
+                                    </td>
+                                    <td className={`py-1 px-2 text-right text-[10px] font-bold ${dept.total === 0 ? 'text-slate-300' : 'text-slate-900'}`}>
+                                        {subtotal > 0 ? ((dept.total / subtotal) * 100).toFixed(1) : 0}%
+                                    </td>
+                                </tr>
+                            </React.Fragment>
                         ))}
                     </tbody>
                     <tfoot>
@@ -1169,7 +1613,6 @@ const PrintableEO = ({ data, printMode }) => {
         </Section>
 
         <Section title="其他資訊 (Other Info)">
-           {/* REMOVED: Delivery Notes */}
            <DetailRow label="泊車" value={data.parkingInfo?.plates} widthClass="w-full" />
            <DetailRow label="其他備註" value={data.otherNotes} widthClass="w-full" />
         </Section>
@@ -1242,7 +1685,6 @@ const PrintableEO = ({ data, printMode }) => {
            <div className="space-y-8">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="text-3xl font-bold underline mb-3">{menu.title}</h4>}<p className="text-3xl font-semibold leading-relaxed whitespace-pre-wrap">{menu.content}</p></div>))) : (<p className="text-3xl font-semibold leading-relaxed">{data.menuType}</p>)}</div>
         </div>
         {(data.specialMenuReq || data.allergies) && (<div className="mb-8 p-6 border-8 border-red-600 rounded-xl bg-red-50"><h3 className="text-3xl font-black text-red-600 mb-4 underline flex items-center"><AlertTriangle size={48} className="mr-4"/> 特殊飲食 & 過敏</h3><p className="text-4xl font-bold text-red-800 whitespace-pre-wrap leading-snug">{data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}</p></div>)}
-        {/* REMOVED: Bottom grid with preDinnerSnacks, StaffMeals, DeliveryNotes */}
       </div>
     </div>
   );
@@ -2019,6 +2461,247 @@ const DashboardView = ({ events, openEditModal }) => {
 };
 
 // ==========================================
+// NEW: DEEPSEEK AI ASSISTANT (WITH SLEEKFLOW)
+// ==========================================
+const AiAssistant = ({ formData, setFormData, onClose }) => {
+  const [prompt, setPrompt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false); // State for sending message
+  const [result, setResult] = useState(null);
+  const [mode, setMode] = useState('edit'); 
+
+  // 1. API KEYS
+  const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101"; // DeepSeek Key
+  const SLEEKFLOW_API_KEY = "l103V8DT4I65XqdUEnoZ8UGPztiJ75VFwHsJAO8TrXI"; // ⚠️ GET THIS FROM SLEEKFLOW SETTINGS
+
+  // ... (handleAiAction function remains exactly the same as before) ...
+  const handleAiAction = async () => {
+    // ... Copy the handleAiAction logic from the previous step ...
+    // (If you need me to paste the full handleAiAction again, let me know, 
+    // but it is identical to the previous 'Chinese Version' code)
+    if (!prompt) return;
+    setLoading(true);
+    setResult(null);
+
+    const contextData = {
+      eventName: formData.eventName,
+      clientName: formData.clientName,
+      date: formData.date,
+      time: `${formData.startTime} - ${formData.endTime}`,
+      guests: formData.guestCount,
+      menus: formData.menus,
+      financials: {
+        total: formData.totalAmount,
+        paid: (Number(formData.deposit1)||0) + (Number(formData.deposit2)||0) + (Number(formData.deposit3)||0),
+        balance: Number(formData.totalAmount) - ((Number(formData.deposit1)||0) + (Number(formData.deposit2)||0) + (Number(formData.deposit3)||0))
+      }
+    };
+
+    try {
+      let systemContent = "";
+      if (mode === 'edit') {
+        systemContent = `You are a Venue CRM JSON helper. CONTEXT: ${JSON.stringify(contextData)}. TASK: Return ONLY a raw JSON object with updates. RULES: 1. Output pure JSON. No markdown. 2. User will ask in Traditional Chinese. EXAMPLE: User says "改做300人", you return {"guestCount": "300"}`;
+      } else if (mode === 'email') {
+        systemContent = `You are a professional Banquet Manager. CONTEXT: ${JSON.stringify(contextData)}. TASK: Write a professional business email in Traditional Chinese.`;
+      } else {
+        // WHATSAPP MODE
+        systemContent = `You are a helpful assistant writing a WhatsApp message for a client via SleekFlow.
+        CONTEXT: ${JSON.stringify(contextData)}
+        TASK: Write a short, friendly, and professional WhatsApp message in Traditional Chinese (繁體中文).
+        RULES:
+        1. Keep it brief (under 100 words).
+        2. Use emojis (e.g. 🥢, 📅).
+        3. No subject line. Plain text only.`;
+      }
+
+      const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${API_KEY}` },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [{ role: "system", content: systemContent }, { role: "user", content: prompt }],
+          temperature: 0.7,
+          response_format: mode === 'edit' ? { type: "json_object" } : { type: "text" }
+        })
+      });
+
+      if (!response.ok) throw new Error("API Error");
+      const data = await response.json();
+      const aiContent = data.choices[0].message.content;
+
+      if (mode === 'edit') {
+        try {
+          const cleanJson = aiContent.replace(/```json/g, '').replace(/```/g, '').trim();
+          setResult({ type: 'json', content: JSON.parse(cleanJson) });
+        } catch (e) { setResult({ type: 'error', content: "JSON Error" }); }
+      } else {
+        setResult({ type: 'text', content: aiContent });
+      }
+    } catch (error) {
+      setResult({ type: 'error', content: "Connection Error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyChanges = () => {
+    if (result && result.type === 'json') {
+      setFormData(prev => ({ ...prev, ...result.content }));
+      onClose();
+    }
+  };
+
+// --- UPDATED: SLEEKFLOW SEND FUNCTION ---
+  const sendViaSleekFlow = async () => {
+    if (!result || !result.content) return;
+    setSending(true);
+
+    // 1. Clean Phone Number
+    // Your snippet showed "85261231231" (No '+' sign, just country code + number)
+    let phone = formData.clientPhone || "";
+    phone = phone.replace(/[^0-9]/g, ''); // Remove all non-digits
+    
+    if (phone.length === 8) {
+        // If only 8 digits, assume HK number and add 852
+        phone = "852" + phone; 
+    } 
+    // Note: We are NOT adding a '+' because your working snippet didn't have one.
+
+    try {
+      console.log("Sending to:", phone);
+
+      // 2. Prepare Payload based on your working snippet
+      const payload = {
+        channel: "whatsappcloudapi",
+        from: "85252226066", // Your verified sender number
+        to: phone,           // The client's phone number
+        messageType: "text",
+        messageContent: result.content, // The text generated by AI
+        analyticTags: [
+          "CRM_Auto", 
+          "Event_EO"
+        ]
+      };
+
+      // 3. Call SleekFlow API
+      const response = await fetch("https://api.sleekflow.io/api/message/send/json", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Sleekflow-Api-Key": SLEEKFLOW_API_KEY 
+        },
+        body: JSON.stringify(payload)
+      });
+
+      // 4. Handle Response
+      const responseText = await response.text(); 
+      console.log("SleekFlow Response:", response.status, responseText);
+
+      if (response.ok) {
+        // Add a toast notification if you have the function available, or just alert
+        alert("✅ Message sent successfully via SleekFlow!");
+        onClose();
+      } else {
+        // Try to parse error
+        let errorMsg = responseText;
+        try {
+          const json = JSON.parse(responseText);
+          errorMsg = json.error?.message || json.message || JSON.stringify(json);
+        } catch (e) {}
+        
+        alert(`❌ Send Failed (${response.status}): ${errorMsg}`);
+      }
+
+    } catch (error) {
+      console.error("Network Error:", error);
+      alert("❌ Network/CORS Error. Ensure your SleekFlow API Key is correct and allowed.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="bg-[#4e6ef2] p-4 flex justify-between items-center text-white">
+          <h3 className="font-bold flex items-center"><Sparkles className="mr-2" size={18}/> DeepSeek + SleekFlow</h3>
+          <button onClick={onClose}><X size={20}/></button>
+        </div>
+        
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex gap-2">
+          <button onClick={() => setMode('edit')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'edit' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
+            Modify
+          </button>
+          <button onClick={() => setMode('email')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'email' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
+            Email
+          </button>
+          {/* UPDATED WHATSAPP TAB */}
+          <button onClick={() => setMode('whatsapp')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'whatsapp' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
+            SleekFlow
+          </button>
+        </div>
+
+        <div className="p-4 flex-1 overflow-y-auto">
+          <textarea 
+            className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            rows={3}
+            placeholder={mode === 'edit' ? "e.g. 改30人..." : mode === 'email' ? "e.g. 寫郵件..." : "e.g. 提醒客人比錢..."}
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+          />
+
+          {result && (
+            <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
+              <div className={`border p-3 rounded-lg ${mode === 'whatsapp' ? 'bg-green-50 border-green-100' : 'bg-blue-50 border-blue-100'}`}>
+                <span className="text-xs font-bold uppercase mb-2 block opacity-70">AI Response:</span>
+                {result.type === 'json' ? (
+                  <pre className="text-xs overflow-x-auto bg-white p-2 rounded border border-slate-200 text-slate-700">
+                    {JSON.stringify(result.content, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="text-sm whitespace-pre-wrap text-slate-800">{result.content}</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-2">
+          {result?.type === 'json' ? (
+            <button onClick={applyChanges} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg font-bold text-sm">
+              Confirm Changes
+            </button>
+          ) : (
+            <>
+              {/* IF WHATSAPP MODE & HAS RESULT -> SHOW SLEEKFLOW BUTTON */}
+              {mode === 'whatsapp' && result ? (
+                 <button 
+                   onClick={sendViaSleekFlow} 
+                   disabled={sending}
+                   className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold text-sm flex justify-center items-center"
+                 >
+                   {sending ? <Loader2 className="animate-spin mr-2" size={18}/> : <Send className="mr-2" size={18}/>}
+                   {sending ? "Sending..." : "Send via SleekFlow"}
+                 </button>
+              ) : (
+                 <button 
+                   onClick={handleAiAction} 
+                   disabled={loading}
+                   className="flex-1 bg-[#4e6ef2] hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-sm flex justify-center items-center"
+                 >
+                   {loading ? <Loader2 className="animate-spin mr-2" size={16}/> : <Sparkles className="mr-2" size={16}/>}
+                   {loading ? "Thinking..." : "Generate"}
+                 </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
 // SECTION 8: MAIN APP LOGIC
 // ==========================================
 
@@ -2026,7 +2709,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
-  
+  const [isAiOpen, setIsAiOpen] = useState(false);
   // UI State for Toast & Modals
   const [toasts, setToasts] = useState([]);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
@@ -2097,6 +2780,7 @@ export default function App() {
       allergies: '',
       servingStyle: '圍餐',
       platingFee:'',
+      platingFeeApplySC: true,
       drinkAllocation: {},
       
       // 3. Billing - UPDATED STRUCTURE
@@ -2518,12 +3202,22 @@ export default function App() {
       });
     };
 
-  const removeMenu = (id) => {
-    setFormData(prev => ({
-      ...prev,
-      menus: prev.menus.filter(m => m.id !== id)
-    }));
-  };
+  // --- Updated removeMenu with Recalculation ---
+  const removeMenu = (id) => {
+    setFormData(prev => {
+      // 1. Create the new filtered array
+      const newMenus = prev.menus.filter(m => m.id !== id);
+      
+      // 2. Create a temporary object with the new menus
+      const newData = { ...prev, menus: newMenus };
+      
+      // 3. Recalculate Total Amount immediately using the new list
+      return { 
+        ...newData, 
+        totalAmount: calculateTotalAmount(newData) 
+      };
+    });
+  };
 
   // Handle Drink Package Selection
 // Handle Drink Package Selection (FIXED)
@@ -3126,7 +3820,7 @@ export default function App() {
                       </div>
                     )}
 
-{/* TAB 2: F&B (Full Code) */}
+                    {/* TAB 2: F&B (Full Code) */}
                     {formTab === 'fnb' && (
                       <div className="space-y-6 animate-in fade-in">
                         <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
@@ -3423,7 +4117,80 @@ export default function App() {
                           </div>
                         );
                       })}
+                      {/* ========================================================= */}
+                      {/* NEW: PLATING SERVICE FEE ROW (Editable)                   */}
+                      {/* ========================================================= */}
+                      {formData.servingStyle === '位上' && (
+                          <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors border-t border-slate-100">
+                            {/* 1. Name & Icon */}
+                            <div className="col-span-5">
+                              <div className="flex items-center">
+                                <div className="p-1.5 bg-blue-100 text-blue-600 rounded mr-3 flex-shrink-0">
+                                    <Utensils size={14}/>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-700 block text-sm">位上服務費 (Plating Fee)</span>
+                                  <span className="text-xs text-slate-400">來源: 上菜方式設定</span>
+                                </div>
+                              </div>
+                            </div>
 
+                            {/* 2. Rate (Editable) */}
+                            <div className="col-span-2 flex items-center justify-end">
+                                <span className="text-slate-400 text-xs mr-1">$</span>
+                                <input 
+                                  type="number"
+                                  value={formData.platingFee}
+                                  onChange={(e) => {
+                                      const val = e.target.value;
+                                      setFormData(prev => {
+                                          const newData = { ...prev, platingFee: val };
+                                          return { ...newData, totalAmount: calculateTotalAmount(newData) };
+                                      });
+                                  }}
+                                  className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700"
+                                  placeholder="0"
+                                />
+                            </div>
+
+                            {/* 3. Qty (Read-Only Visualization) */}
+                            <div className="col-span-2">
+                                <div className="flex items-center border border-slate-200 rounded-md bg-slate-50 h-9 overflow-hidden">
+                                    <div className="px-2 text-[10px] text-slate-400 border-r border-slate-200 h-full flex items-center bg-slate-100 min-w-[60px] justify-center">
+                                        每席
+                                    </div>
+                                    <input 
+                                      disabled
+                                      type="text"
+                                      value={formData.tableCount}
+                                      className="w-full h-full text-center outline-none text-sm font-bold text-slate-500 bg-transparent cursor-default"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* 4. Amount */}
+                            <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
+                                ${formatMoney((parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0))}
+                            </div>
+
+                            {/* 5. SC Toggle (Editable) */}
+                            <div className="col-span-1 flex justify-center">
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData(prev => {
+                                            const newData = { ...prev, platingFeeApplySC: !prev.platingFeeApplySC };
+                                            return { ...newData, totalAmount: calculateTotalAmount(newData) };
+                                        });
+                                    }}
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${formData.platingFeeApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
+                                >
+                                    SC
+                                </button>
+                            </div>
+                          </div>
+                      )}
+                      {/* ========================================================= */}
                       {/* 3. DRINKS ROW */}
                       <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center bg-blue-50/10 border-t border-slate-100">
                         <div className="col-span-5">
@@ -4195,50 +4962,88 @@ export default function App() {
               )}
             </div>
 
-            {/* Footer */}
-            <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-10">
-              <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar">
-                 {editingEvent && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handlePrintEO}
-                      className="px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium flex items-center border border-slate-200 text-sm"
-                    >
-                      <Printer size={16} className="mr-2" /> 列印 EO
-                    </button>
+            {/* Footer inside the Modal */}
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-10 gap-4">
+              
+              {/* LEFT SIDE: AI & Print Tools */}
+              <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar">
+                 
+                 {/* 1. NEW AI BUTTON */}
+                 <button
+                   type="button"
+                   onClick={() => setIsAiOpen(true)}
+                   className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 rounded-lg font-medium flex items-center shadow-md text-sm whitespace-nowrap"
+                 >
+                   <Sparkles size={16} className="mr-2" /> AI 助手
+                 </button>
+
+                 {/* 2. Divider (Only show if we have print buttons next to it) */}
+                 {editingEvent && <div className="h-6 w-px bg-slate-300 mx-2"></div>}
+
+                 {/* 3. Existing Print Buttons */}
+                 {editingEvent && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handlePrintEO}
+                      className="px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium flex items-center border border-slate-200 text-sm whitespace-nowrap"
+                    >
+                      <Printer size={16} className="mr-2" /> EO
+                    </button>
                     <button
                       type="button"
                       onClick={handlePrintBriefing}
-                      className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm"
+                      className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm whitespace-nowrap"
                     >
-                      <Users size={16} className="mr-2" /> 樓面簡報 (Briefing)
+                      <Users size={16} className="mr-2" /> Brief
                     </button>
                     <button
                       type="button"
                       onClick={handlePrintQuotation}
-                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm"
+                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm whitespace-nowrap"
                     >
-                      <FileText size={16} className="mr-2" /> 報價單 (Quotation)
+                      <FileText size={16} className="mr-2" /> Quotation
                     </button>
-                  </>
-                 )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                          setPrintMode('CONTRACT');
+                          setTimeout(() => window.print(), 100);
+                      }}
+                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap"
+                    >
+                      <FileText size={16} className="mr-2" /> Contract
+                    </button>
+                  </>
+                 )}
+              </div>
 
-              </div>
-              <div className="flex items-center space-x-3 pl-2 flex-shrink-0">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium">取消</button>
-                <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-lg">儲存訂單</button>
-              </div>
-            </div>
+              {/* RIGHT SIDE: Cancel & Save */}
+              <div className="flex items-center space-x-3 pl-2 flex-shrink-0">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium">取消</button>
+                <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-lg whitespace-nowrap">儲存訂單</button>
+              </div>
+            </div>
           </form>
         </Modal>
       </div>
       
-<div className="print-only">
+{isAiOpen && (
+        <AiAssistant 
+          formData={formData} 
+          setFormData={setFormData} 
+          onClose={() => setIsAiOpen(false)} 
+        />
+      )}
+
+      <div className="print-only">
         {/* FIX: Remove the '&&' check so it renders for both 'EO' and 'BRIEFING' modes */}
         {/* Pass printMode as a prop so the component knows which layout to show */}
         <PrintableEO data={formData} printMode={printMode} />
       </div>
-    </>
-  );
+
+      {/* ======================================================== */}
+
+    </>
+  );
 }

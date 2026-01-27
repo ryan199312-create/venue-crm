@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { db, auth, storage } from './firebase';
 import { 
   Calendar as CalendarIcon, 
   LayoutDashboard,
@@ -42,18 +43,13 @@ import {
 } from 'lucide-react';
 
 // Firebase Imports
-import { initializeApp } from "firebase/app";
 import { 
-  getAuth, 
-  signInAnonymously, 
   signInWithEmailAndPassword, 
   signInWithCustomToken, 
   onAuthStateChanged, 
   signOut
 } from "firebase/auth";
 import { 
-  getFirestore, 
-  collection, 
   doc, 
   addDoc, 
   updateDoc, 
@@ -65,7 +61,6 @@ import { 
   getDoc 
 } from "firebase/firestore";
 import { 
-  getStorage, 
   ref, 
   uploadBytes, 
   getDownloadURL 
@@ -75,25 +70,6 @@ import { 
 // SECTION 1: CONFIGURATION & CONSTANTS
 // ==========================================
 
-const getFirebaseConfig = () => {
-  if (typeof __firebase_config !== 'undefined') {
-    return JSON.parse(__firebase_config);
-  }
-  return {
-    apiKey: "AIzaSyCNJ-TZcqTres8fXcZr3rLaH5x2xLsk3Os",
-    authDomain: "event-management-system-9f764.firebaseapp.com",
-    projectId: "event-management-system-9f764",
-    storageBucket: "event-management-system-9f764.firebasestorage.app",
-    messagingSenderId: "281238143424",
-    appId: "1:281238143424:web:b463511f0b3c4d68f84825",
-    measurementId: "G-WK60NDKPT0"
-  };
-};
-
-const app = initializeApp(getFirebaseConfig());
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : "my-venue-crm"; 
 
 const STATUS_COLORS = {

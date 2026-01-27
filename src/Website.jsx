@@ -1,3 +1,4 @@
+import { db } from './firebase';
 import React, { useState } from 'react';
 import { 
   Menu, 
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 
 // --- FIREBASE IMPORT (Use the same config as your VMS) ---
-import { initializeApp } from "firebase/app";
+
 import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 // REPLACE WITH YOUR EXISTING CONFIG

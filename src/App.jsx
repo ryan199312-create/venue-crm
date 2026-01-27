@@ -2073,8 +2073,9 @@ const PrintableEO = ({ data, printMode }) => {
   // ⛔️ CRITICAL: This MUST be the very last return. 
   // Any "if" blocks must go ABOVE this.
 
-// ==========================================
-  // VIEW 8: MENU CONFIRMATION (SINGLE PAGE + CUSTOM FONT SIZE)
+
+  // ==========================================
+  // VIEW 8: MENU CONFIRMATION (SINGLE PAGE + BILINGUAL + CHECKBOX + DATE FIX)
   // ==========================================
   if (printMode === 'MENU_CONFIRM') {
     const BRAND_COLOR = '#A57C00'; 
@@ -2083,6 +2084,16 @@ const PrintableEO = ({ data, printMode }) => {
 
     // 1. Get Custom Font Size from Settings (Default to 18px if not set)
     const fontSizePx = data.printSettings?.menu?.fontSizeOverride || 18;
+    const defaultExpiry = new Date(new Date().setDate(new Date().getDate() + 14)).toLocaleDateString('zh-HK');
+
+    // 2. Custom Date Formatter: YYYY/MM/DD (Day) e.g., 2026/01/28 (Wed)
+    const formatMenuDate = (dateStr) => {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        const datePart = d.toLocaleDateString('zh-HK'); // 2026/1/28
+        const dayPart = d.toLocaleDateString('en-US', { weekday: 'short' }); // Wed
+        return `${datePart} (${dayPart})`;
+    };
 
     return (
       // Main Container: Forces Single Page (h-screen) & Vertical Layout (flex-col)
@@ -2115,7 +2126,8 @@ const PrintableEO = ({ data, printMode }) => {
             <div className="flex justify-center items-center gap-3 text-sm font-bold text-slate-600 border-y border-slate-900 py-1 inline-flex mx-auto">
                 <span>{data.clientName}</span>
                 <span className="text-slate-300">|</span>
-                <span>{formatDateWithDay(data.date)}</span>
+                {/* ✅ UPDATED DATE FORMAT HERE */}
+                <span>{formatMenuDate(data.date)}</span>
                 <span className="text-slate-300">|</span>
                 <span>{data.tableCount} 席 ({data.guestCount} Pax)</span>
             </div>
@@ -2132,24 +2144,24 @@ const PrintableEO = ({ data, printMode }) => {
                             <h3 className="text-2xl font-black text-slate-900 uppercase tracking-widest">{menu.title}</h3>
                             <span className="text-xs font-bold text-slate-400 border border-slate-200 px-1 rounded">{versionLabel}</span>
                         </div>
-                        <p className="text-xs font-bold text-slate-500 mt-1 tracking-widest">(供10-12 位用)</p>
+                        <p className="text-xs font-bold text-slate-500 mt-1 tracking-widest">(供10-12 位用 / For 10-12 Persons)</p>
                         <div className="h-0.5 w-10 bg-slate-900 mx-auto rounded-full mt-2"></div>
                     </div>
                     
                     {/* Content - Controlled by "Print Config" Slider */}
                     <div className="px-4 flex-1 flex flex-col justify-center">
                         <p className="font-medium text-slate-800 whitespace-pre-wrap leading-relaxed font-serif" 
-                           style={{ fontSize: `${fontSizePx}px` }}> {/* ✅ Dynamic Font Size */}
-                            {menu.content || '(暫無菜單內容)'}
+                           style={{ fontSize: `${fontSizePx}px` }}>
+                            {menu.content || '(暫無菜單內容 / No Menu Content)'}
                         </p>
                     </div>
                 </div>
             ))}
 
             {/* Respectfully Await Reply */}
-            <div className="flex-shrink-0 mt-4 mb-2">
-                <p className="text-sm font-black text-slate-900 tracking-[0.5em] border-b border-slate-300 pb-1 inline-block">
-                    **敬候賜覆**
+            <div className="flex-shrink-0 mt-4 mb-2 text-center">
+                <p className="text-sm font-black text-slate-900 tracking-[0.3em] border-b border-slate-300 pb-1 inline-block">
+                    **敬候賜覆 RSVP**
                 </p>
             </div>
         </div>
@@ -2159,45 +2171,72 @@ const PrintableEO = ({ data, printMode }) => {
             
             {/* Left: Disclaimers & Allergy Warning */}
             <div className="flex flex-col justify-end text-[9px] text-slate-600 leading-tight">
-                 <div className="space-y-0.5 mb-2 font-medium">
+                 <div className="space-y-1 mb-2 font-medium">
                     {/* Date Override Logic */}
-                    <p>• 上列內容有效期至: <span className="font-bold underline">{data.printSettings?.menu?.validityDateOverride || new Date(data.date).toLocaleDateString('zh-HK')}</span> 或前預訂</p>
-                    <p>• 同桌個別特別餐膳 (例:素食餐)，需另收取費用及加一服務費</p>
+                    <div>
+                        <p>• 上列內容有效期至: <span className="font-bold underline">{data.printSettings?.menu?.validityDateOverride || defaultExpiry}</span> 或前預訂</p>
+                        <p className="text-[8px] text-slate-400">Valid until {data.printSettings?.menu?.validityDateOverride || defaultExpiry} or prior booking.</p>
+                    </div>
+
+                    {/* Concise "No Reduction" Disclaimer */}
+                    <div>
+                        <p>• 同桌個別特別餐膳 (例:素食餐) 需另收費用及加一服務費；菜單如有更改，費用只加不減。</p>
+                        <p className="text-[8px] text-slate-400 leading-tight">
+                            Special meals (e.g. Vegetarian) are subject to extra charge + 10% service charge. Menu changes will only incur additional costs; no price reduction.
+                        </p>
+                    </div>
                     
-                    {/* Plating Fee Disclaimer Toggle */}
+                    {/* ✅ UPDATED: Plating Fee Disclaimer with Checkbox */}
                     {(data.printSettings?.menu?.showPlatingFeeDisclaimer !== false) && (
-                        <p>• 如需分菜位上, 每桌需額外收取 HKD800 及加一服務費</p>
+                        <div className="flex items-start gap-1.5 mt-1">
+                            {/* The Checkbox for printing */}
+                            <div className="w-3 h-3 border border-slate-800 flex-shrink-0 mt-0.5"></div>
+                            <div>
+                                <p>如需分菜位上, 每桌需額外收取 HKD800 及加一服務費</p>
+                                <p className="text-[8px] text-slate-400 leading-tight">Individual plating service is subject to an extra HKD800/table + 10%.</p>
+                            </div>
+                        </div>
                     )}
                  </div>
 
                  {/* Allergy Statement */}
                  <div className="border-t border-slate-100 pt-1.5 mt-1">
-                     <p className="font-bold text-slate-500 mb-1">
-                        食物可能有微量致敏原, 如你對食物會有過敏性反應或不耐性, 請通知我們的服務員。
-                     </p>
+                     <div className="mb-1">
+                         <p className="font-bold text-slate-500">
+                            食物可能有微量致敏原, 如你對食物會有過敏性反應或不耐性, 請通知我們的服務員。
+                         </p>
+                         <p className="text-[8px] text-slate-400 italic">
+                            Food may contain traces of allergens. Please inform our staff if you have any food allergies or intolerance.
+                         </p>
+                     </div>
                      
                      {/* Existing Remarks */}
                      {data.drinksPackage && (
-                        <p className="truncate"><span className="font-bold text-slate-900">酒水:</span> {data.drinksPackage}</p>
+                        <div className="mt-1">
+                            <p className="truncate"><span className="font-bold text-slate-900">飲料供應 (Beverage):</span> {data.drinksPackage}</p>
+                        </div>
                      )}
                      {(data.specialMenuReq || data.allergies) && (
-                        <p className="text-red-600 font-bold truncate">⚠️ {data.specialMenuReq} {data.specialMenuReq && data.allergies && '|'} {data.allergies}</p>
+                        <p className="text-red-600 font-bold truncate mt-1">
+                            ⚠️ {data.specialMenuReq} {data.specialMenuReq && data.allergies && '|'} {data.allergies}
+                        </p>
                      )}
                  </div>
             </div>
 
             {/* Right: Signature Box */}
-            <div className="border border-slate-800 p-2 rounded bg-slate-50/50 flex flex-col justify-between h-24">
+            <div className="border border-slate-800 p-2 rounded bg-slate-50/50 flex flex-col justify-between h-auto min-h-[90px]">
                 <div>
                     <p className="text-[9px] text-slate-500 text-center uppercase tracking-widest mb-1">
                         Client Confirmation (客戶確認)
                     </p>
-                    <p className="text-[8px] text-slate-400 text-center leading-none">
-                        本人確認以上菜譜及酒水安排無誤。
-                    </p>
+                    <div className="text-center leading-tight">
+                        <p className="text-[8px] text-slate-400">本人確認以上菜譜及酒水安排無誤。</p>
+                        <p className="text-[7px] text-slate-400">I confirm the above menu and beverage arrangements are correct.</p>
+                    </div>
                 </div>
                 
-                <div className="flex justify-between items-end gap-3 px-1">
+                <div className="flex justify-between items-end gap-3 px-1 mt-2">
                     <div className="flex-1 text-center">
                         <div className="border-b border-slate-800 h-px mb-1"></div>
                         <p className="text-[8px] font-bold text-slate-400">Sign</p>
@@ -3570,15 +3609,15 @@ export default function App() {
   // --- AI 翻譯功能狀態 ---
   const [translatingMenuId, setTranslatingMenuId] = useState(null);
 
-  // --- AI 菜單翻譯處理函式 ---
+  // --- AI 菜單翻譯處理函式 (Updated with specific rules) ---
   const handleTranslateMenu = async (menuId, content) => {
     if (!content) {
       addToast("請先輸入菜單內容", "error");
       return;
     }
     
-    setTranslatingMenuId(menuId); // 設定正在翻譯的菜單 ID (顯示 Loading)
-    const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101"; // 使用您的 API Key
+    setTranslatingMenuId(menuId);
+    const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101";
 
     try {
       const response = await fetch("https://api.deepseek.com/chat/completions", {
@@ -3592,23 +3631,39 @@ export default function App() {
           messages: [
             { 
               role: "system", 
-              content: "You are a professional banquet menu translator. Task: Translate the given menu items from Chinese to English. Output format rules: 1. Keep the original Chinese text line. 2. Immediately below each Chinese line, output the English translation. 3. Do not add bullet points, numbering, or extra explanations. 4. Maintain the order." 
+              content: `You are a professional banquet menu translator. 
+              Task: Translate the given menu items from Chinese to English line by line.
+              
+              STRICT RULES:
+              1. **Brand Names:** ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'.
+              2. **Format:** Output the original Chinese line, followed immediately by the English translation on the next line.
+              3. **Spacing:** Remove ALL empty lines between items. The output must be compact.
+              4. **Punctuation:** Do NOT add full stops (periods) at the end of any line.
+              5. **Cleanliness:** Do not add bullet points, numbering, or extra explanations.
+              
+              Example Output:
+              鴻運金豬全體
+              Roasted Whole Suckling Pig
+              璟瓏軒炒飯
+              King Lung Heen Fried Rice`
             }, 
             { 
               role: "user", 
               content: content 
             }
           ],
-          temperature: 0.3, // 較低的溫度以確保翻譯準確
+          temperature: 0.2, // Lower temperature for more deterministic/strict formatting
         })
       });
 
       if (!response.ok) throw new Error("Translation API Failed");
       
       const data = await response.json();
-      const translatedText = data.choices[0].message.content;
+      let translatedText = data.choices[0].message.content;
 
-      // 更新該菜單的內容
+      // Double-check cleanup: Remove double newlines just in case
+      translatedText = translatedText.replace(/\n\s*\n/g, '\n').trim();
+
       handleMenuChange(menuId, 'content', translatedText);
       addToast("菜單翻譯完成！", "success");
 
@@ -6040,7 +6095,7 @@ export default function App() {
                       }}
                       className="px-3 py-2 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg font-medium flex items-center border border-violet-200 text-sm whitespace-nowrap ml-2"
                     >
-                      <Utensils size={16} className="mr-2" /> Print Menu (菜譜)
+                      <Utensils size={16} className="mr-2" /> 菜譜
                     </button>
                     <button
                       type="button"

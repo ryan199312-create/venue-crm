@@ -21,12 +21,12 @@ import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/fire
 
 // REPLACE WITH YOUR EXISTING CONFIG
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "event-management-system-9f764.firebaseapp.com",
-  projectId: "event-management-system-9f764",
-  storageBucket: "event-management-system-9f764.firebasestorage.app",
-  messagingSenderId: "281238143424",
-  appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCNJ-TZcqTres8fXcZr3rLaH5x2xLsk3Os",
+    authDomain: "event-management-system-9f764.firebaseapp.com",
+    projectId: "event-management-system-9f764",
+    storageBucket: "event-management-system-9f764.firebasestorage.app",
+    messagingSenderId: "281238143424",
+    appId: "1:281238143424:web:b463511f0b3c4d68f84825",
 };
 
 // Initialize only if not already initialized

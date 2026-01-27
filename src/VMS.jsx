@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { db, auth, storage } from './firebase';
+
+// 1. Icons
 import { 
   Calendar as CalendarIcon, 
   LayoutDashboard,
@@ -39,31 +40,40 @@ import {
   MessageCircle,
   Loader2,
   Languages,
-  Send // Added for AI
+  Send 
 } from 'lucide-react';
 
-// Firebase Imports
-import { 
-  signInWithEmailAndPassword, 
-  signInWithCustomToken, 
-  onAuthStateChanged, 
-  signOut
+// 2. Shared Connection (from your new file)
+import { db, auth, storage } from './firebase';
+
+// 3. Auth Helpers (Added signInAnonymously back)
+import { 
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  signInWithCustomToken,
+  onAuthStateChanged,
+  signOut
 } from "firebase/auth";
-import { 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  serverTimestamp, 
-  setDoc, 
-  getDoc 
+
+// 4. Firestore Helpers (Added collection back)
+import { 
+  collection,        // <--- THIS WAS MISSING
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  getDoc 
 } from "firebase/firestore";
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL 
+
+// 5. Storage Helpers
+import { 
+  ref,
+  uploadBytes,
+  getDownloadURL 
 } from "firebase/storage";
 
 // ==========================================

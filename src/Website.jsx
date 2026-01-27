@@ -18,21 +18,7 @@ import {
 
 // --- FIREBASE IMPORT (Use the same config as your VMS) ---
 
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
-
-// REPLACE WITH YOUR EXISTING CONFIG
-const firebaseConfig = {
-    apiKey: "AIzaSyCNJ-TZcqTres8fXcZr3rLaH5x2xLsk3Os",
-    authDomain: "event-management-system-9f764.firebaseapp.com",
-    projectId: "event-management-system-9f764",
-    storageBucket: "event-management-system-9f764.firebasestorage.app",
-    messagingSenderId: "281238143424",
-    appId: "1:281238143424:web:b463511f0b3c4d68f84825",
-};
-
-// Initialize only if not already initialized
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const Navbar = ({ onOpenBooking }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

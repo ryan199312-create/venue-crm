@@ -196,11 +196,15 @@ const calculateDepartmentSplit = (data) => {
 // ==========================================
 
 const formatMoney = (val) => {
-  if (!val) return '0';
-  const clean = val.toString().replace(/,/g, '');
-  const number = parseFloat(clean);
-  if (isNaN(number)) return '0';
-  return number.toLocaleString('en-US');
+  if (!val) return '0';
+  // Remove existing commas to parse correctly
+  const clean = val.toString().replace(/,/g, '');
+  const number = parseFloat(clean);
+  
+  if (isNaN(number)) return '0';
+  
+  // ✅ UPDATED: Round to nearest integer to remove decimals
+  return Math.round(number).toLocaleString('en-US');
 };
 
 const parseMoney = (val) => {
@@ -443,71 +447,92 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 // ==========================================
 
 const LocationSelector = ({ formData, setFormData, className = "" }) => {
-  const selectedLocs = formData.selectedLocations || [];
+  const selectedLocs = formData.selectedLocations || [];
 
-  const handleCheckboxChange = (loc) => {
-    let newLocs = [...selectedLocs];
-    
-    if (loc === '全場') {
-      if (newLocs.includes('全場')) {
-        newLocs = newLocs.filter(l => l !== '全場' && !INDIVIDUAL_ZONES.includes(l));
-      } else {
-        newLocs = Array.from(new Set([...newLocs, '全場', ...INDIVIDUAL_ZONES]));
-      }
-    } else {
-      if (newLocs.includes(loc)) {
-        newLocs = newLocs.filter(l => l !== loc);
-        newLocs = newLocs.filter(l => l !== '全場');
-      } else {
-        newLocs.push(loc);
-        const allSelected = INDIVIDUAL_ZONES.every(z => newLocs.includes(z));
-        if (allSelected && !newLocs.includes('全場')) {
-          newLocs.push('全場');
-        }
-      }
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      selectedLocations: newLocs,
-      venueLocation: newLocs.join(', ') + (prev.locationOther ? `, ${prev.locationOther}` : '')
-    }));
-  };
+  // --- BULLETPROOF STRING BUILDER ---
+  // 1. Combine checkboxes and manual input into one array
+  // 2. .filter(Boolean) REMOVES all empty strings, nulls, and undefined values
+  // 3. .join(', ') combines them. 
+  // Result: No leading commas, ever.
+  const buildVenueString = (checkboxes, manualInput) => {
+    const allParts = [
+      ...(checkboxes || []), 
+      manualInput ? manualInput.trim() : null
+    ];
+    
+    // This filter is the magic fix:
+    return allParts.filter(part => part && part.length > 0).join(', ');
+  };
 
-  const handleOtherChange = (e) => {
-    const val = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      locationOther: val,
-      venueLocation: prev.selectedLocations.join(', ') + (val ? `, ${val}` : '')
-    }));
-  };
+  const handleCheckboxChange = (loc) => {
+    let newLocs = [...selectedLocs];
+    
+    // Logic: Toggle '全場' vs Individual Zones
+    if (loc === '全場') {
+      if (newLocs.includes('全場')) {
+        // Uncheck All
+        newLocs = newLocs.filter(l => l !== '全場' && !INDIVIDUAL_ZONES.includes(l));
+      } else {
+        // Check All
+        newLocs = Array.from(new Set([...newLocs, '全場', ...INDIVIDUAL_ZONES]));
+      }
+    } else {
+      // Individual Zone Logic
+      if (newLocs.includes(loc)) {
+        newLocs = newLocs.filter(l => l !== loc);
+        newLocs = newLocs.filter(l => l !== '全場'); // Uncheck All if one removed
+      } else {
+        newLocs.push(loc);
+        const allSelected = INDIVIDUAL_ZONES.every(z => newLocs.includes(z));
+        if (allSelected && !newLocs.includes('全場')) {
+          newLocs.push('全場'); // Check All if all zones selected
+        }
+      }
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      selectedLocations: newLocs,
+      venueLocation: buildVenueString(newLocs, prev.locationOther) // ✅ Use Bulletproof Builder
+    }));
+  };
 
-  return (
-    <div className={className}>
-      <label className="block text-sm font-medium text-slate-700 mb-2">活動位置 (Venue Location)</label>
-      <div className="flex flex-wrap gap-3 mb-2">
-        {LOCATION_CHECKBOXES.map(loc => (
-          <label key={loc} className={`flex items-center space-x-2 px-3 py-2 rounded border cursor-pointer transition-colors ${selectedLocs.includes(loc) ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-            <input 
-              type="checkbox" 
-              checked={selectedLocs.includes(loc)} 
-              onChange={() => handleCheckboxChange(loc)}
-              className="rounded text-blue-600 focus:ring-blue-500"
-            />
-            <span className={`text-sm ${selectedLocs.includes(loc) ? 'text-blue-700 font-bold' : 'text-slate-700'}`}>{loc}</span>
-          </label>
-        ))}
-      </div>
-      <input 
-        type="text" 
-        placeholder="其他位置 (Other)" 
-        value={formData.locationOther || ''}
-        onChange={handleOtherChange}
-        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none"
-      />
-    </div>
-  );
+  const handleOtherChange = (e) => {
+    const val = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      locationOther: val,
+      venueLocation: buildVenueString(prev.selectedLocations, val) // ✅ Use Bulletproof Builder
+    }));
+  };
+
+  return (
+    <div className={className}>
+      <label className="block text-sm font-medium text-slate-700 mb-2">活動位置 (Venue Location)</label>
+      <div className="flex flex-wrap gap-3 mb-2">
+        {LOCATION_CHECKBOXES.map(loc => (
+          <label key={loc} className={`flex items-center space-x-2 px-3 py-2 rounded border cursor-pointer transition-colors ${selectedLocs.includes(loc) ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+            <input 
+              type="checkbox" 
+              checked={selectedLocs.includes(loc)} 
+              onChange={() => handleCheckboxChange(loc)}
+              className="rounded text-blue-600 focus:ring-blue-500"
+            />
+            <span className={`text-sm ${selectedLocs.includes(loc) ? 'text-blue-700 font-bold' : 'text-slate-700'}`}>{loc}</span>
+          </label>
+        ))}
+      </div>
+      <input 
+        type="text" 
+        placeholder="其他位置 (Other)" 
+        value={formData.locationOther || ''}
+        onChange={handleOtherChange}
+        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none"
+      />
+      {/* Debug: confirm the string is clean */}
+      {/* <p className="text-[10px] text-slate-400 mt-1">Preview: {formData.venueLocation}</p> */}
+    </div>
+  );
 };
 
 const DepositField = ({ label, prefix, formData, setFormData, onUpload, addToast, onRemoveProof }) => {
@@ -668,6 +693,12 @@ const PrintableEO = ({ data, printMode }) => {
      return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
+  // --- HELPER: Clean Location String (Remove leading commas) ---
+  const cleanLocation = (loc) => {
+    if (!loc) return '';
+    // Removes leading comma and whitespace (e.g. ", A" -> "A")
+    return loc.replace(/^,\s*/, ''); 
+  };
   // --- Financial Logic (Unified) ---
   const platingTotal = (data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0;
 
@@ -815,7 +846,7 @@ const PrintableEO = ({ data, printMode }) => {
     <div className="flex flex-wrap bg-slate-50 p-2 rounded mb-6 border border-slate-100">
         <DetailRow label="日期 (Date)" value={formatDateWithDay(data.date)} widthClass="w-1/4" highlight={true} />
         <DetailRow label="活動名稱" value={data.eventName} widthClass="w-1/4" />
-        <DetailRow label="位置" value={data.venueLocation} widthClass="w-1/4" />
+        <DetailRow label="位置" value={cleanLocation(data.venueLocation)} widthClass="w-1/4" />
         <DetailRow label="時間" value={`${data.startTime} - ${data.endTime}`} widthClass="w-1/4" />
         <DetailRow label="起菜時間" value={data.servingTime} widthClass="w-1/4" highlight={true} />
         <DetailRow label="席數" value={`${data.tableCount || 0} 席`} widthClass="w-1/4" />
@@ -959,7 +990,7 @@ const PrintableEO = ({ data, printMode }) => {
                     <span className="text-slate-500">Time:</span>
                     <span className="font-bold text-slate-900">{data.startTime} - {data.endTime}</span>
                     <span className="text-slate-500">Venue:</span>
-                    <span className="font-bold text-slate-900">{data.venueLocation}</span>
+                    <span className="font-bold text-slate-900">{cleanLocation(data.venueLocation)}</span>
                     <span className="text-slate-500">Guests:</span>
                     <span className="font-bold text-slate-900">{data.guestCount} Pax / {data.tableCount} Tables</span>
                 </div>
@@ -1211,7 +1242,7 @@ const PrintableEO = ({ data, printMode }) => {
                 </div>
                 <div className="p-2 border-b border-slate-300">
                     <span className="block text-[9px] text-slate-500 uppercase">Venue & Attendance</span>
-                    <span className="font-bold text-sm">{data.venueLocation} | {data.tableCount} Tables / {data.guestCount} Pax</span>
+                    <span className="font-bold text-sm">{cleanLocation(data.venueLocation)} | {data.tableCount} Tables / {data.guestCount} Pax</span>
                 </div>
             </div>
         </div>
@@ -1569,7 +1600,7 @@ const PrintableEO = ({ data, printMode }) => {
                 </div>
                 <div className="p-2 border-b border-slate-300">
                     <span className="block text-[9px] text-slate-500">場地及人數 (Venue & Attendance)</span>
-                    <span className="font-bold text-sm">{data.venueLocation} | {data.tableCount} 席 / {data.guestCount} 人</span>
+                    <span className="font-bold text-sm">{cleanLocation(data.venueLocation)} | {data.tableCount} 席 / {data.guestCount} 人</span>
                 </div>
             </div>
         </div>
@@ -1894,7 +1925,7 @@ const PrintableEO = ({ data, printMode }) => {
                     <span className="text-slate-500">Date:</span>
                     <span className="font-bold">{formatDateWithDay(data.date)}</span>
                     <span className="text-slate-500">Venue:</span>
-                    <span className="font-bold">{data.venueLocation}</span>
+                    <span className="font-bold">{cleanLocation(data.venueLocation)}</span>
                     <span className="text-slate-500">Pax:</span>
                     <span className="font-bold">{data.guestCount} Pax / {data.tableCount} Tables</span>
                 </div>
@@ -2473,7 +2504,7 @@ const PrintableEO = ({ data, printMode }) => {
       {/* PAGE 3: KITCHEN COPY */}
       <div className="print-page">
         <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-6">
-           <div><h1 className="text-5xl font-black tracking-tight uppercase">廚房出品單</h1><p className="text-2xl font-bold mt-2">{data.venueLocation || '未定位置'}</p></div>
+           <div><h1 className="text-5xl font-black tracking-tight uppercase">廚房出品單</h1><p className="text-2xl font-bold mt-2">{cleanLocation(data.venueLocation) || '未定位置'}</p></div>
            <div className="text-right"><div className="inline-block bg-black text-white px-6 py-2 text-2xl font-bold rounded mb-2">KITCHEN</div><div className="text-3xl font-mono font-bold">{formatDateWithDay(data.date)}</div><div className="text-5xl font-black text-red-600 mt-4 border-4 border-red-600 px-4 py-2 rounded-lg inline-block bg-white shadow-sm">{data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}</div></div>
         </div>
         <div className="flex gap-4 mb-8">

@@ -1,263 +1,332 @@
-import { db } from './firebase';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Menu, 
-  X, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Instagram, 
-  Facebook, 
-  ArrowRight,
-  Star,
-  Users,
-  Calendar,
-  Clock,
-  ChefHat
+  Menu, X, MapPin, Phone, Mail, Instagram, Facebook, ArrowRight, 
+  Star, Users, Calendar, Clock, ChefHat, MessageCircle, ChevronRight 
 } from 'lucide-react';
 
-// --- FIREBASE IMPORT (Use the same config as your VMS) ---
-
+import { db } from './firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
-const Navbar = ({ onOpenBooking }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+// --- CONTENT DICTIONARY ---
+const content = {
+  en: {
+    nav: ['Weddings', 'Corporate', 'Dining', 'Venue'],
+    inquire: "Book Now",
+    heroTitle: "Royal Cantonese",
+    heroSub: "The Palace Museum Experience",
+    heroDesc: "A culinary journey situated in the heart of Hong Kong's cultural district, offering Michelin-standard service with a panoramic harbour view.",
+    features: [
+      { t: "Weddings", d: "Bespoke bridal experiences.", img: "https://images.unsplash.com/photo-1519225468359-2996bc017507?q=80&w=2070" },
+      { t: "Corporate", d: "Impress your stakeholders.", img: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=2069" },
+      { t: "Private Dining", d: "Intimate gatherings.", img: "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974" }
+    ],
+    rights: "All rights reserved."
+  },
+  zh: {
+    nav: ['婚宴', '企業', '餐飲', '場地'],
+    inquire: "立即預約",
+    heroTitle: "御膳",
+    heroSub: "故宮文化體驗",
+    heroDesc: "位於香港故宮文化博物館，坐擁維港絕美景色，呈獻米芝蓮級數的精緻粵菜宴席。",
+    features: [
+      { t: "浪漫婚宴", d: "度身訂造的夢幻婚禮。", img: "https://images.unsplash.com/photo-1519225468359-2996bc017507?q=80&w=2070" },
+      { t: "企業活動", d: "專業會議與週年晚宴。", img: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=2069" },
+      { t: "私人饗宴", d: "極致私隱的用餐體驗。", img: "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974" }
+    ],
+    rights: "版權所有"
+  }
+};
+
+// --- COMPONENTS ---
+
+// --- 1. MORPHING "ISLAND" NAVBAR ---
+const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
+  // State: Are we scrolled down? Are we hovering/expanding the island?
+  const [scrolled, setScrolled] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const t = content[lang];
+
+  // Handle Scroll Detection
+  useEffect(() => {
+    const handleScroll = () => {
+      // If we scroll past 100px, shrink to island mode
+      const isScrolled = window.scrollY > 100;
+      setScrolled(isScrolled);
+      // If we scroll back to top, auto-expand again
+      if (!isScrolled) setIsExpanded(false); 
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Interaction Handlers
+  const handleMouseEnter = () => { if (scrolled) setIsExpanded(true); };
+  const handleMouseLeave = () => { if (scrolled) setIsExpanded(false); };
+  const toggleMobile = () => setIsExpanded(!isExpanded);
+
+  // Dynamic Styles based on state
+  const isCompact = scrolled && !isExpanded;
 
   return (
-    <nav className="fixed w-full z-50 bg-white/90 backdrop-blur-md border-b border-stone-100 shadow-sm transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-24">
-          {/* Logo Section */}
-          <div className="flex-shrink-0 flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#A57C00] rounded-lg flex items-center justify-center text-white font-serif font-bold text-xl">
+    <div className="fixed top-6 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+      <motion.nav
+        layout // <--- THE MAGIC PROP: Automatically morphs width/height
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className={`
+          pointer-events-auto
+          relative bg-white/80 backdrop-blur-2xl border border-white/50 shadow-2xl shadow-black/10
+          overflow-hidden
+          ${isExpanded ? 'rounded-[32px] p-2' : 'rounded-full px-2 py-2'} // Shape change
+        `}
+        // Dynamic Widths for different states
+        style={{ 
+          width: isCompact ? 'auto' : '100%', 
+          maxWidth: isCompact ? '200px' : '800px' 
+        }}
+      >
+        <div className="flex items-center justify-between h-12 px-2">
+          
+          {/* LOGO (Always Visible) */}
+          <motion.div layout="position" className="flex items-center gap-3 cursor-pointer group">
+            <div className="w-8 h-8 bg-stone-900 rounded-full flex items-center justify-center text-[#D4AF37] font-serif font-bold">
               璟
             </div>
-            <div className="flex flex-col">
-              <span className="font-serif text-2xl font-bold text-stone-900 tracking-wide">璟瓏軒</span>
-              <span className="text-[10px] uppercase tracking-[0.2em] text-[#A57C00] font-medium">King Lung Heen</span>
-            </div>
+            {/* Hide text in compact mode to save space */}
+            <AnimatePresence>
+              {!isCompact && (
+                <motion.span 
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  className="font-serif font-bold text-stone-800 tracking-wide whitespace-nowrap"
+                >
+                  璟瓏軒
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.div>
+
+          {/* DESKTOP LINKS (Hidden in Compact Mode) */}
+          <div className="hidden md:flex items-center">
+             <AnimatePresence>
+                {!isCompact && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2"
+                  >
+                    {t.nav.map((item, i) => (
+                      <a 
+                        key={i} 
+                        href={`#section-${i}`} 
+                        className="px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full transition-all"
+                      >
+                        {item}
+                      </a>
+                    ))}
+                  </motion.div>
+                )}
+             </AnimatePresence>
           </div>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex space-x-8 items-center">
-            {['Home', 'Weddings', 'Corporate', 'Dining', 'Location'].map((item) => (
-              <a key={item} href={`#${item.toLowerCase()}`} className="text-sm font-medium text-stone-600 hover:text-[#A57C00] transition-colors uppercase tracking-widest">
-                {item}
-              </a>
-            ))}
-            <button 
-              onClick={onOpenBooking}
-              className="bg-[#A57C00] text-white px-6 py-2.5 rounded-none hover:bg-[#8a6800] transition-all duration-300 text-sm font-medium tracking-wide"
-            >
-              INQUIRE NOW
-            </button>
-          </div>
+          {/* RIGHT ACTIONS (Lang + CTA) */}
+          <motion.div layout="position" className="flex items-center gap-2">
+            
+            {/* In compact mode, show a tiny dot indicator or menu icon */}
+            {isCompact ? (
+               <div className="text-xs font-medium text-stone-400 flex items-center gap-1 pr-2">
+                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"/>
+                 <span>Menu</span>
+               </div>
+            ) : (
+              <>
+                <button 
+                  onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+                  className="w-8 h-8 rounded-full bg-stone-100 text-stone-600 text-xs font-bold hover:bg-stone-200 transition-colors"
+                >
+                  {lang === 'en' ? '繁' : 'EN'}
+                </button>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={onOpenBooking}
+                  className="bg-stone-900 text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg"
+                >
+                  {t.inquire}
+                </motion.button>
+              </>
+            )}
 
-          {/* Mobile Menu Button */}
-          <div className="md:hidden">
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-stone-800">
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {/* Mobile Toggle Button */}
+            <button onClick={toggleMobile} className="md:hidden w-8 h-8 flex items-center justify-center bg-stone-100 rounded-full ml-1">
+               {isExpanded ? <X size={16}/> : <Menu size={16}/>}
             </button>
-          </div>
+          </motion.div>
         </div>
-      </div>
 
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-stone-100 animate-in slide-in-from-top-5">
-          <div className="px-4 pt-2 pb-6 space-y-2">
-            {['Home', 'Weddings', 'Corporate', 'Dining', 'Location'].map((item) => (
-              <a key={item} href={`#${item.toLowerCase()}`} className="block px-3 py-3 text-base font-medium text-stone-800 hover:bg-stone-50 rounded-md">
-                {item}
-              </a>
-            ))}
-            <button 
-              onClick={() => { onOpenBooking(); setIsMobileMenuOpen(false); }}
-              className="w-full mt-4 bg-[#A57C00] text-white px-6 py-3 text-center font-medium"
+        {/* MOBILE MENU CONTENT (Expands downwards inside the island) */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden overflow-hidden"
             >
-              BOOK AN EVENT
-            </button>
-          </div>
-        </div>
-      )}
-    </nav>
+              <div className="pt-4 pb-2 px-2 flex flex-col gap-2">
+                 {t.nav.map((item, i) => (
+                    <a 
+                      key={i} 
+                      href={`#section-${i}`} 
+                      onClick={() => setIsExpanded(false)}
+                      className="block px-4 py-3 text-center text-stone-800 bg-stone-50 rounded-2xl font-medium"
+                    >
+                      {item}
+                    </a>
+                 ))}
+                 {/* Mobile Lang Switch */}
+                 <div className="flex justify-center mt-2 border-t border-stone-100 pt-3">
+                   <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+                      Switch Language: {lang === 'en' ? '繁體' : 'English'}
+                   </button>
+                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </motion.nav>
+    </div>
   );
 };
 
-const Hero = ({ onOpenBooking }) => (
-  <div id="home" className="relative h-screen min-h-[600px] flex items-center justify-center overflow-hidden">
-    {/* Background Image with Overlay */}
-    <div className="absolute inset-0 z-0">
-      <img 
-        src="https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=2070&auto=format&fit=crop" 
-        alt="Victoria Harbour View" 
+// 2. Liquid Hero Section
+const Hero = ({ onOpenBooking, t }) => (
+  <section className="relative h-[95vh] w-full p-4 flex flex-col justify-end overflow-hidden">
+    {/* Background Video/Image Container with Apple-style rounded corners */}
+    <div className="absolute inset-4 rounded-[40px] overflow-hidden z-0 shadow-2xl">
+      <motion.img 
+        initial={{ scale: 1.2 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 10, ease: "easeOut" }}
+        src="https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=2070" 
         className="w-full h-full object-cover"
+        alt="Hero"
       />
-      <div className="absolute inset-0 bg-stone-900/40 mix-blend-multiply" />
-      <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-transparent to-transparent" />
+      {/* Soft gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
     </div>
 
-    {/* Content */}
-    <div className="relative z-10 text-center px-4 max-w-4xl mx-auto mt-16 animate-in fade-in zoom-in duration-1000">
-      <div className="inline-block border border-white/30 backdrop-blur-sm px-4 py-1.5 rounded-full mb-6">
-        <span className="text-white text-xs font-bold tracking-[0.2em] uppercase">Located at Hong Kong Palace Museum</span>
-      </div>
-      <h1 className="text-5xl md:text-7xl font-serif text-white mb-6 leading-tight">
-        Culinary Artistry <br/> 
-        <span className="italic text-[#E5C568]">With a Royal View</span>
-      </h1>
-      <p className="text-lg md:text-xl text-stone-200 mb-10 font-light max-w-2xl mx-auto leading-relaxed">
-        Experience exquisite Cantonese banquets and Michelin-standard service overlooking the breathtaking Victoria Harbour skyline.
-      </p>
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <button 
-          onClick={onOpenBooking}
-          className="bg-white text-stone-900 px-8 py-4 min-w-[200px] font-bold text-sm tracking-widest hover:bg-[#A57C00] hover:text-white transition-all duration-300"
+    {/* Text Content */}
+    <div className="relative z-10 p-12 max-w-6xl mx-auto w-full text-white mb-8">
+      <motion.div
+        initial={{ y: 50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2, duration: 0.8 }}
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-white/20 backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest text-white/90">
+            Est. 2022
+          </div>
+          <div className="bg-[#D4AF37]/80 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest text-white">
+            West Kowloon
+          </div>
+        </div>
+
+        <h1 className="text-6xl md:text-8xl font-serif font-medium tracking-tight leading-[0.9] mb-6">
+          {t.heroTitle} <span className="text-[#D4AF37] italic font-light">{t.heroSub}</span>
+        </h1>
+        
+        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8">
+          <p className="text-lg md:text-xl text-white/80 max-w-md font-light leading-relaxed">
+            {t.heroDesc}
+          </p>
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onOpenBooking}
+            className="group flex items-center justify-between bg-white/90 backdrop-blur-xl text-stone-900 px-2 py-2 pr-6 rounded-full font-bold shadow-[0_0_40px_-10px_rgba(255,255,255,0.5)] transition-all"
+          >
+            <span className="w-10 h-10 bg-stone-900 rounded-full flex items-center justify-center text-white mr-4 group-hover:rotate-45 transition-transform">
+              <ArrowRight size={18} />
+            </span>
+            {content.en.inquire === t.inquire ? "Plan Your Event" : "策劃您的活動"}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  </section>
+);
+
+// 3. Bento Grid Features
+const BentoGrid = ({ t }) => (
+  <section className="py-24 px-4 bg-[#F5F5F7]"> {/* Apple's Light Grey */}
+    <div className="max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-auto md:h-[600px]">
+        
+        {/* Large Card (Weddings) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="md:col-span-2 md:row-span-2 relative group rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500"
         >
-          PLAN YOUR EVENT
-        </button>
-        <button className="border border-white text-white px-8 py-4 min-w-[200px] font-bold text-sm tracking-widest hover:bg-white hover:text-stone-900 transition-all duration-300">
-          VIEW MENUS
-        </button>
+          <img src={t.features[0].img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Weddings" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent p-8 flex flex-col justify-end">
+            <h3 className="text-3xl font-bold text-white mb-2">{t.features[0].t}</h3>
+            <p className="text-white/80">{t.features[0].d}</p>
+          </div>
+        </motion.div>
+
+        {/* Small Card 1 (Corporate) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          viewport={{ once: true }}
+          className="relative group rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-xl transition-all duration-500"
+        >
+          <img src={t.features[1].img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Corporate" />
+          <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors p-6 flex flex-col justify-end">
+            <h3 className="text-xl font-bold text-white">{t.features[1].t}</h3>
+          </div>
+        </motion.div>
+
+        {/* Small Card 2 (Dining) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          viewport={{ once: true }}
+          className="relative group rounded-3xl overflow-hidden bg-stone-900 shadow-sm hover:shadow-xl transition-all duration-500 flex items-center justify-center"
+        >
+          <div className="absolute inset-0 opacity-40">
+             <img src={t.features[2].img} className="w-full h-full object-cover" alt="Dining" />
+          </div>
+          <div className="relative z-10 text-center p-6">
+            <ChefHat size={40} className="text-[#D4AF37] mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-white">{t.features[2].t}</h3>
+            <button className="mt-4 text-xs font-bold text-white border border-white/30 px-4 py-2 rounded-full hover:bg-white hover:text-black transition-colors">
+              Explore Menu
+            </button>
+          </div>
+        </motion.div>
+
       </div>
     </div>
-  </div>
+  </section>
 );
 
-const Features = () => {
-  const features = [
-    {
-      title: "Wedding Banquets",
-      desc: "Create unforgettable memories with our bespoke wedding packages, bridal room facilities, and stunning harbour backdrop.",
-      img: "https://images.unsplash.com/photo-1519225468359-2996bc017507?q=80&w=2070&auto=format&fit=crop"
-    },
-    {
-      title: "Corporate Events",
-      desc: "Impress your stakeholders with our versatile venues, capable of hosting conferences, annual dinners, and seminars.",
-      img: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=2069&auto=format&fit=crop"
-    },
-    {
-      title: "Exquisite Dining",
-      desc: "Savor our signature Dim Sum and roasted specialties, crafted by our expert culinary team using premium ingredients.",
-      img: "https://images.unsplash.com/photo-1563245372-f217205d2919?q=80&w=2070&auto=format&fit=crop"
-    }
-  ];
-
-  return (
-    <div id="services" className="py-24 bg-stone-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-[#A57C00] text-sm font-bold tracking-[0.2em] uppercase mb-3">Our Services</h2>
-          <h3 className="text-4xl font-serif text-stone-900">Curated Experiences</h3>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-8">
-          {features.map((f, i) => (
-            <div key={i} className="group cursor-pointer">
-              <div className="relative h-80 overflow-hidden mb-6">
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-all z-10"/>
-                <img 
-                  src={f.img} 
-                  alt={f.title} 
-                  className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-              </div>
-              <h4 className="text-2xl font-serif text-stone-900 mb-3 group-hover:text-[#A57C00] transition-colors">{f.title}</h4>
-              <p className="text-stone-500 leading-relaxed text-sm">{f.desc}</p>
-              <div className="mt-4 flex items-center text-[#A57C00] text-sm font-bold tracking-widest opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all">
-                EXPLORE <ArrowRight size={16} className="ml-2" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Stats = () => (
-  <div className="bg-[#1c1c1c] text-white py-20 border-t border-white/10">
-    <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-      {[
-        { icon: Users, label: "Capacity", val: "240+" },
-        { icon: Star, label: "Service", val: "Premium" },
-        { icon: MapPin, label: "Location", val: "West Kowloon" },
-        { icon: ChefHat, label: "Cuisine", val: "Cantonese" }
-      ].map((s, i) => (
-        <div key={i} className="p-6 border border-white/10 hover:border-[#A57C00] transition-colors duration-300">
-          <s.icon className="mx-auto text-[#A57C00] mb-4" size={32} />
-          <div className="text-3xl font-serif font-bold mb-2">{s.val}</div>
-          <div className="text-stone-400 text-xs uppercase tracking-widest">{s.label}</div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const Footer = () => (
-  <footer id="location" className="bg-[#111] text-stone-400 py-16 text-sm">
-    <div className="max-w-7xl mx-auto px-4 grid md:grid-cols-3 gap-12">
-      <div>
-        <div className="text-white font-serif text-2xl font-bold mb-6">璟瓏軒 <span className="text-[#A57C00]">.</span></div>
-        <p className="mb-6 leading-relaxed">
-          Situated in the heart of West Kowloon Cultural District, we bring traditional craftsmanship to a modern palace setting.
-        </p>
-        <div className="flex space-x-4">
-          <a href="#" className="w-10 h-10 border border-white/20 flex items-center justify-center hover:bg-[#A57C00] hover:border-[#A57C00] hover:text-white transition-all"><Instagram size={18}/></a>
-          <a href="#" className="w-10 h-10 border border-white/20 flex items-center justify-center hover:bg-[#A57C00] hover:border-[#A57C00] hover:text-white transition-all"><Facebook size={18}/></a>
-        </div>
-      </div>
-      
-      <div>
-        <h4 className="text-white font-bold uppercase tracking-widest mb-6">Contact Us</h4>
-        <ul className="space-y-4">
-          <li className="flex items-start">
-            <MapPin className="mr-3 text-[#A57C00] flex-shrink-0" size={18} />
-            <span>4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon, TST</span>
-          </li>
-          <li className="flex items-center">
-            <Phone className="mr-3 text-[#A57C00]" size={18} />
-            <span>+852 2788 3939</span>
-          </li>
-          <li className="flex items-center">
-            <Mail className="mr-3 text-[#A57C00]" size={18} />
-            <span>banquet@kinglungheen.com</span>
-          </li>
-        </ul>
-      </div>
-
-      <div>
-        <h4 className="text-white font-bold uppercase tracking-widest mb-6">Opening Hours</h4>
-        <ul className="space-y-2">
-          <li className="flex justify-between border-b border-white/10 pb-2">
-            <span>Mon - Fri</span>
-            <span className="text-white">11:00 - 23:00</span>
-          </li>
-          <li className="flex justify-between border-b border-white/10 pb-2">
-            <span>Sat - Sun & PH</span>
-            <span className="text-white">10:00 - 23:00</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-    <div className="max-w-7xl mx-auto px-4 mt-16 pt-8 border-t border-white/10 text-center text-xs">
-      &copy; {new Date().getFullYear()} King Lung Heen. All rights reserved.
-    </div>
-  </footer>
-);
-
-// --- INTEGRATION: The Booking Modal ---
-const BookingModal = ({ isOpen, onClose }) => {
+// 4. Glass Booking Modal
+const GlassModal = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    date: '',
-    type: '婚宴 (Wedding)',
-    guests: '',
-    message: ''
+    name: '', phone: '', email: '', date: '', type: '婚宴 (Wedding)', guests: '', message: ''
   });
 
   if (!isOpen) return null;
@@ -265,11 +334,8 @@ const BookingModal = ({ isOpen, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      // 🚀 INTEGRATION MAGIC: Writing directly to your VMS database
       await addDoc(collection(db, 'artifacts', 'my-venue-crm', 'public', 'data', 'events'), {
-        // Map fields to match your VMS structure (initialFormState)
         eventName: `${formData.type} - ${formData.name}`,
         clientName: formData.name,
         clientPhone: formData.phone,
@@ -278,14 +344,11 @@ const BookingModal = ({ isOpen, onClose }) => {
         eventType: formData.type,
         guestCount: formData.guests,
         otherNotes: `Web Inquiry: ${formData.message}`,
-        
-        // Default VMS Fields
-        status: 'tentative', // Mark as tentative/inquiry
+        status: 'tentative', 
         orderId: `WEB-${Date.now().toString().slice(-6)}`,
         createdAt: serverTimestamp(),
         source: 'website_inquiry'
       });
-
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
@@ -293,108 +356,148 @@ const BookingModal = ({ isOpen, onClose }) => {
         onClose();
       }, 3000);
     } catch (error) {
-      alert("Error submitting form. Please call us directly.");
-      console.error(error);
+      alert("System busy. Please try WhatsApp.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-900/80 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="bg-[#A57C00] p-6 text-white text-center">
-          <h3 className="font-serif text-2xl font-bold mb-1">Plan Your Event</h3>
-          <p className="text-white/80 text-sm">Fill in the details below and we'll contact you shortly.</p>
-          <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors">
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Success Message */}
-        {success ? (
-          <div className="p-12 text-center h-full flex flex-col items-center justify-center">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 mx-auto">
-              <Star size={32} fill="currentColor" />
-            </div>
-            <h4 className="text-xl font-bold text-stone-800 mb-2">Inquiry Sent!</h4>
-            <p className="text-stone-500">Thank you, {formData.name}. Our team will reach out to you within 24 hours.</p>
-          </div>
-        ) : (
-          /* Form */
-          <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Name</label>
-                <input required type="text" className="w-full border-b border-stone-300 py-2 outline-none focus:border-[#A57C00] transition-colors" 
-                  value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Your Name" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Phone</label>
-                <input required type="tel" className="w-full border-b border-stone-300 py-2 outline-none focus:border-[#A57C00] transition-colors" 
-                  value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+852" />
-              </div>
-            </div>
-
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      {/* Background Blur Overlay */}
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-stone-900/30 backdrop-blur-md"
+      />
+      
+      {/* Modal Content */}
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="relative w-full max-w-lg bg-white/80 backdrop-blur-2xl border border-white/50 rounded-[40px] shadow-2xl overflow-hidden"
+      >
+        <div className="p-8">
+          <div className="flex justify-between items-center mb-6">
             <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Email</label>
-              <input required type="email" className="w-full border-b border-stone-300 py-2 outline-none focus:border-[#A57C00] transition-colors" 
-                value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="email@address.com" />
+              <h3 className="text-2xl font-serif font-bold text-stone-900">Reserve Your Date</h3>
+              <p className="text-sm text-stone-500">We'll check availability instantly.</p>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Date</label>
-                <input required type="date" className="w-full border-b border-stone-300 py-2 outline-none focus:border-[#A57C00] transition-colors text-stone-600" 
-                  value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Guests</label>
-                <input required type="number" className="w-full border-b border-stone-300 py-2 outline-none focus:border-[#A57C00] transition-colors" 
-                  value={formData.guests} onChange={e => setFormData({...formData, guests: e.target.value})} placeholder="Approx. count" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Event Type</label>
-              <select className="w-full border-b border-stone-300 py-2 outline-none focus:border-[#A57C00] bg-white"
-                value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                <option>婚宴 (Wedding)</option>
-                <option>公司活動 (Corporate)</option>
-                <option>生日派對 (Birthday)</option>
-                <option>其他 (Other)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Message</label>
-              <textarea className="w-full border border-stone-300 rounded p-3 outline-none focus:border-[#A57C00] transition-colors resize-none h-24 text-sm" 
-                value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} placeholder="Any special requests or preferences?" />
-            </div>
-
-            <button disabled={loading} type="submit" className="w-full bg-stone-900 text-white py-4 font-bold tracking-widest hover:bg-[#A57C00] transition-all duration-300 disabled:opacity-50 mt-4">
-              {loading ? 'SENDING...' : 'SUBMIT INQUIRY'}
+            <button onClick={onClose} className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition-colors">
+              <X size={20} className="text-stone-600"/>
             </button>
-          </form>
-        )}
-      </div>
+          </div>
+
+          {success ? (
+            <div className="py-12 text-center">
+              <div className="w-16 h-16 bg-[#D4AF37]/10 text-[#D4AF37] rounded-full flex items-center justify-center mb-4 mx-auto">
+                <Star size={32} fill="currentColor" />
+              </div>
+              <h4 className="text-xl font-bold text-stone-800 mb-2">Request Received</h4>
+              <p className="text-stone-500 text-sm">We'll be in touch within 24 hours.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Name</label>
+                  <input required type="text" className="w-full bg-white/50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Phone</label>
+                  <input required type="tel" className="w-full bg-white/50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Date</label>
+                  <input required type="date" className="w-full bg-white/50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-600 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Guests</label>
+                  <input required type="number" placeholder="e.g. 100" className="w-full bg-white/50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50" value={formData.guests} onChange={e => setFormData({...formData, guests: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Type</label>
+                <select className="w-full bg-white/50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                  <option>婚宴 (Wedding)</option>
+                  <option>公司活動 (Corporate)</option>
+                  <option>生日派對 (Birthday)</option>
+                  <option>其他 (Other)</option>
+                </select>
+              </div>
+
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={loading}
+                type="submit" 
+                className="w-full bg-stone-900 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-stone-800 transition-colors disabled:opacity-50 mt-2"
+              >
+                {loading ? 'Processing...' : 'Submit Request'}
+              </motion.button>
+            </form>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 };
 
+// 5. Minimal Footer
+const Footer = ({ t }) => (
+  <footer className="bg-white py-12 border-t border-stone-100">
+    <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+      <div className="text-center md:text-left">
+        <h5 className="font-serif font-bold text-xl text-stone-900">璟瓏軒</h5>
+        <p className="text-stone-400 text-xs mt-1">Hong Kong Palace Museum</p>
+      </div>
+      <div className="flex gap-6">
+        <MapPin size={20} className="text-stone-400 hover:text-[#D4AF37] transition-colors cursor-pointer" />
+        <Instagram size={20} className="text-stone-400 hover:text-[#D4AF37] transition-colors cursor-pointer" />
+        <Mail size={20} className="text-stone-400 hover:text-[#D4AF37] transition-colors cursor-pointer" />
+      </div>
+      <div className="text-xs text-stone-400 font-medium">
+        <a href="/admin" className="hover:text-stone-900 transition-colors">Staff Login</a>
+        <span className="mx-2">|</span>
+        &copy; {new Date().getFullYear()} {t.rights}
+      </div>
+    </div>
+  </footer>
+);
+
+const WhatsAppFloat = () => (
+  <motion.a 
+    href="https://wa.me/85252226066" 
+    target="_blank" 
+    rel="noreferrer"
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.9 }}
+    className="fixed bottom-6 right-6 z-40 bg-[#25D366] text-white p-4 rounded-full shadow-2xl flex items-center justify-center"
+  >
+    <MessageCircle size={24} fill="white" />
+  </motion.a>
+);
+
+// --- MAIN LAYOUT ---
 export default function Website() {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [lang, setLang] = useState('zh');
 
   return (
-    <div className="font-sans text-stone-800 bg-white selection:bg-[#A57C00] selection:text-white">
-      <Navbar onOpenBooking={() => setIsBookingOpen(true)} />
-      <Hero onOpenBooking={() => setIsBookingOpen(true)} />
-      <Features />
-      <Stats />
-      <Footer />
-      <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} />
+    <div className="font-sans bg-[#F5F5F7] text-stone-900 selection:bg-[#D4AF37] selection:text-white">
+      <FloatingNav onOpenBooking={() => setIsBookingOpen(true)} lang={lang} setLang={setLang} />
+      <Hero onOpenBooking={() => setIsBookingOpen(true)} t={content[lang]} />
+      <BentoGrid t={content[lang]} />
+      <Footer t={content[lang]} />
+      <WhatsAppFloat />
+      <GlassModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} />
     </div>
   );
 }

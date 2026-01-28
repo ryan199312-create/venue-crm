@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 /* 列印專用樣式 */
 @media print {
   @page { size: A4; margin: 10mm; }

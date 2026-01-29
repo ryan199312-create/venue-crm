@@ -4493,9 +4493,12 @@ const saveMenuSnapshot = () => {
   }, [formData.date, formData.startTime, formData.selectedLocations, appSettings.minSpendRules]);
 
 
-  const openNewEventModal = () => {
-    setEditingEvent(null);
-    const today = new Date();
+const openNewEventModal = () => {
+    setTempPrintData(null); // ✅ FIX: Clear leftover print data
+    setPrintMode('EO');     // ✅ FIX: Reset print mode
+    
+    setEditingEvent(null);
+    const today = new Date();
     const dateStr = today.toISOString().slice(0,10).replace(/-/g, '');
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     
@@ -4511,8 +4514,11 @@ const saveMenuSnapshot = () => {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (event) => {
-    setEditingEvent(event);
+const openEditModal = (event) => {
+    setTempPrintData(null); // ✅ FIX: Clear any leftover print data from previous clients
+    setPrintMode('EO');     // ✅ FIX: Reset print mode to default
+    
+    setEditingEvent(event);
     const safeData = {
       ...initialFormState, 
       ...event, 

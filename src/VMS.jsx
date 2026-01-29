@@ -40,6 +40,8 @@ import {
   MessageCircle,
   Loader2,
   Languages,
+  History,
+  Eye,
   Send 
 } from 'lucide-react';
 
@@ -288,7 +290,74 @@ const Toast = ({ message, type, onClose }) => {
     </div>
   );
 };
+const VersionPreviewModal = ({ isOpen, onClose, version, onRestore }) => {
+  if (!isOpen || !version) return null;
 
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">版本預覽 (Version Preview)</h3>
+            <p className="text-sm text-slate-500 font-bold">{version.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto bg-slate-50 flex-1 space-y-4">
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r shadow-sm mb-4">
+            <div className="flex items-start">
+              <AlertTriangle className="text-amber-600 mr-3 flex-shrink-0" size={20} />
+              <div>
+                <h4 className="font-bold text-amber-800 text-sm">⚠️ 注意 (Warning)</h4>
+                <p className="text-xs text-amber-700 mt-1">
+                  還原此版本將會<b>覆蓋</b>當前所有的菜單內容與設定。此操作無法復原。<br/>
+                  Restoring this version will <b>overwrite</b> all current menu items and settings. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {version.data.map((menu, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                <div className="flex justify-between items-start border-b border-slate-100 pb-2 mb-2">
+                  <span className="font-bold text-slate-700">{menu.title}</span>
+                  <div className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500">
+                     ${menu.price} / {menu.priceType}
+                  </div>
+                </div>
+                <pre className="text-xs text-slate-600 whitespace-pre-wrap font-sans leading-relaxed">
+                  {menu.content || '(Empty)'}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-200 bg-white flex justify-end space-x-3">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            取消 (Cancel)
+          </button>
+          <button 
+            onClick={() => { onRestore(version); onClose(); }} 
+            className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 shadow-md flex items-center transition-colors"
+          >
+            <History size={16} className="mr-2" /> 確認還原 (Confirm Restore)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
@@ -426,6 +495,42 @@ const Modal = ({ isOpen, onClose, title, children }) => {
       </div>
     </div>
   );
+};
+
+const MenuPrintSelector = ({ isOpen, onClose, menus, onSelect }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h3 className="font-bold text-slate-800 flex items-center">
+            <Printer size={18} className="mr-2 text-slate-500"/> 選擇列印菜單 (Select Menu to Print)
+          </h3>
+          <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+        </div>
+        
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-slate-500 mb-2">此訂單包含多個菜單。請問您想列印哪一份？<br/>(This order has multiple menus. Which one would you like to print?)</p>
+          
+
+          <div className="border-t border-slate-100 my-2"></div>
+
+          {/* Option 2: Individual Menus */}
+          {menus.map((menu, idx) => (
+            <button 
+              key={idx}
+              onClick={() => onSelect(idx)}
+              className="w-full text-left p-3 rounded-lg border border-slate-200 hover:border-violet-500 hover:bg-violet-50 transition-all"
+            >
+              <div className="font-bold text-slate-700">{menu.title || `Menu ${idx + 1}`}</div>
+              <div className="text-[10px] text-slate-400 truncate mt-0.5">{menu.content ? menu.content.substring(0, 40) + '...' : '(Empty)'}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ==========================================
@@ -615,6 +720,7 @@ const DepositField = ({ label, prefix, formData, setFormData, onUpload, addToast
   );
 };
 
+
 // ==========================================
 // SECTION 5: PRINTABLE VIEWS (UPDATED REVENUE DETAIL)
 // ==========================================
@@ -755,7 +861,9 @@ const PrintableEO = ({ data, printMode }) => {
                     if (val !== 0) {
                         const lineAmt = val * qty;
                         nonKitchenAllocated += lineAmt;
-                        const deptLabel = DEPARTMENTS.find(d=>d.key===dept)?.label.split(' ')[0];
+                        const deptObj = DEPARTMENTS.find(d => d.key === dept);
+                        // Fix: Prevent crash if deptObj is undefined
+                        const deptLabel = deptObj ? deptObj.label.split(' ')[0] : 'Unknown';
                         addItem(dept, m.title, deptLabel, qty, val, lineAmt);
                     }
                 }
@@ -913,7 +1021,8 @@ const PrintableEO = ({ data, printMode }) => {
     } else if (data.balanceDueDateType === '10daysPrior' && data.date) {
         const d = new Date(data.date);
         d.setDate(d.getDate() - 10);
-        balanceDueDateDisplay = d.toLocaleDateString('en-CA'); 
+        // Fix: Prevent crash on invalid dates
+        balanceDueDateDisplay = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA') : 'Check Date';
     } else {
         balanceDueDateDisplay = data.date || 'Event Day';
     }
@@ -3453,6 +3562,8 @@ const AiAssistant = ({ formData, setFormData, onClose, initialPrompt = '', initi
 // SECTION 8: MAIN APP LOGIC
 // ==========================================
 
+
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -3478,6 +3589,10 @@ export default function App() {
     defaultMenus: [] ,
     paymentRules: []
   }); 
+
+  const [isMenuSelectOpen, setIsMenuSelectOpen] = useState(false); // Control the modal
+  const [tempPrintData, setTempPrintData] = useState(null); // Hold data for printing
+  const [previewVersion, setPreviewVersion] = useState(null); // Track which version is being previewed
 
   // User Management State
   const [userProfile, setUserProfile] = useState(null);
@@ -3729,6 +3844,30 @@ export default function App() {
 // State for the template message
   const [templateMessage, setTemplateMessage] = useState(null);
   const [aiPrompt, setAiPrompt] = useState('');
+
+const handleMenuPrintSelection = (selection) => {
+    // 1. Prepare data based on selection
+    let dataToPrint = { ...formData };
+    
+    if (selection !== 'all') {
+      // User selected a specific index -> Filter the menus array
+      dataToPrint.menus = [formData.menus[selection]];
+    }
+    
+    // 2. Set temporary data for the Print View
+    setTempPrintData(dataToPrint);
+    
+    // 3. Trigger Print
+    setPrintMode('MENU_CONFIRM');
+    setIsMenuSelectOpen(false);
+    
+    // Slight delay to allow React to render the tempPrintData
+    setTimeout(() => {
+        window.print();
+        // Optional: Reset temp data after printing if you want, 
+        // but keeping it ensures the background view doesn't flicker back.
+    }, 200); 
+  };
 
   const handleQuickRemind = (event, paymentItem) => {
     if (!event) return;
@@ -4112,34 +4251,45 @@ export default function App() {
     });
   };
   // --- MENU VERSIONING HANDLERS ---
-  const saveMenuSnapshot = (name) => {
+const saveMenuSnapshot = () => {
     if (!formData.menus || formData.menus.length === 0) return addToast("沒有菜單可儲存", "error");
     
-    const snapshotName = name || `Ver ${formData.menuVersions.length + 1} (${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`;
+    // 1. Calculate next version number based on existing list length
+    const nextVerNum = (formData.menuVersions?.length || 0) + 1;
+    const defaultName = `Ver ${nextVerNum}`;
     
+    // 2. Ask user for a name (default to "Ver X")
+    let snapshotName = prompt("請輸入版本名稱 (Enter Version Name):", defaultName);
+    
+    // If user cancels prompt, stop. If empty, use default.
+    if (snapshotName === null) return; 
+    if (snapshotName.trim() === "") snapshotName = defaultName;
+    
+    // 3. Create Snapshot
     const newSnapshot = {
       id: Date.now(),
       name: snapshotName,
-      data: JSON.parse(JSON.stringify(formData.menus)), // Deep copy
-      totalAmount: formData.totalAmount // Save the price at that time too
+      data: JSON.parse(JSON.stringify(formData.menus)), // Deep copy menu data
+      totalAmount: formData.totalAmount, // Save price state
+      timestamp: new Date().toISOString()
     };
 
     setFormData(prev => ({
       ...prev,
-      menuVersions: [newSnapshot, ...(prev.menuVersions || [])] // Add to top
+      menuVersions: [newSnapshot, ...(prev.menuVersions || [])] // Add to top of list
     }));
-    addToast("已儲存菜單版本", "success");
+    
+    addToast(`已儲存: ${snapshotName}`, "success");
   };
 
-  const restoreMenuSnapshot = (snapshot) => {
-    if(!window.confirm(`確定要還原至 "${snapshot.name}" 嗎？目前的未儲存修改將會遺失。`)) return;
-
+ const restoreMenuSnapshot = (snapshot) => {
     setFormData(prev => ({
       ...prev,
       menus: snapshot.data,
       totalAmount: calculateTotalAmount({ ...prev, menus: snapshot.data }) // Recalculate total immediately
     }));
-    addToast("已還原菜單", "success");
+    addToast(`已還原至版本: ${snapshot.name}`, "success");
+    setPreviewVersion(null); // Close modal
   };
 
   const deleteMenuSnapshot = (id) => {
@@ -4792,18 +4942,49 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* --- 2. VERSION HISTORY LIST (Only shows if versions exist) --- */}
+                          {/* --- 2. VERSION HISTORY LIST --- */}
                           {formData.menuVersions && formData.menuVersions.length > 0 && (
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4">
-                                  <span className="text-xs font-bold text-slate-500 uppercase mb-2 block">版本紀錄 (Version History)</span>
-                                  <div className="flex gap-2 overflow-x-auto pb-2">
+                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 animate-in fade-in">
+                                  <div className="flex justify-between items-center mb-2">
+                                      <span className="text-xs font-bold text-slate-500 uppercase flex items-center">
+                                          <History size={14} className="mr-1"/> 版本紀錄 (Version History)
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                          {formData.menuVersions.length} Saved
+                                      </span>
+                                  </div>
+                                  
+                                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
                                       {formData.menuVersions.map(v => (
-                                          <div key={v.id} className="flex-shrink-0 bg-white border border-slate-300 rounded px-3 py-2 text-xs flex flex-col gap-1 shadow-sm min-w-[120px]">
-                                              <div className="font-bold text-slate-700">{v.name}</div>
-                                              <div className="text-slate-400">{v.data.length} Items</div>
-                                              <div className="flex gap-1 mt-1">
-                                                  <button type="button" onClick={() => restoreMenuSnapshot(v)} className="flex-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded py-1 font-bold border border-emerald-100">還原</button>
-                                                  <button type="button" onClick={() => deleteMenuSnapshot(v.id)} className="px-2 text-slate-400 hover:text-red-500"><X size={12}/></button>
+                                          <div key={v.id} className="flex-shrink-0 bg-white border border-slate-300 rounded-lg p-3 text-xs flex flex-col gap-2 shadow-sm min-w-[140px] group hover:border-blue-400 transition-colors">
+                                              <div>
+                                                  <div className="font-bold text-slate-800 text-sm truncate" title={v.name}>{v.name}</div>
+                                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                                      {new Date(v.id).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {v.data.length} Items
+                                                  </div>
+                                              </div>
+                                              
+                                              <div className="flex gap-2 mt-auto pt-2 border-t border-slate-100">
+                                                  {/* PREVIEW / RESTORE BUTTON */}
+                                                  <button 
+                                                      type="button" 
+                                                      onClick={() => setPreviewVersion(v)} // ✅ Opens Modal
+                                                      className="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded py-1.5 font-bold border border-blue-100 transition-colors flex items-center justify-center"
+                                                  >
+                                                      <Eye size={12} className="mr-1"/> 查看
+                                                  </button>
+                                                  
+                                                  {/* DELETE BUTTON */}
+                                                  <button 
+                                                      type="button" 
+                                                      onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          if(confirm('確定刪除此版本?')) deleteMenuSnapshot(v.id);
+                                                      }} 
+                                                      className="px-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                  >
+                                                      <Trash2 size={12}/>
+                                                  </button>
                                               </div>
                                           </div>
                                       ))}
@@ -6107,8 +6288,13 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                          setPrintMode('MENU_CONFIRM');
-                          setTimeout(() => window.print(), 100);
+                          // Check if there are multiple menus
+                          if (formData.menus && formData.menus.length > 1) {
+                              setIsMenuSelectOpen(true); // Open selector
+                          } else {
+                              // If only 1 menu, print directly
+                              handleMenuPrintSelection('all');
+                          }
                       }}
                       className="px-3 py-2 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg font-medium flex items-center border border-violet-200 text-sm whitespace-nowrap ml-2"
                     >
@@ -6178,15 +6364,31 @@ export default function App() {
           initialMessage={templateMessage} // 傳入模板
         />
       )}
+      {/* ✅ PASTE THE CODE HERE ✅ */}
+      {/* Version Preview Modal */}
+      <VersionPreviewModal 
+          isOpen={!!previewVersion} 
+          onClose={() => setPreviewVersion(null)} 
+          version={previewVersion} 
+          onRestore={restoreMenuSnapshot} 
+      />
+
+      {/* Menu Selector Modal */}
+      <MenuPrintSelector 
+        isOpen={isMenuSelectOpen} 
+        onClose={() => setIsMenuSelectOpen(false)} 
+        menus={formData.menus || []} 
+        onSelect={handleMenuPrintSelection} 
+      />
 
       <div className="print-only">
-        {/* FIX: Remove the '&&' check so it renders for both 'EO' and 'BRIEFING' modes */}
-        {/* Pass printMode as a prop so the component knows which layout to show */}
-        <PrintableEO data={formData} printMode={printMode} />
+        {/* Use tempPrintData if available (for specific prints), otherwise default to formData */}
+        <PrintableEO data={tempPrintData || formData} printMode={printMode} />
       </div>
 
       {/* ======================================================== */}
 
     </>
   );
+  
 }

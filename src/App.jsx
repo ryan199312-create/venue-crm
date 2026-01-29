@@ -1,6 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+// Helpers
+import ScrollToTop from './ScrollToTop'; // <--- IMPORT THIS
+
 // Pages
 import WebsiteLayout from './WebsiteLayout';
 import Home from './Home';
@@ -10,14 +13,16 @@ import VMS from './VMS';
 export default function App() {
   return (
     <Router>
+      <ScrollToTop /> {/* <--- ADD THIS LINE HERE */}
       <Routes>
         
         {/* PUBLIC WEBSITE ROUTES */}
         <Route element={<WebsiteLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/weddings" element={<Weddings />} />
-          {/* Add more pages here later: */}
-          {/* <Route path="/corporate" element={<Corporate />} /> */}
+          {/* You can map /corporate and /dining to Home for now if you haven't made those pages yet */}
+          <Route path="/corporate" element={<Navigate to="/" replace />} /> 
+          <Route path="/dining" element={<Navigate to="/" replace />} />
         </Route>
 
         {/* ADMIN ROUTE */}

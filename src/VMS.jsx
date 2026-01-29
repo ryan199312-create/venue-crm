@@ -615,13 +615,13 @@ const LocationSelector = ({ formData, setFormData, className = "" }) => {
       </div>
       <input 
         type="text" 
+        name="locationOther"       // Identifies the field
+        autoComplete="off"         // Tells browser NOT to autofill
         placeholder="其他位置 (Other)" 
         value={formData.locationOther || ''}
         onChange={handleOtherChange}
         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none"
       />
-      {/* Debug: confirm the string is clean */}
-      {/* <p className="text-[10px] text-slate-400 mt-1">Preview: {formData.venueLocation}</p> */}
     </div>
   );
 };
@@ -1153,8 +1153,9 @@ const PrintableEO = ({ data, printMode }) => {
             </table>
         </div>
 
-        {/* Totals Section */}
-        <div className="flex justify-end mb-6">
+{/* Totals Section & Floor Plan (Side-by-Side) */}
+{/* Totals Section (Restored to Right Side) */}
+        <div className="flex justify-end mb-6 break-inside-avoid">
             <div className="w-1/2 space-y-2">
                 <div className="flex justify-between text-xs text-slate-600">
                     <span>Subtotal</span>
@@ -1186,9 +1187,9 @@ const PrintableEO = ({ data, printMode }) => {
                         </div>
                         <div className="space-y-1 bg-slate-50 p-3 rounded border border-slate-100">
                             {[
-                                { label: '1st Deposit', date: data.deposit1Date,amount: data.deposit1, },
-                                { label: '2nd Deposit', date: data.deposit2Date,amount: data.deposit2, },
-                                { label: '3rd Deposit', date: data.deposit3Date,amount: data.deposit3, },
+                                { label: '1st Deposit', date: data.deposit1Date, amount: data.deposit1, },
+                                { label: '2nd Deposit', date: data.deposit2Date, amount: data.deposit2, },
+                                { label: '3rd Deposit', date: data.deposit3Date, amount: data.deposit3, },
                             ].map((item, idx) => (
                                 Number(item.amount) > 0 && (
                                     <div key={idx} className="flex justify-between items-center text-xs">
@@ -1203,7 +1204,7 @@ const PrintableEO = ({ data, printMode }) => {
                                 )
                             ))}
 
-                            {/* ✅ FINAL BALANCE ROW (UPDATED WITH DATE) */}
+                            {/* Final Balance */}
                             <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 mt-1">
                                 <span className="text-slate-600 font-bold">Final Balance</span>
                                 <div className="text-right">
@@ -1220,6 +1221,8 @@ const PrintableEO = ({ data, printMode }) => {
                 )}
             </div>
         </div>
+
+
 
         {/* Footer */}
         <div className="mt-auto pt-12 flex justify-between items-end">
@@ -2598,20 +2601,72 @@ const PrintableEO = ({ data, printMode }) => {
 
       {/* PAGE 3: KITCHEN COPY */}
       <div className="print-page">
-        <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-6">
-           <div><h1 className="text-5xl font-black tracking-tight uppercase">廚房出品單</h1><p className="text-2xl font-bold mt-2">{cleanLocation(data.venueLocation) || '未定位置'}</p></div>
-           <div className="text-right"><div className="inline-block bg-black text-white px-6 py-2 text-2xl font-bold rounded mb-2">KITCHEN</div><div className="text-3xl font-mono font-bold">{formatDateWithDay(data.date)}</div><div className="text-5xl font-black text-red-600 mt-4 border-4 border-red-600 px-4 py-2 rounded-lg inline-block bg-white shadow-sm">{data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}</div></div>
+        {/* Compact Header */}
+        <div className="flex justify-between items-start border-b-4 border-black pb-2 mb-3">
+          <div>
+              <h1 className="text-3xl font-black tracking-tight uppercase">廚房出品單</h1>
+              <div className="text-xl font-mono font-bold">{data.eventName}</div>
+              
+            <div className="flex gap-3 mb-4">
+              <div className="flex-1 bg-slate-100 p-2 border-l-8 border-black">
+                <span className="text-xl font-bold mt-1">{cleanLocation(data.venueLocation) || '未定位置'}</span>
+              </div>
+              <div className="flex-1 bg-slate-100 p-2 border-l-8 border-black">
+                <span className="block text-slate-500 text-xs font-bold uppercase">席數</span>
+                <span className="block text-3xl font-black leading-none">{data.tableCount || '-'}</span>
+              </div>
+              <div className="flex-1 bg-slate-100 p-2 border-l-8 border-slate-600">
+                <span className="block text-slate-500 text-xs font-bold uppercase">人數</span>
+                <span className="block text-3xl font-black leading-none">{data.guestCount || '-'}</span>
+              </div>
+            </div>
+          </div>
+
+           <div className="text-right">
+              <div className="inline-block bg-black text-white px-3 py-1 text-lg font-bold rounded mb-1">KITCHEN</div>
+              <div className="text-xl font-mono font-bold">{formatDateWithDay(data.date)}</div>
+              <div className="text-3xl font-black text-red-600 mt-1 border-2 border-red-600 px-2 py-1 rounded inline-block">
+                 {data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}
+              </div>
+           </div>
         </div>
-        <div className="flex gap-4 mb-8">
-           <div className="flex-1 bg-slate-100 p-6 border-l-[12px] border-slate-800"><span className="block text-slate-500 text-lg font-bold uppercase">活動</span><span className="block text-3xl font-bold mt-1">{data.eventName}</span></div>
-           <div className="flex-1 bg-slate-100 p-6 border-l-[12px] border-black"><span className="block text-slate-500 text-lg font-bold uppercase">席數</span><span className="block text-6xl font-black mt-1">{data.tableCount || '-'}</span></div>
-           <div className="flex-1 bg-slate-100 p-6 border-l-[12px] border-slate-600"><span className="block text-slate-500 text-lg font-bold uppercase">人數</span><span className="block text-6xl font-black mt-1">{data.guestCount || '-'}</span></div>
+
+        {/* Squeezed Stats Row */}
+
+
+        {/* Menu (Kept Large) */}
+        <div className="mb-4 p-4 border-4 border-black rounded-xl">
+           <div className="flex justify-between items-center mb-4 border-b-2 border-gray-300 pb-2">
+              <h3 className="text-2xl font-bold">餐單內容</h3>
+              <span className="text-xl font-bold bg-gray-200 px-3 py-1 rounded">{data.servingStyle}</span>
+           </div>
+           <div className="space-y-6">
+              {data.menus && data.menus.length > 0 ? (
+                 data.menus.map((menu, idx) => (
+                    <div key={idx}>
+                       {menu.title && <h4 className="text-2xl font-bold underline mb-2">{menu.title}</h4>}
+                       {/* Main Menu Text stays large (text-3xl) */}
+                       <p className="text-3xl font-semibold leading-relaxed whitespace-pre-wrap">{onlyChinese(menu.content)}</p>
+                    </div>
+                 ))
+              ) : (
+                 <p className="text-3xl font-semibold leading-relaxed">{onlyChinese(data.menuType)}</p>
+              )}
+           </div>
         </div>
-        <div className="mb-8 p-6 border-4 border-black rounded-xl">
-           <div className="flex justify-between items-center mb-6 border-b-2 border-gray-300 pb-4"><h3 className="text-4xl font-bold">餐單內容</h3><span className="text-2xl font-bold bg-gray-200 px-4 py-2 rounded">{data.servingStyle}</span></div>
-           <div className="space-y-8">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="text-3xl font-bold underline mb-3">{menu.title}</h4>}<p className="text-3xl font-semibold leading-relaxed whitespace-pre-wrap">{onlyChinese(menu.content)}</p></div>))) : (<p className="text-3xl font-semibold leading-relaxed">{onlyChinese(data.menuType)}</p>)}</div>
-        </div>
-        {(data.specialMenuReq || data.allergies) && (<div className="mb-8 p-6 border-8 border-red-600 rounded-xl bg-red-50"><h3 className="text-3xl font-black text-red-600 mb-4 underline flex items-center"><AlertTriangle size={48} className="mr-4"/> 特殊飲食 & 過敏</h3><p className="text-4xl font-bold text-red-800 whitespace-pre-wrap leading-snug">{data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}</p></div>)}
+
+        {/* Allergy (Compact but High Visibility) */}
+        {(data.specialMenuReq || data.allergies) && (
+           <div className="mb-4 p-3 border-4 border-red-600 rounded-lg bg-red-50">
+              <h3 className="text-xl font-black text-red-600 mb-1 underline flex items-center">
+                 <AlertTriangle size={24} className="mr-2"/> 特殊飲食 & 過敏
+              </h3>
+              {/* Reduced from text-4xl to text-xl, but kept bold/red */}
+              <p className="text-xl font-bold text-red-800 whitespace-pre-wrap leading-snug">
+                 {data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}
+              </p>
+           </div>
+        )}
       </div>
     </div>
   );

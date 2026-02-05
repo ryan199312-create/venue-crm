@@ -2443,7 +2443,6 @@ const PrintableEO = ({ data, printMode }) => {
                        <td className="text-center px-1">{data.drinksQty}</td>
                        <td className="text-right px-1 font-mono">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td>
                     </tr>
-                    
                     {(data.customItems || []).map((item, i) => (
                        <tr key={`c-${i}`} className="border-b border-slate-100">
                           <td className="py-1 px-1">{item.name}</td>
@@ -6452,4 +6451,3 @@ const openEditModal = (event) => {
     </>
   );
   
-}

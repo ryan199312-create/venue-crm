@@ -110,17 +110,22 @@ const DEPARTMENTS = [
   { key: 'dimsum', label: '點心 (Dim Sum)' },
   { key: 'roast', label: '燒味 (Roast)' },
   { key: 'bar', label: '水吧 (Bar)' },
-  { key: 'liquor', label: '洋酒 (Liquor)' },
-  { key: 'floor', label: '樓面 (Floor/Venue)' },
+  { key: 'tea', label: '茶芥 (Tea)' },
+  { key: 'wine', label: '紅酒 (Wine)' },
   { key: 'other', label: '其他 (Other)' }
 ];
 
+// Helpers for UI Filtering
+const FOOD_DEPTS = ['kitchen', 'dimsum', 'roast'];
+const DRINK_DEPTS = ['bar', 'tea', 'wine'];
+
 const calculateDepartmentSplit = (data) => {
+  // 1. Initialize with NEW keys
   const split = {
-    kitchen: 0, dimsum: 0, roast: 0, bar: 0, liquor: 0, floor: 0, other: 0
+    kitchen: 0, dimsum: 0, roast: 0, bar: 0, tea: 0, wine: 0, other: 0
   };
 
-  // 1. Process Menus
+  // 2. Process Menus
   (data.menus || []).forEach(m => {
     const qty = parseFloat(m.qty) || 1;
     const allocation = m.allocation || {};
@@ -129,20 +134,20 @@ const calculateDepartmentSplit = (data) => {
     let hasAllocation = false;
     Object.keys(allocation).forEach(deptKey => {
        const amount = parseFloat(allocation[deptKey]) || 0;
+       // Only add if the key exists in our new definition (filters out old keys like 'floor')
        if (amount > 0 && split[deptKey] !== undefined) {
           split[deptKey] += amount * qty;
           hasAllocation = true;
        }
     });
 
-    // If NO allocation defined, dump strictly into Kitchen (Food) or Floor (if price > 0)
-    // You can customize this fallback logic
+    // If NO allocation defined, dump strictly into Kitchen (Food)
     if (!hasAllocation) {
        split.kitchen += (parseFloat(m.price) || 0) * qty; 
     }
   });
 
-  // 2. Process Drinks
+  // 3. Process Drinks
   const dQty = parseFloat(data.drinksQty) || 1;
   const dAllocation = data.drinkAllocation || {};
   let dHasAllocation = false;
@@ -156,47 +161,44 @@ const calculateDepartmentSplit = (data) => {
   });
   
   if (!dHasAllocation) {
-     // Default drinks to Bar
-     split.bar += (parseFloat(data.drinksPrice) || 0) * dQty;
+      // Default drinks to Bar if not allocated
+      split.bar += (parseFloat(data.drinksPrice) || 0) * dQty;
   }
 
-  // 3. Process Custom Items
+  // 4. Process Custom Items
   (data.customItems || []).forEach(item => {
-     const qty = parseFloat(item.qty) || 1;
-     const total = (parseFloat(item.price) || 0) * qty;
-     const cat = item.category || 'other';
-     if (split[cat] !== undefined) {
-        split[cat] += total;
-     } else {
-        split.other += total;
-     }
+      const qty = parseFloat(item.qty) || 1;
+      const total = (parseFloat(item.price) || 0) * qty;
+      const cat = item.category || 'other';
+      if (split[cat] !== undefined) {
+         split[cat] += total;
+      } else {
+         split[other] += total;
+      }
   });
-
-  // 4. Service Charge -> Usually goes to Floor/Company, but let's keep it separate or put in Floor
-  // For this accounting view, we usually track Service Charge separately, but if you want to book it:
-  // split.floor += calculateServiceCharge(data); <--- Optional
 
   return split;
 };
 
 // ==========================================
-// SECTION 2: HELPER FUNCTIONS
+// SECTION 2: HELPER FUNCTIONS (MUST BE HERE)
 // ==========================================
 
 const formatMoney = (val) => {
-  if (!val) return '0';
+  if (!val && val !== 0) return '0'; // Handle null/undefined but allow 0
   // Remove existing commas to parse correctly
   const clean = val.toString().replace(/,/g, '');
   const number = parseFloat(clean);
   
   if (isNaN(number)) return '0';
   
-  // ✅ UPDATED: Round to nearest integer to remove decimals
+  // Round to nearest integer to remove decimals
   return Math.round(number).toLocaleString('en-US');
 };
 
 const parseMoney = (val) => {
-  return val.replace(/,/g, '');
+  if (!val) return '';
+  return val.toString().replace(/,/g, '');
 };
 
 const formatDateWithDay = (dateStr) => {
@@ -206,69 +208,85 @@ const formatDateWithDay = (dateStr) => {
   return `${dateStr} (${day})`;
 };
 
+const safeFloat = (val) => {
+  if (!val) return 0;
+  // Convert to string, strip commas, then parse
+  const clean = val.toString().replace(/,/g, '');
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 const calculateTotalAmount = (data) => {
   let baseForSC = 0;
+  let subTotal = 0;
 
   // 1. Menus
-  let menusTotal = 0;
   (data.menus || []).forEach(m => {
-    const p = parseFloat(m.price) || 0;
-    const q = parseFloat(m.qty) || 1; 
+    const p = safeFloat(m.price);
+    const q = safeFloat(m.qty);
     const line = p * q;
-    menusTotal += line;
-    if (m.applySC !== false) baseForSC += line; 
+    subTotal += line;
+    // Default to TRUE if undefined
+    if (m.applySC !== false) baseForSC += line;
   });
 
-  // NEW: Plating Fee Calculation (位上服務費)
-  let platingTotal = 0;
+  // Plating Fee
   if (data.servingStyle === '位上') {
-      const pFee = parseFloat(data.platingFee) || 0;
-      const tables = parseFloat(data.tableCount) || 0;
-      platingTotal = pFee * tables;
+      const pFee = safeFloat(data.platingFee);
+      const tables = safeFloat(data.tableCount);
+      const platingTotal = pFee * tables;
+      subTotal += platingTotal;
       
-      // CHECK TOGGLE: Only add to base if applySC is true (or undefined/default)
       if (data.platingFeeApplySC !== false) {
           baseForSC += platingTotal;
       }
   }
 
   // 2. Drinks
-  const dPrice = parseFloat(data.drinksPrice) || 0;
-  const dQty = parseFloat(data.drinksQty) || 1; 
+  const dPrice = safeFloat(data.drinksPrice);
+  const dQty = safeFloat(data.drinksQty);
   const drinksTotal = dPrice * dQty;
+  subTotal += drinksTotal;
+  
   if (data.drinksApplySC !== false) baseForSC += drinksTotal;
 
   // 3. Custom Items
-  let customTotal = 0;
   (data.customItems || []).forEach(item => {
-    const p = parseFloat(item.price) || 0;
-    const q = parseFloat(item.qty) || 1;
+    const p = safeFloat(item.price);
+    const q = safeFloat(item.qty);
     const amt = p * q;
-    customTotal += amt;
+    subTotal += amt;
+    // Default to FALSE usually, or explicit check
     if (item.applySC) baseForSC += amt;
   });
 
-  // 4. Service Charge
+  // 4. Service Charge Calculation (FIXED LOGIC)
   let sc = 0;
   if (data.enableServiceCharge !== false) {
       const scStr = (data.serviceCharge || '10%').toString().trim();
-      const val = parseFloat(scStr.replace(/[^0-9.]/g, '')) || 0;
+      
+      // Remove commas for safety
+      const cleanVal = parseFloat(scStr.replace(/,/g, '').replace(/[^0-9.]/g, '')) || 0;
       const isExplicitPercent = scStr.includes('%');
 
       if (isExplicitPercent) {
-          sc = baseForSC * (val / 100);
+          // Case A: User typed "%" (e.g. "12.5%", "10%") -> Always Percentage
+          sc = baseForSC * (cleanVal / 100);
       } else {
-          if (val > 0 && val <= 100) {
-             sc = baseForSC * (val / 100);
+          // Case B: No "%" symbol. Use Threshold Logic.
+          // If value <= 100, assume Percentage (e.g. 10, 12.5, 50).
+          // If value > 100, assume Fixed Amount (e.g. 500, 2000).
+          if (cleanVal > 0 && cleanVal <= 100) {
+             sc = baseForSC * (cleanVal / 100);
           } else {
-             sc = val;
+             sc = cleanVal;
           }
       }
   }
-  const disc = parseFloat(data.discount) || 0;
   
-  // Add platingTotal to the final sum
-  return Math.round(menusTotal + platingTotal + drinksTotal + customTotal + sc - disc);
+  const disc = safeFloat(data.discount);
+  
+  return Math.round(subTotal + sc - disc);
 };
 
 // ==========================================
@@ -772,6 +790,34 @@ const PrintableEO = ({ data, printMode }) => {
   const equipmentMap = { podium: '講台', mic: '咪', micStand: '咪架', cake: '蛋糕', nameSign: '禮堂字牌' };
   const decorationMap = { ceremonyService: '證婚桌', ceremonyChairs: '證婚椅子', flowerPillars: '花柱佈置', guestBook: '簽名冊', easel: '畫架', mahjong: '麻雀枱', invites: '喜帖', wreaths: '花圈' };
   const avMap = { ledBig: '大禮堂LED', projBig: '大禮堂Projector', ledSmall: '小禮堂LED', projSmall: '小禮堂Projector', spotlight: '聚光燈', movingHead: '電腦燈', entranceLight: '進場燈', tv60v: '60"TV(直)', tv60h: '60"TV(橫)', mic: '咪', speaker: '喇叭' };
+  
+  // --- NEW: English Date Formatter ---
+  const formatDateEn = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('en-GB', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric', 
+      weekday: 'short' 
+    });
+  };
+
+  // --- NEW: Venue Translation Helper ---
+  const getVenueEn = (loc) => {
+    const clean = cleanLocation(loc);
+    const map = {
+        '紅區': 'Red Zone', 'Red': 'Red Zone',
+        '黃區': 'Yellow Zone', 'Yellow': 'Yellow Zone',
+        '綠區': 'Green Zone', 'Green': 'Green Zone',
+        '藍區': 'Blue Zone', 'Blue': 'Blue Zone',
+        '全場': 'Whole Venue'
+    };
+    // Check if the location contains any of the keys
+    for (let key in map) {
+        if (clean.includes(key)) return `${clean} (${map[key]})`;
+    }
+    return clean; // Return original if no match
+  };
 
   // Helper: Date
   const formatDateWithDay = (dateStr) => {
@@ -832,85 +878,102 @@ const PrintableEO = ({ data, printMode }) => {
   const discountVal = parseFloat(data.discount) || 0;
   const grandTotal = subtotal + serviceChargeVal - discountVal;
 
-  // --- Allocation Logic ---
+// --- Allocation Logic (Strict Mode) ---
   const getDetailedAllocation = () => {
     const allocation = {};
+    
+    // 1. Initialize Standard Departments
     DEPARTMENTS.forEach(dept => {
         allocation[dept.key] = { label: dept.label, total: 0, items: [] };
     });
-    if(!allocation['other']) allocation['other'] = { label: '其他 (Other)', total: 0, items: [] };
+    
+    // 2. Add 'Other' and 'Unallocated' Buckets
+    allocation['other'] = { label: '其他 (Other)', total: 0, items: [] };
+    allocation['unallocated'] = { 
+        label: '⚠️ 未分拆 (Unallocated)', 
+        total: 0, 
+        items: [], 
+        isError: true // Flag for styling
+    };
 
     const addItem = (key, name, subLabel, qty, unitPrice, totalAmount) => {
-        if(totalAmount === 0) return;
+        if(Math.abs(totalAmount) < 0.01) return;
+        // Map to bucket, fallback to 'other' if key missing
         let group = allocation[key] ? key : 'other';
         allocation[group].total += totalAmount;
         allocation[group].items.push({ name, subLabel, qty: parseFloat(qty), unit: parseFloat(unitPrice), amount: totalAmount });
     };
 
-    // 1. Menus
+    // --- A. Process Menus ---
     (data.menus || []).forEach(m => {
         const qty = parseFloat(m.qty) || 1;
         const price = parseFloat(m.price) || 0;
         const totalLineAmount = price * qty;
 
+        // If manual allocation exists
         if (m.allocation && Object.keys(m.allocation).length > 0) {
-            let nonKitchenAllocated = 0;
+            let allocatedTotal = 0;
+            
+            // 1. Add Explicit Allocations
             Object.entries(m.allocation).forEach(([dept, unitVal]) => {
-                if (dept !== 'kitchen') {
-                    const val = parseFloat(unitVal) || 0;
-                    if (val !== 0) {
-                        const lineAmt = val * qty;
-                        nonKitchenAllocated += lineAmt;
-                        const deptObj = DEPARTMENTS.find(d => d.key === dept);
-                        // Fix: Prevent crash if deptObj is undefined
-                        const deptLabel = deptObj ? deptObj.label.split(' ')[0] : 'Unknown';
-                        addItem(dept, m.title, deptLabel, qty, val, lineAmt);
-                    }
+                const val = parseFloat(unitVal) || 0;
+                if (val !== 0) {
+                    const lineAmt = val * qty;
+                    allocatedTotal += lineAmt;
+                    const deptLabel = DEPARTMENTS.find(d => d.key === dept)?.label.split(' ')[0] || dept;
+                    addItem(dept, m.title, deptLabel, qty, val, lineAmt);
                 }
             });
-            const kitchenTotal = totalLineAmount - nonKitchenAllocated;
-            if (kitchenTotal !== 0) {
-                const unitKitchen = price - (nonKitchenAllocated / qty);
-                addItem('kitchen', m.title, 'Balance', qty, unitKitchen, kitchenTotal);
+
+            // 2. Handle Remainder -> Send to UNALLOCATED (Not Kitchen)
+            const remainder = totalLineAmount - allocatedTotal;
+            if (Math.abs(remainder) > 1) { // Tolerance for float math
+                const unitRemainder = price - (allocatedTotal / qty);
+                addItem('unallocated', m.title, 'Balance', qty, unitRemainder, remainder);
             }
         } else {
+            // No allocation defined -> Default to Kitchen
             addItem('kitchen', m.title, '', qty, price, totalLineAmount);
         }
     });
 
-    // 2. Plating Fee
-    if (platingTotal > 0) {
-        addItem('kitchen', '位上服務費', `${data.tableCount}席 @ $${data.platingFee}`, data.tableCount, data.platingFee, platingTotal);
+    // --- B. Plating Fee ---
+    if (data.servingStyle === '位上') {
+        const pFee = parseFloat(data.platingFee) || 0;
+        const pQty = parseFloat(data.tableCount) || 0;
+        if (pFee > 0) {
+            addItem('kitchen', '位上服務費', `${pQty}席`, pQty, pFee, pFee * pQty);
+        }
     }
 
-    // 3. Drinks
+    // --- C. Drinks ---
     const dQty = parseFloat(data.drinksQty) || 1;
     const dPrice = parseFloat(data.drinksPrice) || 0;
     const dTotal = dPrice * dQty;
     const dName = data.drinksPackage || 'Drinks Package';
     
     if (data.drinkAllocation && Object.keys(data.drinkAllocation).length > 0) {
-         let nonBarAllocated = 0;
+         let allocatedTotal = 0;
          Object.entries(data.drinkAllocation).forEach(([dept, unitVal]) => {
-             if (dept !== 'bar') {
-                 const val = parseFloat(unitVal) || 0;
-                 if (val !== 0) {
-                     const lineAmt = val * dQty;
-                     nonBarAllocated += lineAmt;
-                     addItem(dept, dName, dept, dQty, val, lineAmt);
-                 }
+             const val = parseFloat(unitVal) || 0;
+             if (val !== 0) {
+                 const lineAmt = val * dQty;
+                 allocatedTotal += lineAmt;
+                 addItem(dept, dName, dept, dQty, val, lineAmt);
              }
          });
-         const barTotal = dTotal - nonBarAllocated;
-         if (barTotal !== 0) {
-             const unitBar = dPrice - (nonBarAllocated / dQty);
-             addItem('bar', dName, 'Water Bar', dQty, unitBar, barTotal);
+         
+         // Handle Remainder -> Unallocated
+         const remainder = dTotal - allocatedTotal;
+         if (Math.abs(remainder) > 1) {
+             const unitRemainder = dPrice - (allocatedTotal / dQty);
+             addItem('unallocated', dName, 'Balance', dQty, unitRemainder, remainder);
          }
     } else {
          addItem('bar', dName, '', dQty, dPrice, dTotal);
     }
 
-    // 4. Custom Items
+    // --- D. Custom Items ---
     (data.customItems || []).forEach(i => {
         const qty = parseFloat(i.qty) || 1;
         const price = parseFloat(i.price) || 0;
@@ -935,7 +998,13 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     </div>
   );
-
+  const getServingStyleLabel = () => {
+      let text = data.servingStyle;
+      if (data.servingStyle === '位上' && data.enableHandCarry) {
+          text += ` (手捧服務: ${data.handCarryStaffQty || 0}人)`;
+      }
+      return text;
+  };
   const EventSummary = () => (
     <div className="flex flex-wrap bg-slate-50 p-2 rounded mb-6 border border-slate-100">
         <DetailRow label="日期 (Date)" value={formatDateWithDay(data.date)} widthClass="w-1/4" highlight={true} />
@@ -945,7 +1014,13 @@ const PrintableEO = ({ data, printMode }) => {
         <DetailRow label="起菜時間" value={data.servingTime} widthClass="w-1/4" highlight={true} />
         <DetailRow label="席數" value={`${data.tableCount || 0} 席`} widthClass="w-1/4" />
         <DetailRow label="人數" value={`${data.guestCount || 0} 人`} widthClass="w-1/4" />
-        <DetailRow label="類型" value={data.eventType} widthClass="w-1/4" />
+        <DetailRow 
+            label="類型 / 上菜" 
+            value={`${data.eventType} / ${data.servingStyle}${data.enableHandCarry ? ` + 酒會手捧(${data.handCarryStaffQty || 0}人)` : ''}`} 
+            widthClass="w-1/4" 
+            highlight={data.enableHandCarry} 
+        />
+        
     </div>
   );
 
@@ -955,7 +1030,18 @@ const PrintableEO = ({ data, printMode }) => {
   if (printMode === 'BRIEFING') {
     return (
       <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm p-4">
-        <style>{`@media print { @page { margin: 5mm; size: A4; } }`}</style>
+        {/* ✅ UPDATED CSS FOOTER */}
+        <style>{`
+          @media print { 
+            @page { 
+              margin: 5mm; 
+              size: A4; 
+              @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+              @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+              @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+            } 
+          }
+        `}</style>
         <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
            <div>
               <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">FLOOR STAFF BRIEFING</div>
@@ -1028,8 +1114,20 @@ const PrintableEO = ({ data, printMode }) => {
     }
 
     return (
-      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 min-h-screen relative flex flex-col">
-        <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+        <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 min-h-screen relative flex flex-col">
+          {/* ✅ UPDATED CSS FOOTER */}
+          <style>{`
+            @media print { 
+              @page { 
+                margin: 10mm; 
+                size: A4; 
+                @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+                @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+                @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+              } 
+              body { -webkit-print-color-adjust: exact; } 
+            }
+          `}</style>
         
         {/* Header */}
         <div className="flex justify-between items-start border-b-4 pb-4 mb-6" style={{ borderColor: BRAND_COLOR }}>
@@ -1080,12 +1178,18 @@ const PrintableEO = ({ data, printMode }) => {
                 <div className="grid grid-cols-2 gap-y-1 text-xs">
                     <span className="text-slate-500">Event:</span>
                     <span className="font-bold text-slate-900">{data.eventName}</span>
+                    
+                    {/* ✅ UPDATED: English Date */}
                     <span className="text-slate-500">Date:</span>
-                    <span className="font-bold text-slate-900">{formatDateWithDay(data.date)}</span>
+                    <span className="font-bold text-slate-900">{formatDateEn(data.date)}</span>
+                    
                     <span className="text-slate-500">Time:</span>
                     <span className="font-bold text-slate-900">{data.startTime} - {data.endTime}</span>
+                    
+                    {/* ✅ UPDATED: English Venue */}
                     <span className="text-slate-500">Venue:</span>
-                    <span className="font-bold text-slate-900">{cleanLocation(data.venueLocation)}</span>
+                    <span className="font-bold text-slate-900">{getVenueEn(data.venueLocation)}</span>
+                    
                     <span className="text-slate-500">Guests:</span>
                     <span className="font-bold text-slate-900">{data.guestCount} Pax / {data.tableCount} Tables</span>
                 </div>
@@ -1232,10 +1336,12 @@ const PrintableEO = ({ data, printMode }) => {
                 2. Cheques should be made payable to "best wish investment limited".<br/>
                 3. This document is computer generated. No signature is required.
              </div>
-             <div className="w-1/3">
+             <div className="w-1/3 text-right">
                 <div className="border-b border-slate-800 mb-2"></div>
-                <p className="font-bold text-xs">Confirmed & Accepted by</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">{data.clientName}</p>
+                <p className="font-bold text-xs text-left">Confirmed & Accepted by</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 text-left">{data.clientName}</p>
+                {/* Visual Page Number for Screen view (Print view uses CSS) */}
+                <p className="text-[8px] text-slate-300 mt-4 no-print">Page 1 of 1</p>
              </div>
         </div>
       </div>
@@ -1280,14 +1386,19 @@ const PrintableEO = ({ data, printMode }) => {
     const grandTotal = subtotal + serviceChargeVal - discountVal;
 
     return (
-      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white min-h-screen relative flex flex-col text-xs leading-tight">
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 min-h-screen relative flex flex-col">
+        {/* ✅ UPDATED CSS FOOTER */}
         <style>{`
           @media print { 
-            @page { margin: 15mm; size: A4; } 
+            @page { 
+              margin: 10mm; 
+              size: A4; 
+              @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+              @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+              @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+            } 
             body { -webkit-print-color-adjust: exact; } 
-            .page-break { page-break-before: always; }
-            .legal-text { font-size: 8px; text-align: justify; line-height: 1.3; }
-            .legal-header { font-weight: bold; margin-top: 8px; margin-bottom: 2px; text-transform: uppercase; font-size: 9px; }
+            .page-number-fallback:after { content: counter(page); }
           }
         `}</style>
 
@@ -1308,7 +1419,7 @@ const PrintableEO = ({ data, printMode }) => {
             <div className="text-right">
                 <h1 className="text-2xl font-bold text-slate-800 uppercase tracking-widest mb-1">Banquet Agreement</h1>
                 <p className="text-xs font-bold text-slate-700">Agreement No: {data.orderId}</p>
-                <p className="text-xs text-slate-500">Date: {new Date().toLocaleDateString('en-GB')}</p>
+                <p className="text-xs text-slate-500">Date: {formatDateEn(new Date())}</p>
             </div>
         </div>
 
@@ -1334,13 +1445,15 @@ const PrintableEO = ({ data, printMode }) => {
                 </div>
                 <div className="p-2 border-r border-slate-300 border-b">
                     <span className="block text-[9px] text-slate-500 uppercase">Date & Time</span>
+                    {/* ✅ Updated Event Date */}
                     <span className="font-bold text-sm">
-                        {formatDateWithDay(data.date)} | {data.startTime} - {data.endTime}
+                        {formatDateEn(data.date)} | {data.startTime} - {data.endTime}
                     </span>
                 </div>
                 <div className="p-2 border-b border-slate-300">
                     <span className="block text-[9px] text-slate-500 uppercase">Venue & Attendance</span>
-                    <span className="font-bold text-sm">{cleanLocation(data.venueLocation)} | {data.tableCount} Tables / {data.guestCount} Pax</span>
+                    {/* ✅ Updated Bilingual Venue */}
+                    <span className="font-bold text-sm">{getVenueEn(data.venueLocation)} | {data.tableCount} Tables / {data.guestCount} Pax</span>
                 </div>
             </div>
         </div>
@@ -1638,16 +1751,23 @@ const PrintableEO = ({ data, printMode }) => {
 
     // 3. Render
     return (
-      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white min-h-screen relative flex flex-col text-xs leading-tight">
-        <style>{`
-          @media print { 
-            @page { margin: 15mm; size: A4; } 
-            body { -webkit-print-color-adjust: exact; } 
-            .page-break { page-break-before: always; }
-            .legal-text { font-size: 9px; text-align: justify; line-height: 1.4; }
-            .legal-header { font-weight: bold; margin-top: 10px; margin-bottom: 2px; font-size: 10px; }
-          }
-        `}</style>
+    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white min-h-screen relative flex flex-col text-xs leading-tight">
+      {/* ✅ UPDATED CSS FOOTER */}
+      <style>{`
+        @media print { 
+          @page { 
+            margin: 15mm; 
+            size: A4; 
+            @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+            @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+          } 
+          body { -webkit-print-color-adjust: exact; } 
+          .page-break { page-break-before: always; }
+          .legal-text { font-size: 9px; text-align: justify; line-height: 1.4; }
+          .legal-header { font-weight: bold; margin-top: 10px; margin-bottom: 2px; font-size: 10px; }
+        }
+      `}</style>
 
         {/* --- PAGE 1: PARTICULARS & DETAILS --- */}
         
@@ -1666,7 +1786,7 @@ const PrintableEO = ({ data, printMode }) => {
             <div className="text-right">
                 <h1 className="text-3xl font-bold text-slate-800 uppercase tracking-widest mb-1">宴會合約</h1>
                 <p className="text-xs font-bold text-slate-700">合約編號: {data.orderId}</p>
-                <p className="text-xs text-slate-500">日期: {new Date().toLocaleDateString('zh-HK')}</p>
+                <p className="text-xs text-slate-500">日期: {formatDateEn(new Date())}</p>
             </div>
         </div>
 
@@ -1692,13 +1812,15 @@ const PrintableEO = ({ data, printMode }) => {
                 </div>
                 <div className="p-2 border-r border-slate-300 border-b">
                     <span className="block text-[9px] text-slate-500">日期及時間 (Date & Time)</span>
+                    {/* ✅ Updated Event Date */}
                     <span className="font-bold text-sm">
-                        {formatDateWithDay(data.date)} | {data.startTime} - {data.endTime}
+                        {formatDateEn(data.date)} | {data.startTime} - {data.endTime}
                     </span>
                 </div>
                 <div className="p-2 border-b border-slate-300">
                     <span className="block text-[9px] text-slate-500">場地及人數 (Venue & Attendance)</span>
-                    <span className="font-bold text-sm">{cleanLocation(data.venueLocation)} | {data.tableCount} 席 / {data.guestCount} 人</span>
+                    {/* ✅ Updated Bilingual Venue */}
+                    <span className="font-bold text-sm">{getVenueEn(data.venueLocation)} | {data.tableCount} 席 / {data.guestCount} 人</span>
                 </div>
             </div>
         </div>
@@ -1971,7 +2093,7 @@ const PrintableEO = ({ data, printMode }) => {
     const BRAND_COLOR = '#A57C00'; 
     const totalDeposits = (Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0);
     
-    // Calculate Total Paid based on checkboxes
+    // Calculate Total Paid
     let totalPaid = 0;
     if (data.deposit1Received) totalPaid += Number(data.deposit1) || 0;
     if (data.deposit2Received) totalPaid += Number(data.deposit2) || 0;
@@ -1980,9 +2102,33 @@ const PrintableEO = ({ data, printMode }) => {
     
     const balanceDue = grandTotal - totalPaid;
 
+    // --- ✅ NEW: CALCULATE ACTUAL BALANCE DATE ---
+    let balanceDueDateDisplay = data.date; // Default to Event Date
+    if (data.balanceDueDateType === 'manual' && data.balanceDueDateOverride) {
+        balanceDueDateDisplay = data.balanceDueDateOverride;
+    } else if (data.balanceDueDateType === '10daysPrior' && data.date) {
+        const d = new Date(data.date);
+        d.setDate(d.getDate() - 10);
+        if (!isNaN(d.getTime())) {
+            balanceDueDateDisplay = d.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        }
+    }
+
     return (
-      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 min-h-screen relative flex flex-col text-xs leading-tight">
-        <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 min-h-screen relative flex flex-col text-xs leading-tight">
+      {/* ✅ UPDATED CSS FOOTER */}
+      <style>{`
+        @media print { 
+          @page { 
+            margin: 10mm; 
+            size: A4; 
+            @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+            @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+          } 
+          body { -webkit-print-color-adjust: exact; } 
+        }
+      `}</style>
         
         {/* Header */}
         <div className="flex justify-between items-start border-b-4 pb-4 mb-6" style={{ borderColor: BRAND_COLOR }}>
@@ -2001,7 +2147,7 @@ const PrintableEO = ({ data, printMode }) => {
                 <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">發票</h2>
                 <div className="text-right space-y-1">
                     <p className="text-xs"><span className="font-bold text-slate-600">Invoice No:</span> {data.orderId}</p>
-                    <p className="text-xs"><span className="font-bold text-slate-600">Date:</span> {new Date().toLocaleDateString('en-GB')}</p>
+                    <p className="text-xs"><span className="font-bold text-slate-600">Date:</span> {formatDateEn(new Date())}</p>
                 </div>
             </div>
         </div>
@@ -2021,9 +2167,11 @@ const PrintableEO = ({ data, printMode }) => {
                     <span className="text-slate-500">Event:</span>
                     <span className="font-bold">{data.eventName}</span>
                     <span className="text-slate-500">Date:</span>
-                    <span className="font-bold">{formatDateWithDay(data.date)}</span>
+                    {/* ✅ Updated Event Date */}
+                    <span className="font-bold">{formatDateEn(data.date)}</span>
                     <span className="text-slate-500">Venue:</span>
-                    <span className="font-bold">{cleanLocation(data.venueLocation)}</span>
+                    {/* ✅ Updated Bilingual Venue */}
+                    <span className="font-bold">{getVenueEn(data.venueLocation)}</span>
                     <span className="text-slate-500">Pax:</span>
                     <span className="font-bold">{data.guestCount} Pax / {data.tableCount} Tables</span>
                 </div>
@@ -2117,11 +2265,11 @@ const PrintableEO = ({ data, printMode }) => {
                                     </td>
                                 </tr>
                             ))}
-                            {/* Balance Line */}
+                            {/* Balance Line with ACTUAL DATE */}
                             <tr>
                                 <td className="py-1.5 px-3 font-bold text-slate-800">Final Balance</td>
                                 <td className="py-1.5 px-3 text-right font-mono font-bold">${formatMoney(Number(data.totalAmount) - totalDeposits)}</td>
-                                <td className="py-1.5 px-3 text-right text-slate-500">{data.balanceDueDateType === '10daysPrior' ? '10 Days Prior' : 'Event Day'}</td>
+                                <td className="py-1.5 px-3 text-right text-slate-500">{balanceDueDateDisplay}</td>
                                 <td className="py-1.5 px-3 text-center">
                                     {data.balanceReceived ? 
                                         <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">PAID</span> : 
@@ -2197,13 +2345,6 @@ const PrintableEO = ({ data, printMode }) => {
   }
 
   // ==========================================
-  // VIEW 7: STANDARD EO (DEFAULT)
-  // ==========================================
-  // ⛔️ CRITICAL: This MUST be the very last return. 
-  // Any "if" blocks must go ABOVE this.
-
-
-  // ==========================================
   // VIEW 8: MENU CONFIRMATION (SINGLE PAGE + BILINGUAL + CHECKBOX + DATE FIX)
   // ==========================================
   if (printMode === 'MENU_CONFIRM') {
@@ -2225,15 +2366,21 @@ const PrintableEO = ({ data, printMode }) => {
     };
 
     return (
-      // Main Container: Forces Single Page (h-screen) & Vertical Layout (flex-col)
-      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 h-screen flex flex-col justify-between overflow-hidden relative">
-        <style>{`
-            @media print { 
-                @page { margin: 5mm; size: A4; } 
-                body { -webkit-print-color-adjust: exact; } 
-                html, body { height: 100%; overflow: hidden; }
-            }
-        `}</style>
+    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 h-screen flex flex-col justify-between overflow-hidden relative">
+      {/* ✅ UPDATED CSS FOOTER */}
+      <style>{`
+        @media print { 
+          @page { 
+            margin: 5mm; 
+            size: A4; 
+            @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+            @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+          } 
+          body { -webkit-print-color-adjust: exact; } 
+          html, body { height: 100%; overflow: hidden; }
+        }
+      `}</style>
         
         {/* --- 1. HEADER (Compact) --- */}
         <div className="flex-shrink-0 flex justify-between items-start border-b border-slate-200 pb-2 mb-2">
@@ -2381,294 +2528,364 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     );
   }
-  return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
-      <style>{`@media print { body, html { height: auto !important; overflow: visible !important; } .no-print, aside, nav, button, .modal-overlay { display: none !important; } .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } @page { margin: 10mm; size: A4; } .break-after-page { page-break-after: always; break-after: page; display: block; height: 1px; width: 100%; margin: 0; } .print-page { page-break-inside: avoid; min-height: 280mm; position: relative; } }`}</style>
+  // ... inside PrintableEO ...
 
-      {/* PAGE 1: MANAGER COPY */}
-      <div className="print-page">
-        <Header title="活動訂單 (EO)" copyType="Manager Copy (Admin)" badgeColor="bg-blue-900" />
-        <EventSummary />
-        {/* ... Rest of Standard EO Code ... */}
-        <Section title="客戶資料 (Client Info)">
-           <DetailRow label="客戶姓名" value={data.clientName} />
-           <DetailRow label="電話" value={data.clientPhone} />
-           <DetailRow label="Email" value={data.clientEmail} />
-           <DetailRow label="公司/機構" value={data.companyName} />
-           <DetailRow label="銷售人員" value={data.salesRep} />
-           {data.secondaryContact && <DetailRow label="第二聯絡人" value={data.secondaryContact} />}
-           {data.secondaryPhone && <DetailRow label="第二電話" value={data.secondaryPhone} />}
-           {data.address && <DetailRow label="地址" value={data.address} widthClass="w-full" />}
-        </Section>
-        <Section title="餐飲安排 (F&B)">
-           <DetailRow label="上菜方式" value={data.servingStyle} widthClass="w-1/4" />
-           <DetailRow label="酒水安排" value={data.drinksPackage} widthClass="w-3/4" />
-           <div className="w-full px-2 mb-2 mt-2">
-              <span className="text-slate-500 text-[10px] block uppercase font-bold mb-1">餐單內容</span>
-              <div className="text-sm font-medium whitespace-pre-wrap leading-relaxed bg-slate-50 p-2 rounded border border-slate-100">{data.menus?.map(m => `${m.title}:\n${onlyChinese(m.content)}`).join('\n\n') || onlyChinese(data.menuType)}</div>
-           </div>
-           <DetailRow label="特殊要求 / 過敏" value={`${data.specialMenuReq || ''} ${data.allergies ? `/ ALLERGY: ${data.allergies}` : ''}`} widthClass="w-full" highlight={!!data.allergies}/>
-        </Section>
-        <Section title="費用明細 (Billing)">
-           <div className="w-full px-2">
-              <table className="w-full text-xs border-collapse mb-2">
-                 <thead>
-                    <tr className="border-b border-slate-300 bg-slate-50">
-                       <th className="text-left py-1 px-1">項目</th>
-                       <th className="text-right py-1 px-1">單價</th>
-                       <th className="text-center py-1 px-1">數量</th>
-                       <th className="text-right py-1 px-1">金額</th>
-                    </tr>
-                 </thead>
-                 <tbody>
-                    {(data.menus || []).map((m, i) => (
-                       <tr key={`m-${i}`} className="border-b border-slate-100">
-                          <td className="py-1 px-1">{m.title}</td>
-                          <td className="text-right px-1">${formatMoney(m.price)}</td>
-                          <td className="text-center px-1">{m.qty}</td>
-                          <td className="text-right px-1 font-mono">${formatMoney((m.price||0)*(m.qty||1))}</td>
-                       </tr>
-                    ))}
-                    {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (
-                        <tr className="border-b border-slate-100 bg-blue-50/30">
-                           <td className="py-1 px-1">位上服務費 (Plating Service Fee)</td>
-                           <td className="text-right px-1">${formatMoney(data.platingFee)}</td>
-                           <td className="text-center px-1">{data.tableCount}</td>
-                           <td className="text-right px-1 font-mono">${formatMoney(platingTotal)}</td>
-                        </tr>
-                    )}
-                    <tr className="border-b border-slate-100">
-                       <td className="py-1 px-1">酒水 ({data.drinksPackage || 'Standard'})</td>
-                       <td className="text-right px-1">${formatMoney(data.drinksPrice)}</td>
-                       <td className="text-center px-1">{data.drinksQty}</td>
-                       <td className="text-right px-1 font-mono">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td>
-                    </tr>
-                    {(data.customItems || []).map((item, i) => (
-                       <tr key={`c-${i}`} className="border-b border-slate-100">
-                          <td className="py-1 px-1">{item.name}</td>
-                          <td className="text-right px-1">${formatMoney(item.price)}</td>
-                          <td className="text-center px-1">{item.qty}</td>
-                          <td className="text-right px-1 font-mono">${formatMoney((item.price||0)*(item.qty||1))}</td>
-                       </tr>
-                    ))}
-                 </tbody>
-                 <tfoot>
-                    <tr><td colSpan="3" className="text-right pt-2 text-slate-500">小計 (Subtotal):</td><td className="text-right pt-2 font-mono">${formatMoney(subtotal)}</td></tr>
-                    <tr><td colSpan="3" className="text-right text-slate-500">服務費 ({scLabel}):</td><td className="text-right font-mono text-slate-500">+${formatMoney(serviceChargeVal)}</td></tr>
-                    <tr><td colSpan="3" className="text-right text-slate-500">折扣 (Discount):</td><td className="text-right font-mono text-red-500">-${formatMoney(discountVal)}</td></tr>
-                    <tr className="border-t border-slate-300"><td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (Total):</td><td className="text-right font-bold pt-1 font-mono text-sm">${formatMoney(data.totalAmount)}</td></tr>
-                    <tr><td colSpan="3" className="text-right text-slate-500">已收訂金:</td><td className="text-right text-slate-500 font-mono">-${formatMoney((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0))}</td></tr>
-                    <tr><td colSpan="3" className="text-right font-bold text-red-600">餘額 (Balance):</td><td className="text-right font-bold text-red-600 font-mono">${formatMoney(Number(data.totalAmount) - ((Number(data.deposit1)||0) + (Number(data.deposit2)||0) + (Number(data.deposit3)||0)))}</td></tr>
-                 </tfoot>
-              </table>
-           </div>
-        </Section>
-        
-        {/* REVENUE ALLOCATION - TABLE VIEW */}
-        <Section title="營收分配明細 (Detailed Revenue Allocation)" color="gray">
-            <div className="w-full px-2">
-                <table className="w-full text-xs border-collapse table-fixed">
-                    <colgroup>
-                        <col className="w-[15%]" />
-                        <col className="w-[40%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[5%]" />
-                    </colgroup>
-                    <thead>
-                        <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-600">
-                            <th className="text-left py-2 px-2">部門 (Dept)</th>
-                            <th className="text-left py-2 px-2">項目 (Item)</th>
-                            <th className="text-right py-2 px-2">單價 (Unit)</th>
-                            <th className="text-center py-2 px-2">數量 (Qty)</th>
-                            <th className="text-right py-2 px-2">總額 (Total)</th>
-                            <th className="text-right py-2 px-2">%</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {Object.values(detailedAlloc).map((dept, i) => (
-                            <React.Fragment key={i}>
-                                {dept.items.map((item, idx) => (
-                                    <tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-100" : ""}>
-                                        <td className="py-1 px-2 font-bold text-slate-700 align-top">
-                                            {idx === 0 ? dept.label : ''}
-                                        </td>
-                                        <td className="py-1 px-2 text-slate-600 align-top">
-                                            <span>{item.name}</span>
-                                            {item.subLabel && <span className="ml-2 text-[9px] bg-slate-100 text-slate-500 px-1 rounded">{item.subLabel}</span>}
-                                        </td>
-                                        <td className="py-1 px-2 text-right font-mono text-slate-500 align-top">
-                                            ${formatMoney(item.unit)}
-                                        </td>
-                                        <td className="py-1 px-2 text-center text-slate-500 align-top">
-                                            {item.qty}
-                                        </td>
-                                        <td className="py-1 px-2 text-right font-mono font-medium text-slate-800 align-top">
-                                            ${formatMoney(item.amount)}
-                                        </td>
-                                        <td className="py-1 px-2 text-right text-[10px] text-slate-400 align-top"></td>
-                                    </tr>
-                                ))}
-                                <tr className="bg-slate-50/50 border-b border-slate-200">
-                                    <td colSpan="4" className="py-1 px-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                        {dept.label.split(' ')[0]} Subtotal
-                                    </td>
-                                    <td className={`py-1 px-2 text-right font-mono font-bold border-t border-slate-300 ${dept.total === 0 ? 'text-slate-300' : 'text-slate-900'}`}>
-                                        ${formatMoney(dept.total)}
-                                    </td>
-                                    <td className={`py-1 px-2 text-right text-[10px] font-bold ${dept.total === 0 ? 'text-slate-300' : 'text-slate-900'}`}>
-                                        {subtotal > 0 ? ((dept.total / subtotal) * 100).toFixed(1) : 0}%
-                                    </td>
-                                </tr>
-                            </React.Fragment>
-                        ))}
-                    </tbody>
-                    <tfoot>
-                        <tr className="border-t-2 border-slate-800 bg-slate-100">
-                            <td colSpan="4" className="pt-2 pb-2 px-2 font-black text-right uppercase">
-                                營收總計 (Total Revenue)
-                            </td>
-                            <td className="pt-2 pb-2 px-2 text-right font-mono font-black text-sm">
-                                ${formatMoney(subtotal)}
-                            </td>
-                            <td className="pt-2 pb-2 px-2 text-right font-bold text-xs">
-                                100%
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </Section>
+  // ==========================================
+  // VIEW 7: STANDARD EO (FINAL - RUNDOWN & BUS ADDED)
+  // ==========================================
+  if (!printMode || printMode === 'EO') {
+    
+    const COPIES = [
+      { name: '行政存檔 (Manager Copy)', showBilling: false, showOps: true, showAllocation: false, color: 'bg-slate-800' },
+      { name: '會計帳務單 (Finance Copy)', showBilling: true, showOps: false, showAllocation: true, color: 'bg-emerald-700' },
+      { name: '樓面工作單 (Banquet Copy)', showBilling: false, showOps: true, showAllocation: false, color: 'bg-indigo-600' }
+    ];
 
-        <Section title="其他資訊 (Other Info)">
-           <DetailRow label="泊車" value={data.parkingInfo?.plates} widthClass="w-full" />
-           <DetailRow label="其他備註" value={data.otherNotes} widthClass="w-full" />
-        </Section>
-      </div>
-      <div className="break-after-page"></div>
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
+        <style>{`
+          @media print { 
+            body, html { height: auto !important; overflow: visible !important; background: white !important; } 
+            .no-print, aside, nav, button, .modal-overlay { display: none !important; } 
+            .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } 
+            
+            @page { 
+              margin: 10mm; 
+              size: A4; 
+              @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
+              @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+              @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
+            }
+            .page-break { page-break-after: always !important; display: block; height: 0; overflow: hidden; }
+            .print-page { position: relative; width: 100%; background: white; margin-bottom: 20px; } 
+            .break-inside-avoid { break-inside: avoid; }
+            .compact-table th, .compact-table td { padding: 3px 6px; border-bottom: 1px solid #e2e8f0; }
+            .compact-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; color: #64748b; }
+          }
+        `}</style>
 
-      {/* PAGE 2 & 3: SETUP & KITCHEN COPIES */}
-      <div className="print-page">
-        <Header title="活動指示單 (EO)" copyType="Setup & Logistics" badgeColor="bg-indigo-600" />
-        <EventSummary />
-        <Section title="A. 場地設置 (Venue Setup)" color="indigo">
-           <div className="flex flex-wrap w-full bg-slate-50 p-2 rounded mb-4 border border-slate-100">
-              <DetailRow label="檯布顏色" value={data.tableClothColor} />
-              <DetailRow label="椅套顏色" value={data.chairCoverColor} />
-              <DetailRow label="主家席" value={data.headTableColorType === 'custom' ? data.headTableCustomColor : '同客席'} />
-              <DetailRow label="新娘房" value={data.bridalRoom ? `✅ 使用 (${data.bridalRoomHours})` : '❌ 不使用'} />
-           </div>
-           {(data.stageDecor || data.stageDecorPhoto) && <div className="mt-3 flex gap-4 border-t border-slate-200 pt-2"><div className="flex-1"><span className="text-xs font-bold text-slate-500 block">舞台/花藝:</span><p className="text-sm whitespace-pre-wrap">{data.stageDecor || '無'}</p></div>{data.stageDecorPhoto && <img src={data.stageDecorPhoto} alt="Stage Ref" className="w-24 h-24 object-cover border rounded bg-white" />}</div>}
-           <div className="w-full px-2 mt-2">
-              <p className="text-xs font-bold text-slate-500 mb-2 uppercase">物資清單</p>
-              <div className="flex flex-wrap">{Object.keys(equipmentMap).map(key => <CheckItem key={key} label={equipmentMap[key]} checked={data.equipment?.[key]} />)}</div>
-           </div>
-        </Section>
-        <Section title="B. 裝飾佈置 (Decoration)" color="indigo">
-           <div className="w-full px-2">
-              <div className="flex flex-wrap mb-2">{Object.keys(decorationMap).map(key => <CheckItem key={key} label={decorationMap[key]} checked={data.decoration?.[key]} />)}</div>
-              <div className="grid grid-cols-2 gap-4 mt-3 bg-slate-50 p-2 rounded">
-                 {data.equipment?.nameSign && <div className="text-xs"><strong>禮堂字牌:</strong> {data.nameSignText || '無文字'}</div>}
-                 {data.decoration?.invites && <div className="text-xs"><strong>喜帖數量:</strong> {data.invitesQty || '-'} 套</div>}
-                 {data.decoration?.ceremonyChairs && <div className="text-xs"><strong>證婚椅:</strong> {data.decorationChairsQty || '-'} 張</div>}
-              </div>
-              {(data.venueDecor || data.venueDecorPhoto) && <div className="mt-3 flex gap-4 border-t border-slate-200 pt-2"><div className="flex-1"><span className="text-xs font-bold text-slate-500 block">場地佈置備註:</span><p className="text-sm whitespace-pre-wrap">{data.venueDecor || '無'}</p></div>{data.venueDecorPhoto && <img src={data.venueDecorPhoto} alt="Decor Ref" className="w-24 h-24 object-cover border rounded bg-white" />}</div>}
-           </div>
-        </Section>
-        <Section title="C. 影音工程 (AV)" color="indigo">
-           <div className="w-full px-2">
-              <div className="flex flex-wrap mb-3">{Object.keys(avMap).map(key => <CheckItem key={key} label={avMap[key]} checked={data.avRequirements?.[key]} />)}</div>
-              <div className="space-y-2"><DetailRow label="AV 備註" value={data.avNotes} widthClass="w-full" /><DetailRow label="其他器材" value={data.avOther} widthClass="w-full" /></div>
-           </div>
-        </Section>
-        <Section title="D. 物流與泊車 (Logistics)" color="indigo">
-           <div className="w-full px-2 space-y-4">
-              <div className="border border-slate-300 rounded overflow-hidden">
-                 <div className="bg-slate-100 px-2 py-1 border-b border-slate-300 flex justify-between items-center"><span className="text-xs font-bold text-slate-700 uppercase">送貨安排</span><span className="text-[10px] bg-white px-1.5 rounded border border-slate-300">共 {data.deliveries?.length || 0} 項</span></div>
-                 {(!data.deliveries || data.deliveries.length === 0) ? (<div className="p-2 text-xs text-slate-400 italic">無送貨登記</div>) : (<div className="divide-y divide-slate-200">{data.deliveries.map((item, i) => (<div key={i} className="p-2 flex gap-4"><div className="w-1/3"><div className="font-bold text-sm text-slate-800">{item.unit || '-'}</div><div className="flex gap-1 mt-1"><span className="text-xs font-mono bg-white px-1 rounded border border-slate-300">{formatShortDate(item.date)}</span><span className="text-xs font-mono bg-slate-50 px-1 rounded border border-slate-200">{item.time || '--:--'}</span></div></div><div className="flex-1 text-sm whitespace-pre-wrap border-l border-slate-100 pl-4 text-slate-600">{item.items || '無備註'}</div></div>))}</div>)}
-              </div>
-              <div className="border border-slate-300 rounded p-2 flex gap-4">
-                 <div className="w-1/2"><span className="text-xs font-bold text-slate-500 uppercase block mb-1">免費泊車券</span><div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-800">{data.parkingInfo?.ticketQty || '0'}</span><span className="text-xs font-bold text-slate-500">張</span><span className="text-slate-300">x</span><span className="text-xl font-bold text-slate-800">{data.parkingInfo?.ticketHours || '0'}</span><span className="text-xs font-bold text-slate-500">小時</span></div></div>
-                 <div className="w-1/2 border-l border-dashed border-slate-300 pl-4"><span className="text-xs font-bold text-slate-500 uppercase block mb-1">車牌登記</span><p className="font-mono text-sm font-bold whitespace-pre-wrap">{data.parkingInfo?.plates || '無'}</p></div>
-              </div>
-              {data.otherNotes && (<div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm"><span className="font-bold text-slate-600 mr-2">⚠️ 其他備註:</span>{data.otherNotes}</div>)}
-           </div>
-        </Section>
-      </div>
-      <div className="break-after-page"></div>
-
-      {/* PAGE 3: KITCHEN COPY */}
-      <div className="print-page">
-        {/* Compact Header */}
-        <div className="flex justify-between items-start border-b-4 border-black pb-2 mb-3">
-          <div>
-              <h1 className="text-3xl font-black tracking-tight uppercase">廚房出品單</h1>
-              <div className="text-xl font-mono font-bold">{data.eventName}</div>
+        {COPIES.map((copy, idx) => (
+          <div key={idx}>
+            <div className="print-page">
               
-            <div className="flex gap-3 mb-4">
-              <div className="flex-1 bg-slate-100 p-2 border-l-8 border-black">
-                <span className="text-xl font-bold mt-1">{cleanLocation(data.venueLocation) || '未定位置'}</span>
-              </div>
-              <div className="flex-1 bg-slate-100 p-2 border-l-8 border-black">
-                <span className="block text-slate-500 text-xs font-bold uppercase">席數</span>
-                <span className="block text-3xl font-black leading-none">{data.tableCount || '-'}</span>
-              </div>
-              <div className="flex-1 bg-slate-100 p-2 border-l-8 border-slate-600">
-                <span className="block text-slate-500 text-xs font-bold uppercase">人數</span>
-                <span className="block text-3xl font-black leading-none">{data.guestCount || '-'}</span>
-              </div>
-            </div>
-          </div>
-
-           <div className="text-right">
-              <div className="inline-block bg-black text-white px-3 py-1 text-lg font-bold rounded mb-1">KITCHEN</div>
-              <div className="text-xl font-mono font-bold">{formatDateWithDay(data.date)}</div>
-              <div className="text-3xl font-black text-red-600 mt-1 border-2 border-red-600 px-2 py-1 rounded inline-block">
-                 {data.servingTime ? `${data.servingTime} 起菜` : `${data.startTime} 預備`}
-              </div>
-           </div>
-        </div>
-
-        {/* Squeezed Stats Row */}
-
-
-        {/* Menu (Kept Large) */}
-        <div className="mb-4 p-4 border-4 border-black rounded-xl">
-           <div className="flex justify-between items-center mb-4 border-b-2 border-gray-300 pb-2">
-              <h3 className="text-2xl font-bold">餐單內容</h3>
-              <span className="text-xl font-bold bg-gray-200 px-3 py-1 rounded">{data.servingStyle}</span>
-           </div>
-           <div className="space-y-6">
-              {data.menus && data.menus.length > 0 ? (
-                 data.menus.map((menu, idx) => (
-                    <div key={idx}>
-                       {menu.title && <h4 className="text-2xl font-bold underline mb-2">{menu.title}</h4>}
-                       {/* Main Menu Text stays large (text-3xl) */}
-                       <p className="text-3xl font-semibold leading-relaxed whitespace-pre-wrap">{onlyChinese(menu.content)}</p>
+              {/* 1. HEADER */}
+              <div className="flex justify-between items-start mb-2 border-b-2 border-slate-900 pb-2">
+                 <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                       <h1 className="text-2xl font-black uppercase tracking-tight leading-none">{data.eventName}</h1>
+                       <span className={`text-white px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wider ${copy.color}`}>{copy.name}</span>
                     </div>
-                 ))
-              ) : (
-                 <p className="text-3xl font-semibold leading-relaxed">{onlyChinese(data.menuType)}</p>
+                    <div className="flex gap-4 mt-1 text-xs font-bold text-slate-600 font-mono">
+                        <span>編號: {data.orderId}</span>
+                        <span>建立日期: {new Date().toLocaleDateString('zh-HK')}</span>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <div className="text-sm font-bold text-slate-900">{formatDateWithDay(data.date)}</div>
+                    <div className="text-xs text-slate-500">{data.startTime} - {data.endTime}</div>
+                 </div>
+              </div>
+
+              {/* 2. INFO BAR */}
+              <div className="bg-slate-100 border border-slate-200 p-2 rounded mb-4 grid grid-cols-4 gap-4 text-xs">
+                  <div className="border-r border-slate-300 pr-2">
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">客戶</span>
+                      <div className="font-bold truncate">{data.clientName}</div>
+                      <div className="truncate text-[10px]">{data.clientPhone}</div>
+                  </div>
+                  <div className="border-r border-slate-300 pr-2">
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">場地</span>
+                      <div className="font-bold truncate">{cleanLocation(data.venueLocation)}</div>
+                  </div>
+                  <div className="border-r border-slate-300 pr-2">
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">席數 / 人數</span>
+                      <div className="font-bold">{data.tableCount} 席 / {data.guestCount} 人</div>
+                  </div>
+                  <div>
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">負責人</span>
+                      <div className="font-bold">{data.salesRep || '-'}</div>
+                  </div>
+              </div>
+
+              {/* 3. MAIN GRID (F&B + Ops) */}
+              {copy.showOps && (
+                  <div className="flex gap-6 items-start mb-4">
+                      
+                      {/* LEFT: F&B (50%) */}
+                      <div className="w-1/2 flex flex-col gap-4">
+                          <div className="border border-slate-300 rounded overflow-hidden h-full">
+                              <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 flex justify-between items-center">
+                                  <span className="font-bold text-slate-700 text-xs">餐飲安排 (Food & Beverage)</span>
+                                  <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 rounded text-slate-600">{data.servingStyle}</span>
+                              </div>
+                              <div className="p-3">
+                                   <div className="bg-blue-50 border border-blue-100 rounded p-2 mb-3 text-xs flex gap-2">
+                                       <Coffee size={14} className="text-blue-500 mt-0.5 flex-shrink-0"/>
+                                       <div>
+                                           <span className="font-bold text-blue-700 block text-[10px] uppercase">酒水套餐</span>
+                                           <span className="font-medium text-slate-700">{data.drinksPackage || '標準 / 無'}</span>
+                                       </div>
+                                   </div>
+                                   <div className="space-y-3">
+                                      {data.menus && data.menus.length > 0 ? (
+                                         data.menus.map((m, mIdx) => (
+                                            <div key={mIdx} className="break-inside-avoid">
+                                               {m.title && <div className="font-bold text-slate-800 text-sm underline decoration-slate-300 mb-1">{m.title}</div>}
+                                               <div className="text-sm font-medium leading-snug text-slate-700 whitespace-pre-wrap pl-2 border-l-2 border-slate-200">{onlyChinese(m.content)}</div>
+                                            </div>
+                                         ))
+                                      ) : <div className="text-slate-400 italic text-xs">未選擇菜單</div>}
+                                   </div>
+                              </div>
+                          </div>
+                          {(data.specialMenuReq || data.allergies) && (
+                              <div className="border-2 border-red-200 bg-red-50 rounded p-3 text-xs break-inside-avoid">
+                                  <div className="font-black text-red-600 flex items-center gap-1 mb-1"><AlertTriangle size={14}/> 特別要求 / 過敏</div>
+                                  <div className="font-bold text-red-900 whitespace-pre-wrap">{data.specialMenuReq}{data.specialMenuReq && data.allergies && ' | '}{data.allergies}</div>
+                              </div>
+                          )}
+                      </div>
+
+                      {/* RIGHT: OPS (50%) */}
+                      <div className="w-1/2 flex flex-col gap-4">
+                          
+                          {/* ✅ NEW: RUNDOWN */}
+                          <div className="border border-slate-300 rounded overflow-hidden break-inside-avoid">
+                              <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-xs">活動流程 (Rundown)</div>
+                              <div className="p-2">
+                                  {(!data.rundown || data.rundown.length === 0) ? <span className="text-[10px] text-slate-400 italic">無</span> : (
+                                      <table className="w-full text-xs">
+                                          <tbody className="divide-y divide-slate-100">
+                                              {data.rundown.map((item, i) => (
+                                                  <tr key={i}>
+                                                      <td className="py-1 font-mono text-slate-500 w-16 align-top">{item.time}</td>
+                                                      <td className="py-1 font-bold text-slate-700">{item.activity}</td>
+                                                  </tr>
+                                              ))}
+                                          </tbody>
+                                      </table>
+                                  )}
+                              </div>
+                          </div>
+
+                          <div className="border border-slate-300 rounded overflow-hidden break-inside-avoid">
+                              <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-xs">場地與影音</div>
+                              <div className="p-3 text-xs space-y-3">
+                                  <div className="grid grid-cols-2 gap-2">
+                                      <div><span className="text-[9px] text-slate-400 block font-bold">檯布顏色</span>{data.tableClothColor || '標準'}</div>
+                                      <div><span className="text-[9px] text-slate-400 block font-bold">椅套顏色</span>{data.chairCoverColor || '標準'}</div>
+                                  </div>
+                                  <div><span className="text-[9px] text-slate-400 block font-bold">主家席</span>{data.headTableColorType === 'custom' ? data.headTableCustomColor : '同客席'}</div>
+                                  {data.venueDecor && <div className="bg-slate-50 p-2 rounded italic text-[10px] border border-slate-100"><span className="font-bold not-italic">佈置備註:</span> {data.venueDecor}</div>}
+                                  <div className="border-t border-slate-100 pt-2">
+                                      <span className="text-[9px] text-slate-400 block font-bold mb-1">AV 設備</span>
+                                      <div className="flex flex-wrap gap-1 mb-1">
+                                          {Object.keys(avMap).map(k => data.avRequirements?.[k] && <span key={k} className="px-1.5 py-0.5 bg-indigo-50 rounded border border-indigo-100 text-[10px] text-indigo-700">{avMap[k]}</span>)}
+                                      </div>
+                                      {data.avNotes && <p className="text-[10px] text-slate-500">*{data.avNotes}</p>}
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="border border-slate-300 rounded overflow-hidden break-inside-avoid">
+                              <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-xs">物流與泊車</div>
+                              <div className="p-3 text-xs space-y-3">
+                                  {/* ✅ NEW: BUS INFO */}
+                                  {data.busInfo?.enabled && (
+                                      <div className="bg-indigo-50 border border-indigo-100 rounded p-2 text-[10px] mb-2">
+                                          <span className="font-bold text-indigo-700 block mb-1">🚌 旅遊巴安排</span>
+                                          {data.busInfo.arrival?.time && <div><span className="text-indigo-500">接載:</span> {data.busInfo.arrival.time} ({data.busInfo.arrival.plate || '未定'})</div>}
+                                          {data.busInfo.departure?.time && <div><span className="text-indigo-500">散席:</span> {data.busInfo.departure.time} ({data.busInfo.departure.plate || '未定'})</div>}
+                                          {data.busInfo.customRoutes?.map(r => <div key={r.id}><span className="text-indigo-500">{r.route}:</span> {r.time}</div>)}
+                                      </div>
+                                  )}
+
+                                  <div className="flex justify-between items-center">
+                                      <span className="font-bold text-slate-500">泊車安排</span>
+                                      <span className="bg-slate-100 px-2 rounded font-bold">{data.parkingInfo?.ticketQty || 0} 張 x {data.parkingInfo?.ticketHours || 0} 小時</span>
+                                  </div>
+                                  {data.parkingInfo?.plates && <div className="text-[10px] bg-slate-50 p-1 rounded font-mono break-all">車牌: {data.parkingInfo.plates}</div>}
+                                  <div className="border-t border-slate-100 pt-2">
+                                      <span className="text-[9px] text-slate-400 block font-bold mb-1">送貨安排</span>
+                                      {(!data.deliveries || data.deliveries.length === 0) ? <span className="text-[10px] text-slate-400 italic">無</span> : (
+                                          <div className="space-y-1">
+                                              {data.deliveries.map((d, i) => (
+                                                  <div key={i} className="flex justify-between text-[10px] bg-slate-50 p-1.5 rounded">
+                                                      <span className="font-bold truncate mr-2">{d.unit}</span>
+                                                      <span className="font-mono text-slate-500 whitespace-nowrap">{d.time}</span>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
+                          </div>
+                          
+                          {data.otherNotes && (
+                              <div className="border border-yellow-200 bg-yellow-50 rounded p-2 text-xs">
+                                  <span className="font-bold text-yellow-700 text-[10px] block uppercase">備註</span>
+                                  <p className="leading-tight text-yellow-900 whitespace-pre-wrap">{data.otherNotes}</p>
+                              </div>
+                          )}
+                      </div>
+                  </div>
               )}
+
+              {/* 4. BILLING */}
+              {copy.showBilling && (
+                  <div className={`${copy.showOps ? "mt-auto" : "mt-4"} break-inside-avoid border-t-2 border-slate-800 pt-2`}>
+                      <div className="flex justify-between items-end mb-2">
+                          <h3 className="font-bold text-slate-800 text-xs uppercase">費用明細 (Billing Summary)</h3>
+                      </div>
+                      <table className="w-full text-xs compact-table">
+                          <thead>
+                              <tr><th className="text-left w-[50%]">項目</th><th className="text-right w-[15%]">單價</th><th className="text-center w-[10%]">數量</th><th className="text-right w-[25%]">金額</th></tr>
+                          </thead>
+                          <tbody>
+                               {(data.menus||[]).map((m, i) => (
+                                  <tr key={`m-${i}`}><td className="font-medium">{m.title}</td><td className="text-right font-mono text-slate-500">${formatMoney(m.price)}</td><td className="text-center text-slate-500">{m.qty}</td><td className="text-right font-mono font-bold">${formatMoney((m.price||0)*(m.qty||1))}</td></tr>
+                               ))}
+                               {(data.drinksPrice > 0 || data.platingFee > 0) && (
+                                  <tr className="bg-slate-50/50"><td className="text-slate-500 italic">{data.drinksPrice > 0 ? `+ 酒水 (${data.drinksPackage}) ` : ''}{data.platingFee > 0 ? `+ 位上服務費 ` : ''}{data.customItems?.length > 0 ? `+ 額外項目 (${data.customItems.length})` : ''}</td><td colSpan="2"></td><td className="text-right font-mono text-slate-500">${formatMoney(((data.drinksPrice||0)*(data.drinksQty||1)) + ((data.platingFee||0)*(data.tableCount||0)) + (data.customItems||[]).reduce((a, b) => a + ((b.price||0)*(b.qty||1)), 0))}</td></tr>
+                               )}
+                          </tbody>
+                          <tfoot>
+                               <tr className="border-t-2 border-slate-300"><td colSpan="3" className="text-right font-bold pt-1">總金額</td><td className="text-right font-bold font-mono pt-1 text-sm">${formatMoney(data.totalAmount)}</td></tr>
+                               <tr><td colSpan="3" className="text-right text-slate-500">已付訂金</td><td className="text-right font-mono text-slate-500">-${formatMoney((Number(data.deposit1)||0)+(Number(data.deposit2)||0)+(Number(data.deposit3)||0))}</td></tr>
+                               <tr><td colSpan="3" className="text-right font-bold text-red-600">尚餘尾數</td><td className="text-right font-bold font-mono text-red-600">${formatMoney(Number(data.totalAmount) - ((Number(data.deposit1)||0)+(Number(data.deposit2)||0)+(Number(data.deposit3)||0)))}</td></tr>
+                          </tfoot>
+                      </table>
+                      
+                      {/* Revenue Allocation */}
+                      {copy.showAllocation && (
+                          <div className="mt-4 pt-2 border-t border-slate-200">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">部門拆帳詳情</p>
+                              <div className="w-full">
+                                  <table className="w-full text-[10px] border-collapse table-fixed">
+                                      <colgroup><col className="w-[15%]"/><col className="w-[40%]"/><col className="w-[15%]"/><col className="w-[10%]"/><col className="w-[15%]"/><col className="w-[5%]"/></colgroup>
+                                      <thead>
+                                          <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-600">
+                                              <th className="text-left py-1 px-2">部門</th><th className="text-left py-1 px-2">項目</th><th className="text-right py-1 px-2">單價</th><th className="text-center py-1 px-2">數量</th><th className="text-right py-1 px-2">總額</th><th className="text-right py-1 px-2">%</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                          {Object.values(detailedAlloc).map((dept, i) => {
+                                              if (dept.total === 0 && dept.items.length === 0) return null;
+                                              return (
+                                                  <React.Fragment key={i}>
+                                                      {dept.items.map((item, idx) => (
+                                                          <tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-200" : ""}>
+                                                              <td className={`py-1 px-2 align-top ${idx === 0 ? 'font-bold' : ''}`}>{idx === 0 ? dept.label : ''}</td>
+                                                              <td className="py-1 px-2 align-top text-slate-600">{item.name}</td>
+                                                              <td className="py-1 px-2 text-right font-mono text-slate-500">${formatMoney(item.unit)}</td>
+                                                              <td className="py-1 px-2 text-center text-slate-500">{item.qty}</td>
+                                                              <td className="py-1 px-2 text-right font-mono font-medium">${formatMoney(item.amount)}</td>
+                                                              <td className="py-1 px-2"></td>
+                                                          </tr>
+                                                      ))}
+                                                      <tr className="bg-slate-50/50">
+                                                          <td colSpan="4" className="py-1 px-2 text-right text-[9px] uppercase font-bold text-slate-400">{dept.label.split(' ')[0]} 小計</td>
+                                                          <td className="py-1 px-2 text-right font-mono font-bold">${formatMoney(dept.total)}</td>
+                                                          <td className="py-1 px-2 text-right font-bold text-[9px] text-slate-500">{subtotal > 0 ? ((dept.total/subtotal)*100).toFixed(1) : 0}%</td>
+                                                      </tr>
+                                                  </React.Fragment>
+                                              );
+                                          })}
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              )}
+            </div>
+            
+            {/* EXPLICIT BREAK */}
+            <div className="page-break"></div>
+          </div>
+        ))}
+        
+        {/* --- PAGE 4: APPENDIX (PHOTOS) --- */}
+        {(data.stageDecorPhoto || data.venueDecorPhoto) && (
+            <>
+                <div className="print-page page-break">
+                    <Header title="附錄" copyType="參考圖片" badgeColor="bg-slate-500" />
+                    <div className="grid grid-cols-1 gap-6 mt-4">
+                        {data.stageDecorPhoto && (
+                            <div className="break-inside-avoid border border-slate-200 rounded p-2 bg-slate-50">
+                                <h3 className="text-sm font-bold text-slate-700 mb-2">舞台/花藝參考圖</h3>
+                                <img src={data.stageDecorPhoto} alt="Stage" className="w-full h-auto max-h-[110mm] object-contain mx-auto" />
+                            </div>
+                        )}
+                        {data.venueDecorPhoto && (
+                            <div className="break-inside-avoid border border-slate-200 rounded p-2 bg-slate-50">
+                                <h3 className="text-sm font-bold text-slate-700 mb-2">場地佈置參考圖</h3>
+                                <img src={data.venueDecorPhoto} alt="Venue" className="w-full h-auto max-h-[110mm] object-contain mx-auto" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </>
+        )}
+
+        {/* --- PAGE 5: KITCHEN COPY (HIGH CONTRAST) --- */}
+        <div className="print-page page-break">
+           <div className="flex justify-between items-end border-b-4 border-black pb-2 mb-4">
+              <div>
+                 <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">廚房出品單</h1>
+                 <p className="text-lg font-bold text-slate-500 mt-1">KITCHEN COPY</p>
+              </div>
+              <div className="text-right">
+                 <div className="text-xl font-bold bg-black text-white px-4 py-1 inline-block mb-1">{data.servingTime ? `${data.servingTime} 起菜` : '時間待定'}</div>
+                 <div className="text-sm font-mono font-bold">{formatDateWithDay(data.date)}</div>
+              </div>
+           </div>
+
+           <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-slate-100 p-4 border-l-8 border-slate-800">
+                 <span className="block text-xs font-bold text-slate-500 uppercase">活動名稱</span>
+                 <span className="block text-xl font-bold leading-tight">{data.eventName}</span>
+              </div>
+              <div className="bg-slate-100 p-4 border-l-8 border-black text-center">
+                 <span className="block text-xs font-bold text-slate-500 uppercase">席數</span>
+                 <span className="block text-4xl font-black leading-none">{data.tableCount}</span>
+              </div>
+              <div className="bg-slate-100 p-4 border-l-8 border-slate-600 text-center">
+                 <span className="block text-xs font-bold text-slate-500 uppercase">人數</span>
+                 <span className="block text-4xl font-black leading-none">{data.guestCount}</span>
+              </div>
+           </div>
+
+           {(data.specialMenuReq || data.allergies) && (
+              <div className="mb-6 p-4 border-4 border-red-600 bg-red-50">
+                 <h3 className="text-lg font-black text-red-600 uppercase underline mb-2 flex items-center"><AlertTriangle className="mr-2"/> 特別飲食 / 過敏</h3>
+                 <p className="text-2xl font-bold text-red-900 leading-tight">
+                    {data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}
+                 </p>
+              </div>
+           )}
+
+           <div className="border-4 border-black p-4">
+              <div className="flex justify-between items-center mb-4 border-b-2 border-black pb-2">
+                 <h3 className="text-2xl font-bold uppercase">餐單內容</h3>
+                 <span className="text-lg font-bold bg-slate-200 px-3 py-1">{data.servingStyle}</span>
+              </div>
+              <div className="space-y-6">
+                 {data.menus && data.menus.map((menu, idx) => (
+                    <div key={idx}>
+                       {menu.title && <div className="font-bold text-xl underline mb-2">{menu.title}</div>}
+                       <p className="text-2xl font-semibold leading-relaxed whitespace-pre-wrap font-serif">
+                          {onlyChinese(menu.content)}
+                       </p>
+                    </div>
+                 ))}
+              </div>
            </div>
         </div>
 
-        {/* Allergy (Compact but High Visibility) */}
-        {(data.specialMenuReq || data.allergies) && (
-           <div className="mb-4 p-3 border-4 border-red-600 rounded-lg bg-red-50">
-              <h3 className="text-xl font-black text-red-600 mb-1 underline flex items-center">
-                 <AlertTriangle size={24} className="mr-2"/> 特殊飲食 & 過敏
-              </h3>
-              {/* Reduced from text-4xl to text-xl, but kept bold/red */}
-              <p className="text-xl font-bold text-red-800 whitespace-pre-wrap leading-snug">
-                 {data.specialMenuReq}{data.specialMenuReq && data.allergies && '\n'}{data.allergies}
-              </p>
-           </div>
-        )}
       </div>
-    </div>
-  );
+    );
+  }
 };
 
 
@@ -2921,7 +3138,56 @@ const SettingsView = ({ settings, onSave, addToast }) => {
                 <div className="md:col-span-7">
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">預設列表</h3></div>
-                        <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">{localSettings.defaultMenus.map(m => (<div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group"><div className="flex justify-between items-start mb-1"><div className="flex items-center"><span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase mr-2 ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{m.type === 'food' ? 'MENU' : 'DRINK'}</span><span className="font-bold text-slate-800">{m.title}</span><span className="ml-2 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">平日 ${formatMoney(m.priceWeekday)} / 週末 ${formatMoney(m.priceWeekend)}</span></div><div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditingMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button><button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button></div></div>{m.allocation && (<div className="flex gap-2 text-[10px] text-slate-400 mt-1 mb-1">{Object.entries(m.allocation).map(([k, v]) => v > 0 && <span key={k}>{DEPARTMENTS.find(d=>d.key===k)?.label.split(' ')[0]}:${v}</span>)}</div>)}<p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p></div>))}</div>
+                        {/* PRESETS LIST (Updated with Allocation Status) */}
+                        <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                          {localSettings.defaultMenus.map(m => {
+                            // --- CALCULATION LOGIC ---
+                            const price = parseFloat(m.priceWeekday) || parseFloat(m.price) || 0;
+                            const allocSum = Object.values(m.allocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                            let allocBadge = null;
+
+                            if (m.type === 'food') {
+                                if (allocSum === 0) {
+                                    allocBadge = <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold border border-red-200">未分拆</span>;
+                                } else if (Math.abs(price - allocSum) > 1) {
+                                    allocBadge = <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200">⚠️ 待分拆 ${Math.round(price - allocSum)}</span>;
+                                }
+                            }
+                            // -------------------------
+
+                            return (
+                              <div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group">
+                                <div className="flex justify-between items-start mb-1">
+                                  <div className="flex items-center flex-wrap gap-2">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                                      {m.type === 'food' ? 'MENU' : 'DRINK'}
+                                    </span>
+                                    <span className="font-bold text-slate-800">{m.title}</span>
+                                    {allocBadge} {/* ✅ DISPLAY BADGE HERE */}
+                                  </div>
+                                  <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => setEditingMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14}/></button>
+                                    <button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14}/></button>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 items-center text-[10px] text-slate-500 mb-1">
+                                    <span className="bg-slate-100 px-1.5 py-0.5 rounded">平日 ${formatMoney(m.priceWeekday)}</span>
+                                    <span className="bg-slate-100 px-1.5 py-0.5 rounded">週末 ${formatMoney(m.priceWeekend)}</span>
+                                </div>
+                                {m.allocation && (
+                                  <div className="flex gap-2 text-[10px] text-slate-400 mb-1">
+                                    {Object.entries(m.allocation).map(([k, v]) => v > 0 && (
+                                        <span key={k} className="border border-slate-200 px-1 rounded">
+                                            {DEPARTMENTS.find(d=>d.key===k)?.label.split(' ')[0]}:${v}
+                                        </span>
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3623,6 +3889,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isTranslatingDrinks, setIsTranslatingDrinks] = useState(false);
   // UI State for Toast & Modals
   const [toasts, setToasts] = useState([]);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
@@ -3634,6 +3901,7 @@ export default function App() {
   const balanceFileInputRef = useRef(null);
   const [isBalanceUploading, setIsBalanceUploading] = useState(false);
   
+  
   // Printing State
   const [printMode, setPrintMode] = useState('EO'); 
 
@@ -3699,6 +3967,8 @@ export default function App() {
       servingStyle: '圍餐',
       platingFee:'',
       platingFeeApplySC: true,
+      enableHandCarry: false, // Toggle for Hand Carry
+      handCarryStaffQty: '',  // Number of staff
       drinkAllocation: {},
       
       
@@ -3777,6 +4047,19 @@ export default function App() {
         ticketHours: '',  // Changed from 'hours'
         plates: ''        
       },
+      // ✅ NEW: Rundown
+      rundown: [
+          { id: 1, time: '18:00', activity: '恭候 (Reception)' },
+          { id: 2, time: '20:00', activity: '入席 (March In)' }
+      ],
+
+      // ✅ NEW: Bus Arrangements
+      busInfo: {
+          enabled: false,
+          arrival: { time: '', plate: '', price: '' },   // In > Venue
+          departure: { time: '', plate: '', price: '' }, // Venue > Out
+          customRoutes: [] // Array of { id, route, time, plate, price }
+      },
       printSettings: {
         menu: {
           showPlatingFeeDisclaimer: true, // Default: Show the $800 fee line
@@ -3790,6 +4073,35 @@ export default function App() {
 
   const [formData, setFormData] = useState(initialFormState);
   const [formTab, setFormTab] = useState('basic'); 
+
+// --- JUMP TO ALLOCATION LOGIC ---
+  const [highlightTarget, setHighlightTarget] = useState(null); 
+
+  const jumpToAllocation = (target) => {
+      setHighlightTarget(target);
+      setFormTab('fnb'); 
+  };
+
+  useEffect(() => {
+      if (formTab === 'fnb' && highlightTarget) {
+          setTimeout(() => {
+              if (highlightTarget.type === 'menu') {
+                  setFormData(prev => ({
+                      ...prev,
+                      menus: prev.menus.map(m => m.id === highlightTarget.id ? { ...m, showAllocation: true } : m)
+                  }));
+                  const el = document.getElementById(`menu-item-${highlightTarget.id}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } 
+              else if (highlightTarget.type === 'drinks') {
+                  setFormData(prev => ({ ...prev, showDrinkAllocation: true }));
+                  const el = document.getElementById('drinks-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              setHighlightTarget(null); 
+          }, 100); 
+      }
+  }, [formTab, highlightTarget]); 
   
   // 加入 AI Prompt 狀態
   // --- AI 翻譯功能狀態 ---
@@ -3858,6 +4170,69 @@ export default function App() {
       addToast("翻譯失敗，請稍後再試", "error");
     } finally {
       setTranslatingMenuId(null);
+    }
+  };
+
+  // --- NEW: Beverage Translation Handler ---
+  const handleTranslateDrinks = async () => {
+    const content = formData.drinksPackage;
+    if (!content) {
+      addToast("請先輸入酒水內容", "error");
+      return;
+    }
+    
+    setIsTranslatingDrinks(true);
+    const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101";
+
+    try {
+      const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json", 
+          "Authorization": `Bearer ${API_KEY}` 
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { 
+              role: "system", 
+              content: `You are a professional banquet translator. 
+              Task: Translate the beverage list from Chinese to English line by line.
+              
+              STRICT RULES:
+              1. **Format:** Output the original Chinese line, followed immediately by the English translation on the next line.
+              2. **Spacing:** Remove ALL empty lines.
+              3. **Punctuation:** Do NOT add full stops.
+              
+              Example:
+              無限量供應汽水
+              Unlimited Soft Drinks
+              指定紅酒
+              House Red Wine`
+            }, 
+            { 
+              role: "user", 
+              content: content 
+            }
+          ],
+          temperature: 0.2,
+        })
+      });
+
+      if (!response.ok) throw new Error("Translation API Failed");
+      
+      const data = await response.json();
+      let translatedText = data.choices[0].message.content;
+      translatedText = translatedText.replace(/\n\s*\n/g, '\n').trim();
+
+      setFormData(prev => ({ ...prev, drinksPackage: translatedText }));
+      addToast("酒水翻譯完成！", "success");
+
+    } catch (error) {
+      console.error(error);
+      addToast("翻譯失敗，請稍後再試", "error");
+    } finally {
+      setIsTranslatingDrinks(false);
     }
   };
 
@@ -4193,17 +4568,23 @@ const handleMenuPrintSelection = (selection) => {
       });
     };
 
-// --- PRICE HANDLER & CALCULATION (FIXED) ---
-  const handlePriceChange = (e) => {
-    const { name, value } = e.target;
-    // Fix: Remove commas before saving to state so parseFloat works correctly later
-    const cleanValue = value.toString().replace(/,/g, ''); 
+const handlePriceChange = (e) => {
+  const { name, value } = e.target;
+  
+  // ✅ 1. Remove commas immediately
+  const cleanValue = value.toString().replace(/,/g, '');
+  
+  setFormData(prev => {
+    // ✅ 2. Create the new data object with the clean value
+    const newData = { ...prev, [name]: cleanValue };
     
-    setFormData(prev => {
-      const newData = { ...prev, [name]: cleanValue };
-      return { ...newData, totalAmount: calculateTotalAmount(newData) };
-    });
-  };
+    // ✅ 3. Calculate Total using the NEW data, not the old 'prev' state
+    return { 
+        ...newData, 
+        totalAmount: calculateTotalAmount(newData) 
+    };
+  });
+};
 
   // --- MENU HANDLERS ---
   const handleMenuChange = (id, field, value) => {
@@ -5052,163 +5433,345 @@ const openEditModal = (event) => {
                               </div>
                           )}
                           
-                          {/* --- 3. MENU ITEMS LIST (With Reordering) --- */}
+                          {/* --- 3. MENU ITEMS LIST (With Allocation Status) --- */}
                           <div className="space-y-4">
-                            {formData.menus && formData.menus.map((menu, index) => (
-                              <div key={menu.id || index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm">
-                                
-                                {/* Menu Header: Title & Controls */}
-                                <div className="flex justify-between items-center mb-2">
-                                  <div className="flex items-center flex-1 gap-2">
-                                    {/* Reordering Arrows */}
-                                    <div className="flex flex-col mr-2">
+                            {formData.menus && formData.menus.map((menu, index) => {
+                              // --- STATUS CALCULATION LOGIC ---
+                              const price = parseFloat(menu.price) || 0;
+                              const allocSum = Object.values(menu.allocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                              const diff = price - allocSum;
+                              
+                              // Create Badge Element based on math
+                              let statusBadge = null;
+                              if (price > 0) {
+                                  if (allocSum === 0) {
+                                      statusBadge = (
+                                          <span className="ml-2 text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold border border-red-200 flex items-center animate-pulse">
+                                              <AlertCircle size={10} className="mr-1"/> 未分拆 (Unallocated)
+                                          </span>
+                                      );
+                                  } else if (Math.abs(diff) > 1) { // Tolerance for float rounding
+                                      statusBadge = (
+                                          <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold border border-amber-200 flex items-center">
+                                              <AlertTriangle size={10} className="mr-1"/> 剩餘 ${formatMoney(diff)}
+                                          </span>
+                                      );
+                                  } else {
+                                      statusBadge = (
+                                          <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold border border-emerald-200 flex items-center">
+                                              <CheckCircle size={10} className="mr-1"/> OK
+                                          </span>
+                                      );
+                                  }
+                              }
+                              // --------------------------------
+
+                              return (
+                                <div 
+                                  key={menu.id || index} 
+                                  id={`menu-item-${menu.id}`} // ✅ ADD THIS ID
+                                  className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm"
+                                >    
+                                  {/* ROW 1: HEADER & CONTROLS */}
+                                  <div className="flex justify-between items-center mb-2">
+                                    <div className="flex items-center flex-1 gap-2">
+                                      {/* Reordering Arrows */}
+                                      <div className="flex flex-col mr-2">
                                         <button type="button" onClick={() => moveMenu(index, 'up')} disabled={index === 0} className="text-slate-400 hover:text-blue-600 disabled:opacity-30"><ChevronLeft size={14} className="rotate-90"/></button>
                                         <button type="button" onClick={() => moveMenu(index, 'down')} disabled={index === formData.menus.length - 1} className="text-slate-400 hover:text-blue-600 disabled:opacity-30"><ChevronRight size={14} className="rotate-90"/></button>
-                                    </div>
+                                      </div>
 
-                                    <input 
-                                      type="text" 
-                                      placeholder="菜單標題 (e.g. Main Menu)" 
-                                      value={menu.title}
-                                      onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
-                                      className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
-                                    />
-                                    
-                                    {/* Load Preset */}
-                                    <select 
-                                      className="text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-500 outline-none w-32"
-                                      onChange={(e) => handleApplyMenuPreset(menu.id, e.target.value)}
-                                      value=""
-                                    >
-                                      <option value="" disabled>📂 載入預設...</option>
-                                      {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'food').map(m => (
-                                        <option key={m.id} value={m.id}>{m.title}</option>
-                                      ))}
-                                    </select>
-                                    
-                                    {/* Delete */}
-                                    {formData.menus.length > 1 && (
-                                      <button type="button" onClick={() => removeMenu(menu.id)} className="text-slate-400 hover:text-red-500 p-1 rounded ml-2">
-                                        <Trash2 size={16}/>
-                                      </button>
-                                    )}
+                                      {/* Menu Title Input */}
+                                      <input 
+                                        type="text" 
+                                        placeholder="菜單標題 (e.g. Main Menu)" 
+                                        value={menu.title}
+                                        onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)}
+                                        className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1"
+                                      />
+                                      
+                                      {/* Preset Loader */}
+                                      <select 
+                                          className="text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-500 outline-none w-32" 
+                                          onChange={(e) => handleApplyMenuPreset(menu.id, e.target.value)} 
+                                          value=""
+                                      >
+                                        <option value="" disabled>📂 載入預設...</option>
+                                        {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'food').map(m => (
+                                          <option key={m.id} value={m.id}>{m.title}</option>
+                                        ))}
+                                      </select>
+
+                                      {/* Delete Button */}
+                                      {formData.menus.length > 1 && (
+                                        <button type="button" onClick={() => removeMenu(menu.id)} className="text-slate-400 hover:text-red-500 p-1 rounded ml-2">
+                                          <Trash2 size={16}/>
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
+
+                                  {/* ROW 2: CONTENT & TRANSLATE TOOL */}
+                                  <div className="flex justify-between items-end mb-1">
+                                      <label className="text-xs font-bold text-slate-500">菜單內容 (一行一項)</label>
+                                      <button 
+                                          type="button" 
+                                          onClick={() => handleTranslateMenu(menu.id, menu.content)} 
+                                          disabled={translatingMenuId === menu.id || !menu.content} 
+                                          className="flex items-center text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 disabled:opacity-50 transition-colors"
+                                      >
+                                          {translatingMenuId === menu.id ? <><Loader2 size={12} className="animate-spin mr-1"/> 翻譯中...</> : <><Languages size={12} className="mr-1"/> AI 中英對照翻譯</>}
+                                      </button>
+                                  </div>
+                                  
+                                  {/* Content Textarea */}
+                                  <textarea 
+                                      rows={8} 
+                                      placeholder="輸入詳細菜色..." 
+                                      value={menu.content} 
+                                      onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)} 
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3 font-mono leading-relaxed" 
+                                  />
+
+                                  {/* ROW 3: FOOTER BAR (Price & Allocation Toggle) */}
+                                  <div className="border-t border-slate-200 pt-2 flex justify-between items-center">
+                                      {/* Toggle Button */}
+                                      <button 
+                                          type="button" 
+                                          onClick={() => toggleMenuAllocation(menu.id)} 
+                                          className={`flex items-center text-xs font-bold px-3 py-1.5 rounded transition-colors ${menu.showAllocation ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:text-blue-600 hover:bg-blue-50'}`}
+                                      >
+                                          <PieChart size={14} className="mr-1.5"/> 
+                                          {menu.showAllocation ? "隱藏拆帳 (Hide)" : "設定拆帳 (Allocation)"}
+                                          {/* Show badge INSIDE button if panel is closed, so user sees status immediately */}
+                                          {!menu.showAllocation && statusBadge}
+                                      </button>
+                                      
+                                      {/* Price Info */}
+                                      <div className="text-xs text-slate-400 flex items-center">
+                                          <span className="mr-2">{menu.priceType === 'perTable' ? '每席' : menu.priceType === 'perPerson' ? '每位' : '固定'}價:</span>
+                                          <span className="font-mono text-slate-700 font-bold text-sm bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                              ${formatMoney(menu.price)}
+                                          </span>
+                                          {/* Show badge NEXT to price if panel is open */}
+                                          {menu.showAllocation && statusBadge}
+                                      </div>
+                                  </div>
+
+                                  {/* ROW 4: ALLOCATION PANEL (Conditional) */}
+                                  {menu.showAllocation && (
+                                      <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2 shadow-sm">
+                                          {/* Helper Header */}
+                                          <div className="flex justify-between text-[10px] text-slate-400 mb-2 border-b border-slate-100 pb-1">
+                                              <span>總金額 (Total): ${formatMoney(price)}</span>
+                                              <span className={Math.abs(diff) > 1 ? "text-amber-600 font-bold" : "text-emerald-600 font-bold"}>
+                                                  {Math.abs(diff) < 1 ? "✅ 平衡 (Balanced)" : `⚠️ 剩餘未分: $${formatMoney(diff)}`}
+                                              </span>
+                                          </div>
+                                          
+                                          {/* ✅ UPDATED: Only show Kitchen, Dim Sum, Roast */}
+                                          <div className="grid grid-cols-3 gap-3">
+                                              {DEPARTMENTS.filter(d => FOOD_DEPTS.includes(d.key)).map(dept => (
+                                                  <div key={dept.key}>
+                                                      <label className="block text-[9px] font-bold text-slate-500 mb-0.5">{dept.label}</label>
+                                                      <div className="relative">
+                                                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 text-[10px]">$</span>
+                                                          <input 
+                                                              type="number" 
+                                                              value={menu.allocation?.[dept.key]||''} 
+                                                              onChange={e=>handleMenuAllocationChange(menu.id, dept.key, e.target.value)} 
+                                                              className={`w-full border rounded pl-4 pr-1 py-1 text-xs outline-none focus:ring-1 transition-colors ${menu.allocation?.[dept.key] ? 'border-emerald-300 bg-emerald-50 font-bold text-emerald-700' : 'border-slate-200 text-slate-600'}`}
+                                                              placeholder="0"
+                                                          />
+                                                      </div>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  )}
                                 </div>
-
-                                {/* Content Area */}
-{/* Content Area with Translate Button */}
-                            <div className="flex justify-between items-end mb-1">
-                                <label className="text-xs font-bold text-slate-500">菜單內容 (一行一項)</label>
-                                <button 
-                                    type="button"
-                                    onClick={() => handleTranslateMenu(menu.id, menu.content)}
-                                    disabled={translatingMenuId === menu.id || !menu.content}
-                                    className="flex items-center text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 disabled:opacity-50 transition-colors"
-                                >
-                                    {translatingMenuId === menu.id ? (
-                                        <><Loader2 size={12} className="animate-spin mr-1"/> 翻譯中...</>
-                                    ) : (
-                                        <><Languages size={12} className="mr-1"/> AI 中英對照翻譯</>
-                                    )}
-                                </button>
-                            </div>
-                            
-                            <textarea
-                              rows={8} //稍微加大一點方便看翻譯
-                              placeholder="輸入詳細菜色 (一行一項)...&#10;例子:&#10;鴻運金豬全體&#10;上湯焗龍蝦"
-                              value={menu.content}
-                              onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3 font-mono leading-relaxed"
-                            />
-
-                                {/* Allocation & Price Controls */}
-                                <div className="border-t border-slate-200 pt-2 flex justify-between items-center">
-                                    <button type="button" onClick={() => toggleMenuAllocation(menu.id)} className="flex items-center text-xs font-bold text-slate-500 hover:text-blue-600">
-                                        <PieChart size={14} className="mr-1"/> 
-                                        {menu.showAllocation ? "隱藏拆帳" : "設定拆帳"}
-                                    </button>
-                                    <div className="text-xs text-slate-400">
-                                        {menu.priceType === 'perTable' ? '每席' : menu.priceType === 'perPerson' ? '每位' : '固定'}價: 
-                                        <span className="font-mono text-slate-700 font-bold ml-1">${formatMoney(menu.price)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Allocation Logic Rendered Here */}
-                                {menu.showAllocation && (
-                                    <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2">
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {DEPARTMENTS.map(dept => (
-                                                <div key={dept.key}>
-                                                    <label className="block text-[9px] font-bold text-slate-500">{dept.label.split(' ')[0]}</label>
-                                                    <input type="number" value={menu.allocation?.[dept.key]||''} onChange={e=>handleMenuAllocationChange(menu.id, dept.key, e.target.value)} className="w-full border rounded px-1 text-xs"/>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
 
                           {/* --- 4. SERVING STYLE & DRINKS (RESTORED) --- */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-100">
                             
-                            {/* Left Col: Serving Style + Plating Fee */}
-                            <div className="space-y-3">
-                                <FormSelect 
-                                    label="上菜方式 (Serving Style)" 
-                                    name="servingStyle" 
-                                    options={SERVING_STYLES} 
-                                    value={formData.servingStyle} 
-                                    onChange={(e) => {
-                                        const newStyle = e.target.value;
-                                        setFormData(prev => {
-                                            const newData = { ...prev, servingStyle: newStyle, platingFee: newStyle !== '位上' ? '' : prev.platingFee };
-                                            return { ...newData, totalAmount: calculateTotalAmount(newData) };
-                                        });
-                                    }} 
-                                />
-                                
-                                {formData.servingStyle === '位上' && (
-                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 animate-in fade-in slide-in-from-top-2">
-                                        <MoneyInput 
-                                            label="位上服務費 (每席計算)" 
-                                            name="platingFee"
-                                            value={formData.platingFee}
-                                            onChange={handlePriceChange}
-                                            required
-                                        />
-                                        <div className="text-right text-xs text-blue-600 font-mono mt-1 font-bold">
-                                            = ${formatMoney((parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                          {/* Left Col: Serving Style, Plating Fee & Hand Carry */}
+                          <div className="space-y-4">
+                              {/* 1. Main Serving Style Selection */}
+                              <FormSelect 
+                                  label="上菜方式 (Serving Style)" 
+                                  name="servingStyle" 
+                                  options={SERVING_STYLES} 
+                                  value={formData.servingStyle} 
+                                  onChange={(e) => {
+                                      const newStyle = e.target.value;
+                                      setFormData(prev => {
+                                          // Only reset plating fee if not '位上'. 
+                                          // We keep enableHandCarry as is, in case you want hand carry for other styles.
+                                          const isPlating = newStyle === '位上';
+                                          const newData = { 
+                                              ...prev, 
+                                              servingStyle: newStyle, 
+                                              platingFee: isPlating ? prev.platingFee : ''
+                                          };
+                                          return { ...newData, totalAmount: calculateTotalAmount(newData) };
+                                      });
+                                  }} 
+                              />
+                              
+                              {/* 2. Plating Fee Input (Only shows if '位上') */}
+                              {formData.servingStyle === '位上' && (
+                                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 animate-in fade-in slide-in-from-top-2 shadow-sm">
+                                      <MoneyInput 
+                                          label="位上服務費 (每席計算)" 
+                                          name="platingFee"
+                                          value={formData.platingFee}
+                                          onChange={handlePriceChange}
+                                          required
+                                      />
+                                      <div className="text-right text-xs text-blue-600 font-mono mt-1 font-bold">
+                                          = ${formatMoney((parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0))}
+                                      </div>
+                                  </div>
+                              )}
 
-                            {/* Right Col: Drinks Package */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排 (Drinks)</label>
-                                <select 
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
-                                    value={drinkPackageType}
-                                    onChange={handleDrinkTypeChange}
-                                >
-                                    <option value="">請選擇套餐 (載入預設)</option>
-                                    {DEFAULT_DRINK_PACKAGES.map(p => <option key={p} value={p}>{p}</option>)}
-                                    {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'drink').map(m => (
-                                        <option key={m.id} value={m.title}>📂 {m.title}</option>
-                                    ))}
-                                    <option value="Other">自訂 / 其他</option>
-                                </select>
-                                <textarea
-                                    name="drinksPackage"
-                                    rows={4}
-                                    value={formData.drinksPackage || ''}
-                                    onChange={handleInputChange}
-                                    placeholder="酒水內容詳細描述..."
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                />
-                            </div>
+                              {/* 3. Hand Carry Service (Renamed to 酒會手捧) */}
+                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between transition-all hover:border-purple-200">
+                                  <label className="flex items-center space-x-3 cursor-pointer select-none group">
+                                      <div className="relative flex items-center">
+                                          <input 
+                                              type="checkbox" 
+                                              checked={formData.enableHandCarry || false}
+                                              onChange={(e) => setFormData(prev => ({...prev, enableHandCarry: e.target.checked}))}
+                                              className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded bg-white checked:bg-purple-600 checked:border-purple-600 transition-all cursor-pointer"
+                                          />
+                                          <svg className="absolute w-3.5 h-3.5 text-white left-[3px] top-[3px] opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </svg>
+                                      </div>
+                                      <span className={`text-sm font-bold transition-colors ${formData.enableHandCarry ? 'text-purple-700' : 'text-slate-500 group-hover:text-slate-700'}`}>
+                                          酒會手捧 (Butler Style)
+                                      </span>
+                                  </label>
+
+                                  {/* Staff Quantity Input */}
+                                  {formData.enableHandCarry && (
+                                      <div className="flex items-center animate-in fade-in slide-in-from-left-2 duration-300 bg-white px-3 py-1.5 rounded border border-purple-100 shadow-sm">
+                                          <span className="text-xs text-purple-600 mr-2 font-medium">人手:</span>
+                                          <input 
+                                              type="number" 
+                                              placeholder="0"
+                                              value={formData.handCarryStaffQty || ''}
+                                              onChange={(e) => setFormData(prev => ({...prev, handCarryStaffQty: e.target.value}))}
+                                              className="w-12 border-b-2 border-purple-200 text-center text-sm font-bold text-purple-800 focus:outline-none bg-transparent focus:border-purple-500 transition-colors"
+                                          />
+                                          <span className="text-xs text-purple-600 ml-1">Pax</span>
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+
+                    {/* Right Col: Drinks Package */}
+                    <div id="drinks-section">
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排 (Drinks)</label>
+                        
+                        {/* Preset Selector */}
+                        <select 
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2"
+                            value={drinkPackageType}
+                            onChange={handleDrinkTypeChange}
+                        >
+                            <option value="">請選擇套餐 (載入預設)</option>
+                            {DEFAULT_DRINK_PACKAGES.map(p => <option key={p} value={p}>{p}</option>)}
+                            {appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'drink').map(m => (
+                                <option key={m.id} value={m.title}>📂 {m.title}</option>
+                            ))}
+                            <option value="Other">自訂 / 其他</option>
+                        </select>
+
+                        {/* Translate Button */}
+                        <div className="flex justify-end mb-1">
+                            <button 
+                                type="button"
+                                onClick={handleTranslateDrinks}
+                                disabled={isTranslatingDrinks || !formData.drinksPackage}
+                                className="flex items-center text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 disabled:opacity-50 transition-colors"
+                            >
+                                {isTranslatingDrinks ? (
+                                    <><Loader2 size={12} className="animate-spin mr-1"/> 翻譯中...</>
+                                ) : (
+                                    <><Languages size={12} className="mr-1"/> AI 中英翻譯</>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Description Textarea */}
+                        <textarea
+                            name="drinksPackage"
+                            rows={4}
+                            value={formData.drinksPackage || ''}
+                            onChange={handleInputChange}
+                            placeholder="酒水內容詳細描述..."
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                        />
+
+                        {/* ✅ NEW: DRINKS ALLOCATION CONTROLS (Placed here as requested) */}
+                        <div className="mt-2">
+                            <button 
+                                type="button" 
+                                onClick={() => setFormData(prev => ({...prev, showDrinkAllocation: !prev.showDrinkAllocation}))} 
+                                className={`w-full flex justify-center items-center text-xs font-bold px-3 py-1.5 rounded transition-colors border ${formData.showDrinkAllocation ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                            >
+                                <PieChart size={14} className="mr-1.5"/> 
+                                {formData.showDrinkAllocation ? "隱藏酒水拆帳" : "設定酒水拆帳 (Allocation)"}
+                            </button>
+
+                            {/* Allocation Panel */}
+                            {formData.showDrinkAllocation && (
+                                <div className="mt-2 bg-blue-50/50 p-3 rounded border border-blue-100 animate-in slide-in-from-top-1">
+                                    {(() => {
+                                        const dPrice = parseFloat(formData.drinksPrice) || 0;
+                                        const dAllocSum = Object.values(formData.drinkAllocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                                        const dDiff = dPrice - dAllocSum;
+                                        
+                                        return (
+                                            <>
+                                                <div className="flex justify-between text-[10px] text-slate-500 mb-2 border-b border-blue-100 pb-1">
+                                                    <span>單價: ${formatMoney(dPrice)}</span>
+                                                    <span className={Math.abs(dDiff) > 1 ? "text-amber-600 font-bold" : "text-emerald-600 font-bold"}>
+                                                        {Math.abs(dDiff) < 1 ? "✅ 平衡" : `⚠️ 剩餘: $${formatMoney(dDiff)}`}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {/* Only show Bar, Tea, Wine */}
+                                                    {DEPARTMENTS.filter(d => DRINK_DEPTS.includes(d.key)).map(dept => (
+                                                        <div key={dept.key}>
+                                                            <label className="block text-[9px] font-bold text-slate-500 mb-0.5">{dept.label.split(' ')[0]}</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[9px]">$</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    value={formData.drinkAllocation?.[dept.key]||''} 
+                                                                    onChange={e => setFormData(prev => ({
+                                                                        ...prev, 
+                                                                        drinkAllocation: { ...prev.drinkAllocation, [dept.key]: e.target.value }
+                                                                    }))} 
+                                                                    className={`w-full border rounded pl-3 pr-1 py-1 text-[10px] outline-none focus:ring-1 transition-colors ${formData.drinkAllocation?.[dept.key] ? 'border-blue-400 bg-white font-bold text-blue-700' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
+                                                                    placeholder="0"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                           </div>
 
                           {/* --- 5. REQUESTS & ALLERGIES --- */}
@@ -5235,107 +5798,151 @@ const openEditModal = (event) => {
 
                     <div className="divide-y divide-slate-100">
                       
-                      {/* 2. MENU ITEMS */}
-                      {(formData.menus || []).map((m, idx) => {
-                        const subtotal = (m.price || 0) * (m.qty || 1);
-                        return (
-                          <div key={m.id || idx} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors">
-                            <div className="col-span-5">
-                              <div className="flex items-center">
-                                <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded mr-3 flex-shrink-0"><Utensils size={14}/></div>
-                                <div>
-                                  <span className="font-bold text-slate-700 block text-sm">{m.title || `Menu ${idx+1}`}</span>
-                                  <span className="text-xs text-slate-400">來源: 餐飲分頁</span>
+                    {/* 2. MENU ITEMS (Billing Tab) */}
+                    {(formData.menus || []).map((menu, idx) => {
+                      const subtotal = (menu.price || 0) * (menu.qty || 1);
+                      
+                      // --- ALLOCATION CHECK ---
+                      const price = parseFloat(menu.price) || 0;
+                      const allocSum = Object.values(menu.allocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                      const diff = price - allocSum;
+                      const isAllocated = Math.abs(diff) < 1;
+                      const hasAllocation = allocSum > 0;
+
+                      return (
+                        <div key={menu.id || idx} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+                          
+                          {/* Name Column with Warning */}
+                          <div className="col-span-5">
+                            <div className="flex items-center">
+                              <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded mr-3 flex-shrink-0">
+                                <Utensils size={14}/>
+                              </div>
+                              <div>
+                                <div className="flex items-center">
+                                    <span className="font-bold text-slate-700 block text-sm mr-2">{menu.title || `Menu ${idx+1}`}</span>
+                                    
+                                    {/* ⚠️ WARNING BADGE (Clickable) */}
+                                    {price > 0 && !isAllocated && (
+                                        <div 
+                                            className="relative group z-10 cursor-pointer"
+                                            onClick={() => jumpToAllocation({ type: 'menu', id: menu.id })} // ✅ Uses 'menu.id'
+                                        >
+                                            <div className="flex items-center justify-center w-4 h-4 bg-red-100 text-red-600 rounded-full border border-red-200 animate-pulse hover:bg-red-200 hover:scale-110 transition-transform">
+                                                <span className="text-[10px] font-bold">!</span>
+                                            </div>
+                                            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-max px-2 py-1 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                                                {hasAllocation ? `⚠️ 點擊前往分拆: 剩餘 $${formatMoney(diff)}` : "⚠️ 點擊前往設定部門分拆"}
+                                                <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-1 border-4 border-transparent border-r-slate-800"></div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
+                                <span className="text-xs text-slate-400">來源: 餐飲分頁</span>
                               </div>
                             </div>
+                          </div>
 
-                            <div className="col-span-2 flex items-center justify-end">
-                                <span className="text-slate-400 text-xs mr-1">$</span>
-                                <input 
-                                  type="number"
-                                  value={m.price}
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setFormData(prev => {
-                                        const newMenus = prev.menus.map(menu => menu.id === m.id ? { ...menu, price: val } : menu);
-                                        return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
-                                    });
-                                  }}
-                                  className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono"
-                                  placeholder="0"
-                                />
-                            </div>
+                          {/* Rate */}
+                          <div className="col-span-2 flex items-center justify-end">
+                            <span className="text-slate-400 text-xs mr-1">$</span>
+                            <input 
+                              type="number" 
+                              value={menu.price} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                setFormData(prev => {
+                                  // ✅ FIXED: Uses 'menu.id'
+                                  const newMenus = prev.menus.map(item => item.id === menu.id ? { ...item, price: val } : item);
+                                  return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
+                                });
+                              }}
+                              className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono"
+                              placeholder="0"
+                            />
+                          </div>
 
-                            {/* UNIFIED QTY COLUMN STYLE */}
-                            <div className="col-span-2">
-                                <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden shadow-sm">
-                                    <select 
-                                      value={m.priceType}
-                                      onChange={e => {
-                                          const type = e.target.value;
-                                          // Auto-fill Qty based on selection
-                                          let newQty = m.qty || 1;
-                                          if(type === 'perTable') newQty = formData.tableCount || 1;
-                                          if(type === 'perPerson') newQty = formData.guestCount || 1;
+                          {/* Qty */}
+                          <div className="col-span-2">
+                            <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden shadow-sm">
+                              <select 
+                                value={menu.priceType} 
+                                onChange={e => {
+                                  const type = e.target.value;
+                                  let newQty = menu.qty || 1;
+                                  if(type === 'perTable') newQty = formData.tableCount || 1;
+                                  if(type === 'perPerson') newQty = formData.guestCount || 1;
 
-                                          setFormData(prev => {
-                                              const newMenus = prev.menus.map(menu => menu.id === m.id ? { ...menu, priceType: type, qty: newQty } : menu);
-                                              return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
-                                          });
-                                      }}
-                                      className="bg-slate-50 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 hover:bg-slate-100 cursor-pointer min-w-[60px]"
-                                    >
-                                      <option value="perTable">席</option>
-                                      <option value="perPerson">位</option>
-                                      <option value="total">固定</option>
-                                    </select>
-                                    <input 
-                                      type="number" 
-                                      value={m.qty || ''}
-                                      onChange={e => {
-                                        const val = e.target.value;
-                                        setFormData(prev => {
-                                            const newMenus = prev.menus.map(menu => menu.id === m.id ? { ...menu, qty: val } : menu);
-                                            return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
-                                        });
-                                      }}
-                                      className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
-                              ${formatMoney(subtotal)}
-                            </div>
-
-                            <div className="col-span-1 flex justify-center">
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                    setFormData(prev => {
-                                        const newMenus = prev.menus.map(menu => menu.id === m.id ? { ...menu, applySC: !menu.applySC } : menu);
-                                        return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
-                                    });
+                                  setFormData(prev => {
+                                    // ✅ FIXED: Uses 'menu.id'
+                                    const newMenus = prev.menus.map(item => item.id === menu.id ? { ...item, priceType: type, qty: newQty } : item);
+                                    return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
+                                  });
                                 }}
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${m.applySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
+                                className="bg-slate-50 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 hover:bg-slate-100 cursor-pointer min-w-[60px]"
                               >
-                                SC
-                              </button>
+                                <option value="perTable">席</option>
+                                <option value="perPerson">位</option>
+                                <option value="total">固定</option>
+                              </select>
+                              <input 
+                                type="number" 
+                                value={menu.qty || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setFormData(prev => {
+                                    // ✅ FIXED: Uses 'menu.id'
+                                    const newMenus = prev.menus.map(item => item.id === menu.id ? { ...item, qty: val } : item);
+                                    return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
+                                  });
+                                }}
+                                className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors"
+                              />
                             </div>
                           </div>
-                        );
-                      })}
+
+                          {/* Amount */}
+                          <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
+                            ${formatMoney(subtotal)}
+                          </div>
+
+                          {/* SC Toggle */}
+                          <div className="col-span-1 flex justify-center">
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setFormData(prev => {
+                                  const newMenus = prev.menus.map(item => {
+                                    // ✅ FIXED: Uses 'menu.id' and 'item.id'
+                                    if (item.id !== menu.id) return item;
+                                    const currentVal = item.applySC !== false; 
+                                    return { ...item, applySC: !currentVal };
+                                  });
+                                  return { ...prev, menus: newMenus, totalAmount: calculateTotalAmount({ ...prev, menus: newMenus }) };
+                                });
+                              }}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${menu.applySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
+                            >
+                              SC
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                       {/* ========================================================= */}
                       {/* NEW: PLATING SERVICE FEE ROW (Editable)                   */}
                       {/* ========================================================= */}
+                      {/* ========================================================= */}
+                      {/* PLATING SERVICE FEE ROW + HAND CARRY OPTION               */}
+                      {/* ========================================================= */}
                       {formData.servingStyle === '位上' && (
+                        <>
+                          {/* 1. Existing Plating Fee Row */}
                           <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors border-t border-slate-100">
-                            {/* 1. Name & Icon */}
                             <div className="col-span-5">
                               <div className="flex items-center">
                                 <div className="p-1.5 bg-blue-100 text-blue-600 rounded mr-3 flex-shrink-0">
-                                    <Utensils size={14}/>
+                                  <Utensils size={14}/>
                                 </div>
                                 <div>
                                   <span className="font-bold text-slate-700 block text-sm">位上服務費 (Plating Fee)</span>
@@ -5343,52 +5950,35 @@ const openEditModal = (event) => {
                                 </div>
                               </div>
                             </div>
-
-                            {/* 2. Rate (Editable) */}
                             <div className="col-span-2 flex items-center justify-end">
-                                <span className="text-slate-400 text-xs mr-1">$</span>
-                                <input 
-                                  type="number"
-                                  value={formData.platingFee}
-                                  onChange={(e) => {
-                                      const val = e.target.value;
-                                      setFormData(prev => {
-                                          const newData = { ...prev, platingFee: val };
-                                          return { ...newData, totalAmount: calculateTotalAmount(newData) };
-                                      });
-                                  }}
-                                  className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700"
-                                  placeholder="0"
-                                />
+                              <span className="text-slate-400 text-xs mr-1">$</span>
+                              <input 
+                                type="number" 
+                                name="platingFee"
+                                value={formData.platingFee} 
+                                onChange={handlePriceChange} 
+                                className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700"
+                                placeholder="0"
+                              />
                             </div>
-
-                            {/* 3. Qty (Read-Only Visualization) */}
                             <div className="col-span-2">
-                                <div className="flex items-center border border-slate-200 rounded-md bg-slate-50 h-9 overflow-hidden">
-                                    <div className="px-2 text-[10px] text-slate-400 border-r border-slate-200 h-full flex items-center bg-slate-100 min-w-[60px] justify-center">
-                                        每席
-                                    </div>
-                                    <input 
-                                      disabled
-                                      type="text"
-                                      value={formData.tableCount}
-                                      className="w-full h-full text-center outline-none text-sm font-bold text-slate-500 bg-transparent cursor-default"
-                                    />
-                                </div>
+                              <div className="flex items-center border border-slate-200 rounded-md bg-slate-50 h-9 overflow-hidden">
+                                <div className="px-2 text-[10px] text-slate-400 border-r border-slate-200 h-full flex items-center bg-slate-100 min-w-[60px] justify-center">每席</div>
+                                <input disabled type="text" value={formData.tableCount} className="w-full h-full text-center outline-none text-sm font-bold text-slate-500 bg-transparent cursor-default"/>
+                              </div>
                             </div>
-
-                            {/* 4. Amount */}
                             <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
-                                ${formatMoney((parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0))}
+                              ${formatMoney((parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0))}
                             </div>
-
-                            {/* 5. SC Toggle (Editable) */}
+                            {/* SC Toggle (Plating Fee) - FIXED */}
                             <div className="col-span-1 flex justify-center">
                                 <button 
-                                    type="button"
+                                    type="button" 
                                     onClick={() => {
                                         setFormData(prev => {
-                                            const newData = { ...prev, platingFeeApplySC: !prev.platingFeeApplySC };
+                                            // FIX: Treat undefined as TRUE (Default ON)
+                                            const currentVal = prev.platingFeeApplySC !== false;
+                                            const newData = { ...prev, platingFeeApplySC: !currentVal };
                                             return { ...newData, totalAmount: calculateTotalAmount(newData) };
                                         });
                                     }}
@@ -5398,221 +5988,290 @@ const openEditModal = (event) => {
                                 </button>
                             </div>
                           </div>
-                      )}
-                      {/* ========================================================= */}
-                      {/* 3. DRINKS ROW */}
-                      <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center bg-blue-50/10 border-t border-slate-100">
-                        <div className="col-span-5">
-                          <div className="flex items-center">
-                            <div className="p-1.5 bg-blue-100 text-blue-600 rounded mr-3 flex-shrink-0"><Coffee size={14}/></div>
-                            <div className="flex-1">
-                              <input 
-                                type="text"
-                                name="drinksPackage"
-                                value={formData.drinksPackage || ''}
-                                onChange={handleInputChange}
-                                placeholder="酒水套餐 (未選擇)"
-                                className="w-full bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-500 outline-none text-sm font-bold text-slate-700 transition-all placeholder:text-slate-400"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="col-span-2 flex items-center justify-end">
-                            <span className="text-slate-400 text-xs mr-1">$</span>
-                            <input 
-                              type="number"
-                              name="drinksPrice"
-                              value={formData.drinksPrice}
-                              onChange={handlePriceChange}
-                              className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-blue-800"
-                              placeholder="0"
-                            />
-                        </div>
 
-                        {/* UNIFIED QTY COLUMN STYLE */}
-                        <div className="col-span-2">
-                            <div className="flex items-center border border-blue-200 rounded-md bg-white h-9 overflow-hidden shadow-sm">
-                                <select 
-                                  name="drinksPriceType"
-                                  value={formData.drinksPriceType}
-                                  onChange={e => {
-                                      const type = e.target.value;
-                                      let newQty = formData.drinksQty || 1;
-                                      if(type === 'perTable') newQty = formData.tableCount || 1;
-                                      if(type === 'perPerson') newQty = formData.guestCount || 1;
+
+                            
+                          
+                        </> 
+                      )}
+
+
+                      {/* ========================================================= */}
+                      {/* 3. DRINKS ROW (With Content & Allocation) */}
+<div 
+    id="drinks-section" // ✅ ADD THIS ID
+    className="bg-blue-50/10 border-t border-slate-100 p-4 rounded-lg"
+>
+                        <div className="grid grid-cols-12 gap-4 items-center">
+                            
+                            {/* Icon & Name */}
+                            <div className="col-span-5">
+                              <div className="flex items-center">
+                                <div className="p-1.5 bg-blue-100 text-blue-600 rounded mr-3 flex-shrink-0"><Coffee size={14}/></div>
+                                <div className="flex-1">
+                                  <div className="flex items-center mb-1">
+                                      <input 
+                                        type="text" 
+                                        name="drinksPackage" 
+                                        value={formData.drinksPackage || ''} 
+                                        onChange={handleInputChange} 
+                                        placeholder="酒水套餐標題 (e.g. Standard Package)" 
+                                        className="bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-500 outline-none text-sm font-bold text-slate-700 transition-all placeholder:text-slate-400 w-full"
+                                      />
                                       
-                                      setFormData(prev => ({...prev, drinksPriceType: type, drinksQty: newQty, totalAmount: calculateTotalAmount({...prev, drinksPriceType: type, drinksQty: newQty})}));
-                                  }}
-                                  className="bg-blue-50 border-r border-blue-200 h-full px-2 text-[10px] outline-none text-blue-800 hover:bg-blue-100 cursor-pointer min-w-[60px]"
-                                >
-                                  <option value="perTable">席</option>
-                                  <option value="perPerson">位</option>
-                                  <option value="total">固定</option>
-                                </select>
+                                      {/* ⚠️ ALLOCATION WARNING BADGE */}
+                                      {(() => {
+                                          const dPrice = parseFloat(formData.drinksPrice) || 0;
+                                          const dAllocSum = Object.values(formData.drinkAllocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+                                          const dDiff = dPrice - dAllocSum;
+                                          const dIsAllocated = Math.abs(dDiff) < 1;
+
+                                          if (dPrice > 0 && !dIsAllocated) {
+                                            return (
+                                                <div 
+                                                    className="relative group ml-2 z-10 cursor-pointer"
+                                                    onClick={() => jumpToAllocation({ type: 'drinks' })} // ✅ TRIGGER JUMP
+                                                >
+                                                    <div className="flex items-center justify-center w-4 h-4 bg-red-100 text-red-600 rounded-full border border-red-200 animate-pulse hover:bg-red-200 hover:scale-110 transition-transform">
+                                                        <span className="text-[10px] font-bold">!</span>
+                                                    </div>
+                                                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-max px-2 py-1 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                                                        {dAllocSum > 0 ? `⚠️ 點擊前往分拆: 剩餘 $${formatMoney(dDiff)}` : "⚠️ 點擊前往設定酒水分拆"}
+                                                        <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-1 border-4 border-transparent border-r-slate-800"></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                      })()}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Rate */}
+                            <div className="col-span-2 flex items-center justify-end">
+                                <span className="text-slate-400 text-xs mr-1">$</span>
                                 <input 
                                   type="number" 
-                                  value={formData.drinksQty || ''}
-                                  onChange={e => setFormData(prev => ({...prev, drinksQty: e.target.value, totalAmount: calculateTotalAmount({...prev, drinksQty: e.target.value})}))}
-                                  className="w-full h-full text-center outline-none text-sm font-bold text-blue-800 focus:bg-blue-50 transition-colors"
+                                  name="drinksPrice" 
+                                  value={formData.drinksPrice} 
+                                  onChange={handlePriceChange} 
+                                  className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-blue-800"
+                                  placeholder="0"
                                 />
+                            </div>
+
+                            {/* Qty */}
+                            <div className="col-span-2">
+                                <div className="flex items-center border border-blue-200 rounded-md bg-white h-9 overflow-hidden shadow-sm">
+                                    <select 
+                                      name="drinksPriceType" 
+                                      value={formData.drinksPriceType} 
+                                      onChange={e => {
+                                          const type = e.target.value;
+                                          let newQty = formData.drinksQty || 1;
+                                          if(type === 'perTable') newQty = formData.tableCount || 1;
+                                          if(type === 'perPerson') newQty = formData.guestCount || 1;
+                                          setFormData(prev => ({...prev, drinksPriceType: type, drinksQty: newQty, totalAmount: calculateTotalAmount({...prev, drinksPriceType: type, drinksQty: newQty})}));
+                                      }} 
+                                      className="bg-blue-50 border-r border-blue-200 h-full px-2 text-[10px] outline-none text-blue-800 hover:bg-blue-100 cursor-pointer min-w-[60px]"
+                                    >
+                                      <option value="perTable">席</option>
+                                      <option value="perPerson">位</option>
+                                      <option value="total">固定</option>
+                                    </select>
+                                    <input 
+                                      type="number" 
+                                      value={formData.drinksQty || ''} 
+                                      onChange={e => setFormData(prev => ({...prev, drinksQty: e.target.value, totalAmount: calculateTotalAmount({...prev, drinksQty: e.target.value})}))} 
+                                      className="w-full h-full text-center outline-none text-sm font-bold text-blue-800 focus:bg-blue-50 transition-colors"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Amount */}
+                            <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
+                                ${formatMoney((formData.drinksPrice || 0) * (formData.drinksQty || 1))}
+                            </div>
+
+                            {/* SC Toggle */}
+                            <div className="col-span-1 flex justify-center">
+                                <button 
+                                  type="button" 
+                                  onClick={() => setFormData(prev => {
+                                      const currentVal = prev.drinksApplySC !== false;
+                                      const newData = { ...prev, drinksApplySC: !currentVal };
+                                      return { ...newData, totalAmount: calculateTotalAmount(newData) };
+                                  })} 
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${formData.drinksApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
+                                >
+                                  SC
+                                </button>
                             </div>
                         </div>
 
-                        <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
-                            ${formatMoney((formData.drinksPrice || 0) * (formData.drinksQty || 1))}
-                        </div>
 
-                        <div className="col-span-1 flex justify-center">
-                            <button 
-                              type="button"
-                              onClick={() => setFormData(prev => ({...prev, drinksApplySC: !prev.drinksApplySC, totalAmount: calculateTotalAmount({...prev, drinksApplySC: !prev.drinksApplySC})}))}
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${formData.drinksApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
-                            >
-                              SC
-                            </button>
-                        </div>
+
+
                       </div>
 
-                      {/* 4. CUSTOM ITEMS ROWS (Fixed SC Button) */}
+                      {/* 4. CUSTOM ITEMS ROWS (FIXED VARIABLES) */}
                       {(formData.customItems || []).map((item, idx) => {
                         const subtotal = (item.price || 0) * (item.qty || 1);
 
                         return (
-                          <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-3 items-center group hover:bg-slate-50 transition-colors animate-in fade-in border-t border-slate-50">
-                              
-                              {/* Name */}
-                              <div className="col-span-5 flex items-center">
-                                <div className="p-1.5 bg-slate-100 text-slate-500 rounded mr-3 flex-shrink-0"><Plus size={14}/></div>
-                                <input 
-                                  type="text" 
-                                  value={item.name}
-                                  placeholder="項目名稱 (e.g. 額外租用)"
+                          <div key={item.id || idx} className="grid grid-cols-12 gap-4 px-6 py-3 items-center group hover:bg-slate-50 transition-colors border-t border-slate-50">
+                            
+                            {/* Name */}
+                            <div className="col-span-5 flex items-center">
+                              <div className="p-1.5 bg-slate-100 text-slate-500 rounded mr-3 flex-shrink-0">
+                                <Plus size={14}/>
+                              </div>
+                              <input 
+                                type="text" 
+                                value={item.name} 
+                                placeholder="項目名稱 (e.g. 額外租用)"
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setFormData(prev => {
+                                    // ✅ FIXED: Using 'it' and 'i' to avoid confusion
+                                    const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, name: val } : it);
+                                    return { ...prev, customItems: newItems };
+                                  });
+                                }}
+                                className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none text-sm text-slate-700 transition-all placeholder:text-slate-300"
+                              />
+                            </div>
+
+                            {/* Rate */}
+                            <div className="col-span-2 flex items-center justify-end">
+                              <span className="text-slate-400 text-xs mr-1">$</span>
+                              <input 
+                                type="number" 
+                                value={item.price} 
+                                placeholder="0"
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setFormData(prev => {
+                                    const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, price: val } : it);
+                                    return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                  });
+                                }}
+                                className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono"
+                              />
+                            </div>
+
+                            {/* Unit/Qty */}
+                            <div className="col-span-2">
+                              <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden">
+                                <select 
+                                  value={item.unitType || 'fixed'} 
                                   onChange={e => {
-                                      const val = e.target.value;
-                                      setFormData(prev => {
-                                        const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, name: val } : it);
-                                        return { ...prev, customItems: newItems };
-                                      });
+                                    const type = e.target.value;
+                                    let newQty = item.qty || 1;
+                                    if(type === 'perTable') newQty = formData.tableCount || 1;
+                                    if(type === 'perPerson') newQty = formData.guestCount || 1;
+
+                                    setFormData(prev => {
+                                      const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, unitType: type, qty: newQty } : it);
+                                      return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                    });
                                   }}
-                                  className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none text-sm text-slate-700 transition-all placeholder:text-slate-300"
+                                  className="bg-slate-100 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 hover:bg-slate-200 cursor-pointer min-w-[60px]"
+                                >
+                                  <option value="fixed">固定</option>
+                                  <option value="perTable">席</option>
+                                  <option value="perPerson">位</option>
+                                </select>
+                                <input 
+                                  type="number" 
+                                  value={item.qty || ''}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setFormData(prev => {
+                                      const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, qty: val } : it);
+                                      return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                    });
+                                  }}
+                                  className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors"
                                 />
                               </div>
+                            </div>
 
-                              {/* Rate */}
-                              <div className="col-span-2 flex items-center justify-end">
-                                <span className="text-slate-400 text-xs mr-1">$</span>
-                                <input 
-                                  type="number"
-                                  value={item.price}
-                                  placeholder="0"
-                                  onChange={e => {
-                                      const val = e.target.value;
-                                      setFormData(prev => {
-                                        const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, price: val } : it);
-                                        return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
-                                      });
-                                  }}
-                                  className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono"
-                                />
-                              </div>
+                            {/* Amount */}
+                            <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
+                              ${formatMoney(subtotal)}
+                            </div>
 
-                              {/* Unit/Qty */}
-                              <div className="col-span-2">
-                                <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden">
-                                    <select 
-                                      value={item.unitType || 'fixed'}
-                                      onChange={e => {
-                                        const type = e.target.value;
-                                        // Auto-update qty logic
-                                        let newQty = item.qty || 1;
-                                        if(type === 'perTable') newQty = formData.tableCount || 1;
-                                        if(type === 'perPerson') newQty = formData.guestCount || 1;
+                            {/* Controls (SC & Delete) */}
+                            <div className="col-span-1 flex justify-center gap-1">
+                              {/* SC Button - FIXED to use 'item.applySC' */}
+                              <button 
+                                type="button" 
+                                title="Apply Service Charge"
+                                onClick={() => {
+                                  setFormData(prev => {
+                                    const newItems = prev.customItems.map((it, i) => 
+                                      i === idx ? { ...it, applySC: !it.applySC } : it
+                                    );
+                                    return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                  });
+                                }}
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${item.applySC ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
+                              >
+                                SC
+                              </button>
 
-                                        setFormData(prev => {
-                                            const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, unitType: type, qty: newQty } : it);
-                                            return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
-                                        });
-                                      }}
-                                      className="bg-slate-100 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 hover:bg-slate-200 cursor-pointer min-w-[60px]"
-                                    >
-                                      <option value="fixed">固定</option>
-                                      <option value="perTable">席</option>
-                                      <option value="perPerson">位</option>
-                                    </select>
-                                    <input 
-                                      type="number" 
-                                      value={item.qty || ''}
-                                      onChange={e => {
-                                        const val = e.target.value;
-                                        setFormData(prev => {
-                                            const newItems = prev.customItems.map((it, i) => i === idx ? { ...it, qty: val } : it);
-                                            return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
-                                        });
-                                      }}
-                                      className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors"
-                                    />
-                                </div>
-                              </div>
-
-                              {/* Amount */}
-                              <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
-                                ${formatMoney(subtotal)}
-                              </div>
-
-                              {/* SC Toggle (Fixed) */}
-                              <div className="col-span-1 flex justify-center gap-1">
-                                <button 
-                                  title="Apply Service Charge"
-                                  type="button"
-                                  onClick={() => {
-                                      setFormData(prev => {
-                                        // IMMUTABLE UPDATE: Create a new object for the updated item
-                                        const newItems = prev.customItems.map((it, i) => 
-                                            i === idx ? { ...it, applySC: !it.applySC } : it
-                                        );
-                                        return { 
-                                            ...prev, 
-                                            customItems: newItems, 
-                                            totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) 
-                                        };
-                                      });
-                                  }}
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${item.applySC ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 hover:border-slate-300 opacity-50'}`}
-                                >
-                                  SC
-                                </button>
-                                <button 
-                                  title="Delete Item"
-                                  type="button"
-                                  onClick={() => {
-                                      setFormData(prev => {
-                                        const newItems = prev.customItems.filter((_, i) => i !== idx);
-                                        return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
-                                      });
-                                  }}
-                                  className="text-slate-300 hover:text-red-500 p-1 transition-colors"
-                                >
-                                  <Trash2 size={14}/>
-                                </button>
-                              </div>
+                              {/* Delete Button */}
+                              <button 
+                                type="button"
+                                title="Delete Item"
+                                onClick={() => {
+                                  setFormData(prev => {
+                                    const newItems = prev.customItems.filter((_, i) => i !== idx);
+                                    return { ...prev, customItems: newItems, totalAmount: calculateTotalAmount({ ...prev, customItems: newItems }) };
+                                  });
+                                }}
+                                className="text-slate-300 hover:text-red-500 p-1 transition-colors"
+                              >
+                                <Trash2 size={14}/>
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
 
-                      {/* 5. ADD ITEM BUTTON ROW */}
-                      <div className="px-6 py-3 bg-slate-50/50">
-                        <button 
-                          type="button"
-                          onClick={() => setFormData(prev => ({
-                              ...prev, 
-                              customItems: [...(prev.customItems || []), { id: Date.now(), name: '', price: '', qty: 1, unitType: 'fixed', applySC: false }]
-                          }))}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-                        >
-                          <Plus size={14} className="mr-1"/> 新增額外項目 (Add Item)
-                        </button>
-                      </div>
+                    {/* 5. ADD ITEM BUTTON ROW (Fixed) */}
+                    <div className="px-6 py-3 bg-slate-50/50">
+                      <button 
+                        type="button"
+                        onClick={() => setFormData(prev => {
+                            // 1. Create New Item (Use Random to prevent ID collision)
+                            const newItem = { 
+                                id: Date.now() + Math.random(), 
+                                name: '', 
+                                price: '', 
+                                qty: 1, 
+                                unitType: 'fixed', 
+                                applySC: true // Default to TRUE (Better for Revenue)
+                            };
+
+                            // 2. Create New Array
+                            const newItems = [...(prev.customItems || []), newItem];
+
+                            // 3. Return State with Recalculated Total
+                            return {
+                                ...prev, 
+                                customItems: newItems,
+                                totalAmount: calculateTotalAmount({ ...prev, customItems: newItems })
+                            };
+                        })}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+                      >
+                        <Plus size={14} className="mr-1"/> 新增額外項目 (Add Item)
+                      </button>
+                    </div>
                     </div>
                   </div>
 
@@ -5660,6 +6319,7 @@ const openEditModal = (event) => {
                           </div>
                         </div>
 
+                                                {/* In your JSX (TAB 3: BILLING) */}
                         <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                           <span className="text-sm text-slate-600">折扣 (Discount)</span>
                           <div className="relative w-24">
@@ -5667,8 +6327,8 @@ const openEditModal = (event) => {
                               <input 
                                 type="text" 
                                 name="discount"
-                                value={formatMoney(formData.discount)}
-                                onChange={handlePriceChange}
+                                value={formatMoney(formData.discount)} // Displays "35,000"
+                                onChange={handlePriceChange}           // ✅ MUST BE handlePriceChange
                                 className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono pl-4"
                                 placeholder="0"
                               />
@@ -6044,152 +6704,238 @@ const openEditModal = (event) => {
                 </div>
               )}
 
-              {/* TAB 5: LOGISTICS */}
-              {formTab === 'logistics' && (
-                <div className="space-y-6 animate-in fade-in">
-                  <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                    <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">物流與備註 (Logistics)</h4>
-                    
-                  {/* 1. Multiple Deliveries Section (Updated with DATE) */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                       <div className="flex justify-between items-center mb-3">
-                          <label className="text-sm font-bold text-slate-700 flex items-center"><Truck size={16} className="mr-2"/> 送貨/物資安排 (Deliveries)</label>
-                          <button 
-                             type="button" 
-                             // UPDATE: Added date: '' to the new object
-                             onClick={() => setFormData(prev => ({...prev, deliveries: [...(prev.deliveries || []), { id: Date.now(), unit: '', date: '', time: '', items: '' }] }))}
-                             className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:text-blue-600 flex items-center shadow-sm"
-                          >
-                             <Plus size={12} className="mr-1"/> 新增單位
-                          </button>
+{/* TAB 5: LOGISTICS & RUNDOWN (STRICT 24H TEXT INPUTS) */}
+            {formTab === 'logistics' && (
+              <div className="space-y-6 animate-in fade-in">
+                
+                {/* --- 1. EVENT RUNDOWN --- */}
+                <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
+                   <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4">
+                      <h4 className="font-bold text-slate-800 flex items-center">
+                         <Clock size={18} className="mr-2 text-slate-500"/> 活動流程 (Event Rundown)
+                      </h4>
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData(prev => ({...prev, rundown: [...(prev.rundown||[]), { id: Date.now(), time: '18:30', activity: '' }] }))}
+                        className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 font-bold"
+                      >
+                         + 新增流程
+                      </button>
+                   </div>
+                   <div className="space-y-2">
+                      {(!formData.rundown || formData.rundown.length === 0) && <p className="text-sm text-slate-400 italic">暫無流程</p>}
+                      {(formData.rundown || []).map((item, idx) => (
+                         <div key={item.id} className="flex gap-3 items-center group">
+                            {/* ✅ CHANGED TO TEXT INPUT FOR 24H FORMAT */}
+                            <input 
+                               type="text" 
+                               value={item.time} 
+                               placeholder="18:30"
+                               maxLength={5}
+                               onChange={e => {
+                                  const newList = [...formData.rundown];
+                                  newList[idx].time = e.target.value;
+                                  setFormData(prev => ({...prev, rundown: newList}));
+                               }}
+                               className="w-20 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center font-mono placeholder:text-slate-300"
+                            />
+                            <input 
+                               type="text" 
+                               value={item.activity} 
+                               placeholder="活動內容 (Activity)..."
+                               onChange={e => {
+                                  const newList = [...formData.rundown];
+                                  newList[idx].activity = e.target.value;
+                                  setFormData(prev => ({...prev, rundown: newList}));
+                               }}
+                               className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                            />
+                            <button 
+                               type="button" 
+                               onClick={() => setFormData(prev => ({...prev, rundown: prev.rundown.filter((_, i) => i !== idx)}))}
+                               className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                               <Trash2 size={14}/>
+                            </button>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+
+                {/* --- 2. BUS ARRANGEMENT --- */}
+                <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
+                   <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4">
+                      <h4 className="font-bold text-slate-800 flex items-center">
+                         <Truck size={18} className="mr-2 text-slate-500"/> 旅遊巴安排 (Bus Arrangement)
+                      </h4>
+                      <label className="flex items-center space-x-2 text-xs cursor-pointer select-none">
+                          <input 
+                            type="checkbox" 
+                            checked={formData.busInfo?.enabled || false}
+                            onChange={e => setFormData(prev => ({
+                                ...prev, 
+                                busInfo: { 
+                                    ...prev.busInfo, 
+                                    enabled: e.target.checked,
+                                    arrival: { ...prev.busInfo?.arrival, time: prev.busInfo?.arrival?.time || '18:30' },
+                                    departure: { ...prev.busInfo?.departure, time: prev.busInfo?.departure?.time || '22:30' }
+                                }
+                            }))}
+                            className="rounded text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className={formData.busInfo?.enabled ? "font-bold text-blue-600" : "text-slate-400"}>啟用 (Enable)</span>
+                      </label>
+                   </div>
+
+                   {formData.busInfo?.enabled && (
+                       <div className="space-y-4 animate-in slide-in-from-top-2">
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                               {/* Arrival */}
+                               <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                   <span className="text-xs font-bold text-slate-500 block mb-2">接載 (Arrival): 出發地 {'>'} 璟瓏軒</span>
+                                   <div className="flex gap-2 mb-2">
+                                       <input 
+                                          type="text" 
+                                          placeholder="18:30"
+                                          className="w-20 text-sm border rounded px-2 py-1 text-center font-mono" 
+                                          value={formData.busInfo?.arrival?.time || ''} 
+                                          onChange={e => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, arrival: {...prev.busInfo.arrival, time: e.target.value}}}))}
+                                       />
+                                       <input type="text" placeholder="車牌 (Plate)" className="flex-1 text-sm border rounded px-2 py-1" value={formData.busInfo?.arrival?.plate || ''} onChange={e => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, arrival: {...prev.busInfo.arrival, plate: e.target.value}}}))}/>
+                                   </div>
+                               </div>
+                               {/* Departure */}
+                               <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                   <span className="text-xs font-bold text-slate-500 block mb-2">散席 (Dismissal): 璟瓏軒 {'>'} 目的地</span>
+                                   <div className="flex gap-2 mb-2">
+                                       <input 
+                                          type="text" 
+                                          placeholder="22:30"
+                                          className="w-20 text-sm border rounded px-2 py-1 text-center font-mono" 
+                                          value={formData.busInfo?.departure?.time || ''} 
+                                          onChange={e => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, departure: {...prev.busInfo.departure, time: e.target.value}}}))}
+                                       />
+                                       <input type="text" placeholder="車牌 (Plate)" className="flex-1 text-sm border rounded px-2 py-1" value={formData.busInfo?.departure?.plate || ''} onChange={e => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, departure: {...prev.busInfo.departure, plate: e.target.value}}}))}/>
+                                   </div>
+                               </div>
+                           </div>
+
+                           {/* Custom Routes */}
+                           <div>
+                               <div className="flex justify-between items-center mb-2">
+                                   <span className="text-xs font-bold text-slate-500">自訂路線 (Custom Routes)</span>
+                                   <button 
+                                      type="button" 
+                                      onClick={() => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: [...(prev.busInfo.customRoutes||[]), {id: Date.now(), route: '', time: '18:30', plate: ''}]}}))} 
+                                      className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
+                                   >
+                                      + 新增
+                                   </button>
+                               </div>
+                               <div className="space-y-2">
+                                   {(formData.busInfo?.customRoutes || []).map((route, idx) => (
+                                       <div key={route.id} className="flex gap-2 items-center">
+                                           <input 
+                                              type="text" 
+                                              placeholder="18:30"
+                                              className="w-20 text-sm border rounded px-2 py-1 text-center font-mono" 
+                                              value={route.time} 
+                                              onChange={e => {
+                                               const newRoutes = [...formData.busInfo.customRoutes];
+                                               newRoutes[idx].time = e.target.value;
+                                               setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
+                                           }}/>
+                                           <input type="text" placeholder="路線 (Route)" className="flex-1 text-sm border rounded px-2 py-1" value={route.route} onChange={e => {
+                                               const newRoutes = [...formData.busInfo.customRoutes];
+                                               newRoutes[idx].route = e.target.value;
+                                               setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
+                                           }}/>
+                                           <input type="text" placeholder="車牌 (Plate)" className="w-24 text-sm border rounded px-2 py-1" value={route.plate} onChange={e => {
+                                               const newRoutes = [...formData.busInfo.customRoutes];
+                                               newRoutes[idx].plate = e.target.value;
+                                               setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
+                                           }}/>
+                                           <button type="button" onClick={() => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: prev.busInfo.customRoutes.filter((_, i) => i !== idx)}}))} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                                       </div>
+                                   ))}
+                               </div>
+                           </div>
+                           
+                           <div className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded border border-amber-100 flex items-start">
+                               <Info size={12} className="mr-1 mt-0.5"/>
+                               <span>提示：旅遊巴成本請在「餐飲詳情」或「費用付款」頁面的 "Revenue Allocation" 中分配至 "交通 (Transport)" 部門。</span>
+                           </div>
                        </div>
-                       
-                       <div className="space-y-3">
-                          {(!formData.deliveries || formData.deliveries.length === 0) && (
-                             <div className="text-center text-slate-400 text-xs py-2 italic">暫無送貨安排</div>
-                          )}
-                          
-                          {(formData.deliveries || []).map((delivery, idx) => (
-                             <div key={delivery.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm relative group">
-                                <div className="grid grid-cols-12 gap-2 mb-2">
-                                   {/* Unit Name */}
-                                   <div className="col-span-4">
+                   )}
+                </div>
+
+                {/* --- 3. OTHER LOGISTICS --- */}
+                <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
+                  <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">其他物流 (Other Logistics)</h4>
+                  
+                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <div className="flex justify-between items-center mb-3">
+                         <label className="text-sm font-bold text-slate-700 flex items-center"><Truck size={16} className="mr-2"/> 送貨/物資安排 (Deliveries)</label>
+                         <button 
+                            type="button" 
+                            onClick={() => setFormData(prev => ({...prev, deliveries: [...(prev.deliveries || []), { id: Date.now(), unit: '', date: '', time: '18:30', items: '' }] }))} 
+                            className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:text-blue-600 flex items-center shadow-sm"
+                         >
+                            <Plus size={12} className="mr-1"/> 新增單位
+                         </button>
+                      </div>
+                      <div className="space-y-3">
+                         {(!formData.deliveries || formData.deliveries.length === 0) && <div className="text-center text-slate-400 text-xs py-2 italic">暫無送貨安排</div>}
+                         {(formData.deliveries || []).map((delivery, idx) => (
+                            <div key={delivery.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm relative group">
+                               <div className="grid grid-cols-12 gap-2 mb-2">
+                                  <div className="col-span-4"><input type="text" placeholder="單位 (Unit)" className="w-full text-sm font-bold border-b border-slate-200 outline-none" value={delivery.unit} onChange={e => { const d = [...formData.deliveries]; d[idx].unit = e.target.value; setFormData(prev => ({...prev, deliveries: d})); }}/></div>
+                                  <div className="col-span-4"><input type="date" className="w-full text-sm border-b border-slate-200 outline-none" value={delivery.date} onChange={e => { const d = [...formData.deliveries]; d[idx].date = e.target.value; setFormData(prev => ({...prev, deliveries: d})); }}/></div>
+                                  <div className="col-span-3">
+                                      {/* ✅ CHANGED TO TEXT INPUT FOR 24H FORMAT */}
                                       <input 
                                          type="text" 
-                                         placeholder="單位 (Unit)" 
-                                         className="w-full text-sm font-bold border-b border-slate-200 outline-none focus:border-blue-500 placeholder:font-normal"
-                                         value={delivery.unit}
-                                         onChange={e => {
-                                            const newDeliveries = [...formData.deliveries];
-                                            newDeliveries[idx].unit = e.target.value;
-                                            setFormData(prev => ({...prev, deliveries: newDeliveries}));
-                                         }}
+                                         placeholder="18:30"
+                                         className="w-full text-sm border-b border-slate-200 outline-none focus:border-blue-500 text-slate-600 text-center font-mono" 
+                                         value={delivery.time} 
+                                         onChange={e => { const d = [...formData.deliveries]; d[idx].time = e.target.value; setFormData(prev => ({...prev, deliveries: d})); }}
                                       />
-                                   </div>
+                                  </div>
+                                  <div className="col-span-1 text-right"><button type="button" onClick={() => setFormData(prev => ({...prev, deliveries: prev.deliveries.filter((_, i) => i !== idx)}))} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div>
+                               </div>
+                               <textarea rows={2} placeholder="物資清單..." className="w-full text-sm bg-slate-50 border border-slate-100 rounded p-2 outline-none resize-none" value={delivery.items} onChange={e => { const d = [...formData.deliveries]; d[idx].items = e.target.value; setFormData(prev => ({...prev, deliveries: d})); }}/>
+                            </div>
+                         ))}
+                      </div>
+                   </div>
 
-                                   {/* NEW: Date Input */}
-                                   <div className="col-span-4">
-                                      <input 
-                                         type="date" 
-                                         className="w-full text-sm border-b border-slate-200 outline-none focus:border-blue-500 text-slate-600"
-                                         value={delivery.date}
-                                         onChange={e => {
-                                            const newDeliveries = [...formData.deliveries];
-                                            newDeliveries[idx].date = e.target.value;
-                                            setFormData(prev => ({...prev, deliveries: newDeliveries}));
-                                         }}
-                                      />
-                                   </div>
+                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <label className="text-sm font-bold text-slate-700 flex items-center mb-3"><MapPin size={16} className="mr-2"/> 泊車安排 (Parking)</label>
+                      <div className="bg-white p-3 rounded border border-slate-200 mb-3">
+                         <span className="text-xs font-bold text-blue-600 uppercase mb-2 block">免費泊車券</span>
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center border rounded px-2 py-1 bg-slate-50">
+                               <span className="text-xs text-slate-500 mr-2">數量:</span>
+                               <input type="number" className="flex-1 bg-transparent outline-none text-sm font-bold" value={formData.parkingInfo?.ticketQty || ''} onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, ticketQty: e.target.value }}))} />
+                               <span className="text-xs text-slate-400 ml-1">張</span>
+                            </div>
+                            <div className="flex items-center border rounded px-2 py-1 bg-slate-50">
+                               <span className="text-xs text-slate-500 mr-2">時數:</span>
+                               <input type="number" className="flex-1 bg-transparent outline-none text-sm font-bold" value={formData.parkingInfo?.ticketHours || ''} onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, ticketHours: e.target.value }}))} />
+                               <span className="text-xs text-slate-400 ml-1">小時</span>
+                            </div>
+                         </div>
+                      </div>
+                      <div className="mt-2">
+                         <label className="text-xs font-bold text-slate-500 mb-1 block">車牌登記</label>
+                         <textarea rows={3} value={formData.parkingInfo?.plates || ''} onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, plates: e.target.value }}))} placeholder="請輸入車牌..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none" />
+                      </div>
+                   </div>
 
-                                   {/* Time Input */}
-                                   <div className="col-span-3">
-                                      <input 
-                                         type="time" 
-                                         className="w-full text-sm border-b border-slate-200 outline-none focus:border-blue-500 text-slate-600"
-                                         value={delivery.time}
-                                         onChange={e => {
-                                            const newDeliveries = [...formData.deliveries];
-                                            newDeliveries[idx].time = e.target.value;
-                                            setFormData(prev => ({...prev, deliveries: newDeliveries}));
-                                         }}
-                                      />
-                                   </div>
-
-                                   {/* Delete Button */}
-                                   <div className="col-span-1 text-right">
-                                       <button 
-                                          type="button"
-                                          onClick={() => setFormData(prev => ({...prev, deliveries: prev.deliveries.filter((_, i) => i !== idx)}))}
-                                          className="text-slate-300 hover:text-red-500 p-1"
-                                       >
-                                          <Trash2 size={14} />
-                                       </button>
-                                   </div>
-                                </div>
-                                <textarea 
-                                   rows={2} 
-                                   placeholder="物資清單 / 備註 (Items List)..." 
-                                   className="w-full text-sm bg-slate-50 border border-slate-100 rounded p-2 outline-none focus:bg-white focus:border-blue-200 resize-none"
-                                   value={delivery.items}
-                                   onChange={e => {
-                                      const newDeliveries = [...formData.deliveries];
-                                      newDeliveries[idx].items = e.target.value;
-                                      setFormData(prev => ({...prev, deliveries: newDeliveries}));
-                                   }}
-                                />
-                             </div>
-                          ))}
-                       </div>
-                    </div>
-
-                    {/* 2. Parking Tickets Section */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                       <label className="text-sm font-bold text-slate-700 flex items-center mb-3"><MapPin size={16} className="mr-2"/> 泊車安排 (Parking)</label>
-                       
-                       <div className="bg-white p-3 rounded border border-slate-200 mb-3">
-                          <span className="text-xs font-bold text-blue-600 uppercase mb-2 block">免費泊車券 (Free Parking Tickets)</span>
-                          <div className="grid grid-cols-2 gap-4">
-                             <div className="flex items-center border rounded px-2 py-1 bg-slate-50">
-                                <span className="text-xs text-slate-500 mr-2">數量:</span>
-                                <input 
-                                   type="number" 
-                                   className="flex-1 bg-transparent outline-none text-sm font-bold"
-                                   placeholder="0"
-                                   value={formData.parkingInfo?.ticketQty || ''}
-                                   onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, ticketQty: e.target.value }}))}
-                                />
-                                <span className="text-xs text-slate-400 ml-1">張</span>
-                             </div>
-                             <div className="flex items-center border rounded px-2 py-1 bg-slate-50">
-                                <span className="text-xs text-slate-500 mr-2">時數:</span>
-                                <input 
-                                   type="number" 
-                                   className="flex-1 bg-transparent outline-none text-sm font-bold"
-                                   placeholder="0"
-                                   value={formData.parkingInfo?.ticketHours || ''}
-                                   onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, ticketHours: e.target.value }}))}
-                                />
-                                <span className="text-xs text-slate-400 ml-1">小時</span>
-                             </div>
-                          </div>
-                       </div>
-                       
-                       <div className="mt-2">
-                          <label className="text-xs font-bold text-slate-500 mb-1 block">車牌登記 (License Plates Registration)</label>
-                          <textarea 
-                             rows={3} 
-                             value={formData.parkingInfo?.plates || ''} 
-                             onChange={e => setFormData(prev => ({...prev, parkingInfo: { ...prev.parkingInfo, plates: e.target.value }}))} 
-                             placeholder="請輸入車牌 (e.g. AB1234, CD5678)"
-                             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                          />
-                       </div>
-                    </div>
-
-                    <FormTextArea label="其他備註 (Other Notes)" name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} />
-                  </div>
+                   <FormTextArea label="其他備註 (Other Notes)" name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} />
                 </div>
-              )}
+              </div>
+            )}
             </div>
             {/* TAB 6: PRINT CONFIGURATION */}
             {formTab === 'printConfig' && (
@@ -6451,3 +7197,4 @@ const openEditModal = (event) => {
     </>
   );
   
+}

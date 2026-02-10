@@ -1033,40 +1033,249 @@ const PrintableEO = ({ data, printMode }) => {
   // ==========================================
   // VIEW 1: BRIEFING MODE
   // ==========================================
+  // ==========================================
+  // VIEW 1: BANQUET BRIEFING (FLOOR PLAN & OPS)
+  // ==========================================
   if (printMode === 'BRIEFING') {
     return (
-      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm p-4">
-        {/* ✅ UPDATED CSS FOOTER */}
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 min-h-screen relative flex flex-col">
         <style>{`
           @media print { 
             @page { 
-              margin: 5mm; 
+              margin: 10mm; 
               size: A4; 
               @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
-              @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
+              @bottom-center { content: "${data.orderId} - BRIEFING"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
               @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
             } 
+            body { -webkit-print-color-adjust: exact; } 
+            .break-inside-avoid { break-inside: avoid; }
           }
         `}</style>
-        <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
-           <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">FLOOR STAFF BRIEFING</div>
-              <h1 className="text-3xl font-black mt-1">{data.eventName}</h1>
-              <div className="flex gap-4 mt-2 text-sm font-bold">
-                 <span className="bg-black text-white px-2 py-1 rounded">{formatDateWithDay(data.date)}</span>
-                 <span className="border border-black px-2 py-1 rounded">{data.startTime} - {data.endTime}</span>
-                 <span className="text-red-600 border border-red-600 px-2 py-1 rounded">{data.servingTime ? `${data.servingTime} 起菜` : '起菜時間待定'}</span>
-              </div>
-           </div>
-           <div className="text-right"><div className="text-4xl font-black text-slate-200">BRIEF</div></div>
+
+        {/* HEADER */}
+        <div className="flex justify-between items-start border-b-4 border-indigo-600 pb-4 mb-6">
+            <div>
+                <h1 className="text-3xl font-black tracking-tight text-indigo-900">樓面工作單</h1>
+                <h2 className="text-lg font-bold text-slate-500 uppercase tracking-widest mt-1">Banquet Briefing</h2>
+            </div>
+            <div className="text-right">
+                <div className="text-xl font-bold text-slate-900">{formatDateWithDay(data.date)}</div>
+                <div className="text-base font-bold text-indigo-600 mt-1">{data.startTime} - {data.endTime}</div>
+                <div className="text-xs font-mono text-slate-400 mt-1">{data.orderId}</div>
+            </div>
         </div>
-        <div className="grid grid-cols-2 gap-6 mb-6">
-           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50"><span className="text-slate-400 text-xs font-bold uppercase mb-2">負責檯號 (Table Numbers)</span><div className="text-4xl font-black text-slate-200">寫在此處</div></div>
-           <div className="border-2 border-slate-300 border-dashed rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50"><span className="text-slate-400 text-xs font-bold uppercase mb-2">員工姓名/編號 (Staff Name)</span><div className="text-4xl font-black text-slate-200">寫在此處</div></div>
+
+        {/* TOP STATS */}
+        <div className="grid grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="border-r border-slate-200">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase">Event Name</span>
+                <span className="font-bold text-sm text-slate-900">{data.eventName}</span>
+            </div>
+            <div className="border-r border-slate-200 pl-4">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase">Venue</span>
+                <span className="font-bold text-sm text-slate-900">{cleanLocation(data.venueLocation)}</span>
+            </div>
+            <div className="border-r border-slate-200 pl-4">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase">Attendance</span>
+                <span className="font-bold text-sm text-slate-900">{data.tableCount} 席 / {data.guestCount} Pax</span>
+            </div>
+            <div className="pl-4">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase">PIC</span>
+                <span className="font-bold text-sm text-slate-900">{data.salesRep || '-'}</span>
+            </div>
         </div>
-        <div className="mb-6"><div className="flex gap-4"><div className="flex-1 border-2 border-red-500 rounded-lg p-3 bg-red-50"><div className="flex justify-between items-start mb-2"><span className="text-red-700 font-bold flex items-center"><AlertTriangle size={16} className="mr-1"/> 過敏 / 特別餐 (Allergies)</span><span className="text-[10px] text-red-400">請填寫檯號</span></div><div className="min-h-[80px]"><p className="text-lg font-bold text-red-900 whitespace-pre-wrap">{data.allergies || data.specialMenuReq || '暫無特別記錄'}</p></div><div className="border-b border-red-200 mt-6"></div><div className="border-b border-red-200 mt-6"></div></div><div className="w-1/3 border-2 border-blue-200 rounded-lg p-3 bg-blue-50"><span className="text-blue-700 font-bold block mb-2"><Coffee size={16} className="inline mr-1"/> 酒水 (Drinks)</span><p className="text-sm font-bold text-blue-900 whitespace-pre-wrap">{data.drinksPackage || '未定'}</p></div></div></div>
-        <div className="border-2 border-slate-800 rounded-xl overflow-hidden"><div className="bg-slate-800 text-white px-4 py-2 flex justify-between items-center"><span className="font-bold">餐單 (Menu Reference)</span><span className="text-xs bg-slate-600 px-2 py-1 rounded">{data.servingStyle}</span></div><div className="p-4 bg-white min-h-[300px]"><div className="space-y-6">{data.menus && data.menus.length > 0 ? (data.menus.map((menu, idx) => (<div key={idx}>{menu.title && <h4 className="font-bold underline mb-2 text-lg">{menu.title}</h4>}<p className="text-base font-medium leading-relaxed whitespace-pre-wrap text-slate-800">{onlyChinese(menu.content)}</p></div>))) : (<p className="text-lg font-medium leading-relaxed">{data.menuType}</p>)}</div></div></div>
-        <div className="mt-4 text-xs text-slate-500"><div><span className="font-bold block text-slate-700">其他備註:</span> {data.otherNotes || '無'}</div></div>
+
+        <div className="grid grid-cols-2 gap-8">
+            
+            {/* LEFT COLUMN: RUNDOWN & F&B */}
+            <div className="space-y-6">
+                
+                {/* RUNDOWN */}
+                <div className="break-inside-avoid">
+                    <h3 className="font-bold text-indigo-900 border-b-2 border-indigo-100 pb-1 mb-2 flex items-center">
+                        <Clock size={16} className="mr-2"/> 活動流程 (Rundown)
+                    </h3>
+                    {(!data.rundown || data.rundown.length === 0) ? (
+                        <p className="text-xs text-slate-400 italic">暫無流程</p>
+                    ) : (
+                        <table className="w-full text-xs">
+                            <tbody className="divide-y divide-slate-100">
+                                {data.rundown.map((item, i) => (
+                                    <tr key={i}>
+                                        <td className="py-2 w-16 font-mono font-bold text-indigo-600 align-top">{item.time}</td>
+                                        <td className="py-2 font-medium text-slate-700">{item.activity}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
+                {/* F&B SUMMARY */}
+                <div className="break-inside-avoid bg-amber-50 p-4 rounded-lg border border-amber-100">
+                    <h3 className="font-bold text-amber-800 border-b border-amber-200 pb-1 mb-2 flex items-center">
+                        <Utensils size={16} className="mr-2"/> 餐飲安排 (F&B)
+                    </h3>
+                    <div className="space-y-3 text-xs">
+                        <div className="flex justify-between">
+                            <span className="text-amber-700 font-bold">上菜方式:</span>
+                            <span className="font-bold bg-white px-2 rounded text-slate-800">{data.servingStyle}</span>
+                        </div>
+                        <div>
+                            <span className="text-amber-700 font-bold block mb-1">酒水套餐:</span>
+                            <span className="font-medium text-slate-800">{data.drinksPackage || 'Standard / 無'}</span>
+                        </div>
+                        {data.menus && data.menus.length > 0 && (
+                            <div>
+                                <span className="text-amber-700 font-bold block mb-1">菜單重點:</span>
+                                {data.menus.map((m, i) => (
+                                    <div key={i} className="pl-2 border-l-2 border-amber-300 mb-1">
+                                        {m.title && <div className="font-bold text-slate-900 underline">{m.title}</div>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {(data.specialMenuReq || data.allergies) && (
+                            <div className="mt-2 bg-white p-2 rounded border border-red-200 text-red-700 font-bold">
+                                <AlertTriangle size={12} className="inline mr-1 mb-0.5"/>
+                                {data.specialMenuReq} {data.allergies}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+            </div>
+
+            {/* RIGHT COLUMN: SETUP & LOGISTICS */}
+            <div className="space-y-6">
+                
+                {/* SETUP */}
+                <div className="break-inside-avoid">
+                    <h3 className="font-bold text-indigo-900 border-b-2 border-indigo-100 pb-1 mb-2 flex items-center">
+                        <Layout size={16} className="mr-2"/> 場地設置 (Setup)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                        <div className="bg-slate-50 p-2 rounded">
+                            <span className="block text-[9px] text-slate-400 uppercase">Table Cloth</span>
+                            <span className="font-bold">{data.tableClothColor || 'Standard'}</span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded">
+                            <span className="block text-[9px] text-slate-400 uppercase">Chair Cover</span>
+                            <span className="font-bold">{data.chairCoverColor || 'Standard'}</span>
+                        </div>
+                    </div>
+                    
+                    <div className="text-xs space-y-2">
+                        {data.venueDecor && (
+                            <p><span className="font-bold text-slate-600">佈置備註:</span> {data.venueDecor}</p>
+                        )}
+                        <div className="border-t border-slate-100 pt-2">
+                            <span className="font-bold text-slate-600 block mb-1">AV / 器材:</span>
+                            <div className="flex flex-wrap gap-1">
+                                {Object.keys(avMap).map(k => data.avRequirements?.[k] && (
+                                    <span key={k} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-100 font-bold text-[10px]">
+                                        {avMap[k]}
+                                    </span>
+                                ))}
+                            </div>
+                            {data.avNotes && <p className="mt-1 text-slate-500 italic">*{data.avNotes}</p>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* LOGISTICS (BUS & PARKING) - 2 COLUMN LAYOUT */}
+                <div className="break-inside-avoid">
+                    <h3 className="font-bold text-indigo-900 border-b-2 border-indigo-100 pb-1 mb-2 flex items-center">
+                        <Truck size={16} className="mr-2"/> 物流與泊車 (Logistics)
+                    </h3>
+                    
+                    {/* BUS INFO */}
+                    {data.busInfo?.enabled ? (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-xs mb-3">
+                            <span className="font-bold text-indigo-800 block mb-2 border-b border-indigo-200 pb-1">🚌 旅遊巴安排</span>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* Arrivals */}
+                                <div>
+                                    <span className="font-bold text-indigo-600 block text-[10px] mb-1">接載 (Arrival):</span>
+                                    {(!data.busInfo.arrivals || data.busInfo.arrivals.length === 0) ? <span className="text-slate-400">-</span> : (
+                                        data.busInfo.arrivals.map((bus, i) => (
+                                            <div key={i} className="mb-1.5 leading-tight">
+                                                <div className="font-mono font-bold text-black">{bus.time} <span className="text-slate-500 font-normal">({bus.plate || 'No Plate'})</span></div>
+                                                <div className="text-slate-700">{bus.location}</div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                {/* Departures */}
+                                <div>
+                                    <span className="font-bold text-indigo-600 block text-[10px] mb-1">散席 (Departure):</span>
+                                    {(!data.busInfo.departures || data.busInfo.departures.length === 0) ? <span className="text-slate-400">-</span> : (
+                                        data.busInfo.departures.map((bus, i) => (
+                                            <div key={i} className="mb-1.5 leading-tight">
+                                                <div className="font-mono font-bold text-black">{bus.time} <span className="text-slate-500 font-normal">({bus.plate || 'No Plate'})</span></div>
+                                                <div className="text-slate-700">{bus.location}</div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Custom Routes */}
+                            {data.busInfo.customRoutes?.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-indigo-200">
+                                    <span className="font-bold text-indigo-600 block text-[10px] mb-1">其他路線:</span>
+                                    {data.busInfo.customRoutes.map(r => (
+                                        <div key={r.id} className="flex gap-2 text-indigo-900 leading-tight mb-1">
+                                            <span className="font-mono font-bold">{r.time}</span>
+                                            <span>{r.route}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-slate-400 text-xs italic mb-3">無旅遊巴安排</div>
+                    )}
+
+                    {/* PARKING & DELIVERY */}
+                    <div className="space-y-2 text-xs">
+                        <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
+                            <span className="font-bold text-slate-600">泊車 (Parking):</span>
+                            <span className="font-bold text-slate-900">{data.parkingInfo?.ticketQty || 0} 張 x {data.parkingInfo?.ticketHours || 0} 小時</span>
+                        </div>
+                        {data.parkingInfo?.plates && (
+                            <div className="pl-2 border-l-2 border-slate-300">
+                                <span className="text-[10px] text-slate-400 block uppercase">License Plates</span>
+                                <span className="font-mono font-bold">{data.parkingInfo.plates}</span>
+                            </div>
+                        )}
+                        
+                        {data.deliveries && data.deliveries.length > 0 && (
+                            <div className="mt-3 pt-2 border-t border-slate-100">
+                                <span className="font-bold text-slate-600 block mb-1">送貨 / 物資:</span>
+                                {data.deliveries.map((d, i) => (
+                                    <div key={i} className="flex justify-between text-[10px] bg-slate-50 p-1.5 rounded mb-1">
+                                        <span className="font-bold">{d.unit}</span>
+                                        <span className="font-mono text-slate-500">{d.time}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* NOTES */}
+                {data.otherNotes && (
+                    <div className="break-inside-avoid border-2 border-yellow-300 bg-yellow-50 p-3 rounded-lg">
+                        <h4 className="font-bold text-yellow-800 text-xs uppercase mb-1">Important Notes</h4>
+                        <p className="text-sm font-bold text-slate-800 whitespace-pre-wrap">{data.otherNotes}</p>
+                    </div>
+                )}
+
+            </div>
+        </div>
       </div>
     );
   }
@@ -2136,7 +2345,7 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     );
   }
-  
+
 // ==========================================
   // VIEW 6: INVOICE MODE - FIXED BUS & TOTALS
   // ==========================================
@@ -2612,7 +2821,7 @@ const PrintableEO = ({ data, printMode }) => {
   // ... inside PrintableEO ...
 
 // ==========================================
-  // VIEW 7: STANDARD EO (FIXED: APPENDIX & KITCHEN COPY VISIBILITY)
+  // VIEW 7: STANDARD EO (FIXED: REMOVED DUPLICATE PLATING FEE)
   // ==========================================
   if (!printMode || printMode === 'EO') {
     
@@ -2622,11 +2831,80 @@ const PrintableEO = ({ data, printMode }) => {
       { name: '樓面工作單 (Banquet Copy)', showBilling: false, showOps: true, showAllocation: false, color: 'bg-indigo-600' }
     ];
 
-    // Bus Cost
-    const busCost = Number(data.busCharge) || 0;
+    // 1. Calculate Bus Total
+    const busTotal = data.busInfo?.enabled ? (parseFloat(data.busCharge) || 0) : 0;
 
-    // Allocation Total
-    const totalAllocation = Object.values(detailedAlloc).reduce((acc, dept) => acc + dept.total, 0);
+    // 2. Calculate Breakdown
+    const platingTotal = (data.servingStyle === '位上') ? (parseFloat(data.platingFee) || 0) * (parseFloat(data.tableCount) || 0) : 0;
+    
+    const subtotal = (data.menus || []).reduce((acc, m) => acc + ((m.price||0)*(m.qty||1)), 0) 
+                   + platingTotal
+                   + ((data.drinksPrice||0)*(data.drinksQty||1))
+                   + busTotal 
+                   + (data.customItems||[]).reduce((acc, i) => acc + ((i.price||0)*(i.qty||1)), 0);
+
+    // 3. Service Charge
+    let scBase = 0;
+    (data.menus || []).forEach(m => { if(m.applySC !== false) scBase += (m.price || 0) * (m.qty || 1); });
+    if (platingTotal > 0 && data.platingFeeApplySC !== false) scBase += platingTotal;
+    if(data.drinksApplySC !== false) scBase += (data.drinksPrice || 0) * (data.drinksQty || 1);
+    (data.customItems || []).forEach(i => { if(i.applySC) scBase += (i.price || 0) * (i.qty || 1); });
+    if (data.busInfo?.enabled && data.busApplySC) scBase += busTotal;
+
+    let serviceChargeVal = 0;
+    let scLabel = '固定';
+    if (data.enableServiceCharge !== false) {
+       const scStr = (data.serviceCharge || '10%').toString().trim();
+       const val = parseFloat(scStr.replace(/[^0-9.]/g, '')) || 0;
+       if (scStr.includes('%') || (val > 0 && val <= 100)) {
+           serviceChargeVal = scBase * (val / 100);
+           scLabel = `${val}%`;
+       } else {
+           serviceChargeVal = val;
+       }
+    }
+    const discountVal = parseFloat(data.discount) || 0;
+    const finalTotal = data.totalAmount; 
+    
+    // Total Paid Logic
+    let totalPaid = 0;
+    if (data.deposit1Received) totalPaid += Number(data.deposit1) || 0;
+    if (data.deposit2Received) totalPaid += Number(data.deposit2) || 0;
+    if (data.deposit3Received) totalPaid += Number(data.deposit3) || 0;
+    const effectiveTotalPaid = data.balanceReceived ? finalTotal : totalPaid;
+    const outstandingBalance = finalTotal - effectiveTotalPaid;
+
+
+    // =========================================================
+    // ✅ ALLOCATION INJECTION LOGIC (FIXED)
+    // =========================================================
+    let displayAlloc = JSON.parse(JSON.stringify(detailedAlloc || {}));
+    
+    const addToDept = (key, label, name, amount) => {
+        if (!displayAlloc[key]) displayAlloc[key] = { label: label, items: [], total: 0 };
+        displayAlloc[key].items.push({ name, unit: amount, qty: 1, amount: amount });
+        displayAlloc[key].total += amount;
+    };
+
+    // 1. Inject Bus Fee (-> Others)
+    if (busTotal > 0) addToDept('others', '其他 (Others)', '旅遊巴安排 (Bus Fee)', busTotal);
+
+    // 2. ❌ REMOVED PLATING FEE INJECTION
+    // The core system (detailedAlloc) likely already includes Plating Fee in the Banquet department.
+    // Re-adding it here caused the double counting.
+
+    // 3. Inject Service Charge
+    if (serviceChargeVal > 0) {
+        addToDept('service_charge', '服務費 (Service Charge)', `服務費 (${scLabel})`, serviceChargeVal);
+    }
+
+    // 4. Inject Discount (Negative)
+    if (discountVal > 0) {
+        addToDept('adjustments', '調整 (Adjustments)', '折扣優惠 (Discount)', -discountVal);
+    }
+
+    const totalAllocation = Object.values(displayAlloc).reduce((acc, dept) => acc + dept.total, 0);
+
 
     return (
       <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white text-sm">
@@ -2643,9 +2921,7 @@ const PrintableEO = ({ data, printMode }) => {
               @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
               @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
             }
-            /* Page Break: Explicit separator, NOT to be put on content div */
-            .page-break { page-break-after: always !important; display: block; height: 0; overflow: hidden; }
-            
+            .page-break { page-break-after: always !important; display: block; height: 1px; width: 100%; clear: both; }
             .print-page { position: relative; width: 100%; background: white; margin-bottom: 20px; } 
             .break-inside-avoid { break-inside: avoid; }
             .compact-table th, .compact-table td { padding: 3px 6px; border-bottom: 1px solid #e2e8f0; }
@@ -2653,7 +2929,7 @@ const PrintableEO = ({ data, printMode }) => {
           }
         `}</style>
 
-        {/* 1. OFFICE COPIES LOOP */}
+        {/* --- 1. OFFICE COPIES LOOP --- */}
         {COPIES.map((copy, idx) => (
           <div key={idx}>
             <div className="print-page">
@@ -2684,7 +2960,7 @@ const PrintableEO = ({ data, printMode }) => {
                   <div><span className="block text-[9px] text-slate-400 font-bold uppercase">負責人</span><div className="font-bold">{data.salesRep || '-'}</div></div>
               </div>
 
-              {/* MAIN GRID */}
+              {/* MAIN GRID (F&B + Ops) */}
               {copy.showOps && (
                   <div className="flex gap-6 items-start mb-4">
                       {/* LEFT: F&B */}
@@ -2767,7 +3043,7 @@ const PrintableEO = ({ data, printMode }) => {
                   </div>
               )}
 
-              {/* 4. BILLING */}
+              {/* 4. BILLING (ACCOUNT COPY) */}
               {copy.showBilling && (
                   <div className={`${copy.showOps ? "mt-auto" : "mt-4"} break-inside-avoid border-t-2 border-slate-800 pt-2`}>
                       <div className="flex justify-between items-end mb-2">
@@ -2778,14 +3054,56 @@ const PrintableEO = ({ data, printMode }) => {
                           <tbody>
                                {(data.menus||[]).map((m, i) => (<tr key={`m-${i}`}><td className="font-medium">{m.title}</td><td className="text-right font-mono text-slate-500">${formatMoney(m.price)}</td><td className="text-center text-slate-500">{m.qty}</td><td className="text-right font-mono font-bold">${formatMoney((m.price||0)*(m.qty||1))}</td></tr>))}
                                {parseFloat(data.drinksPrice) > 0 && (<tr><td className="font-medium">酒水套餐 ({data.drinksPackage || 'Standard'})</td><td className="text-right font-mono text-slate-500">${formatMoney(data.drinksPrice)}</td><td className="text-center text-slate-500">{data.drinksQty}</td><td className="text-right font-mono font-bold">${formatMoney((data.drinksPrice||0)*(data.drinksQty||1))}</td></tr>)}
-                               {data.servingStyle === '位上' && parseFloat(data.platingFee) > 0 && (<tr className="bg-blue-50/50"><td className="text-blue-700">位上服務費</td><td className="text-right font-mono text-slate-500">${formatMoney(data.platingFee)}</td><td className="text-center text-slate-500">{data.tableCount}</td><td className="text-right font-mono font-bold text-blue-700">${formatMoney((data.platingFee||0)*(data.tableCount||0))}</td></tr>)}
+                               {platingTotal > 0 && (<tr className="bg-blue-50/50"><td className="text-blue-700">位上服務費</td><td className="text-right font-mono text-slate-500">${formatMoney(data.platingFee)}</td><td className="text-center text-slate-500">{data.tableCount}</td><td className="text-right font-mono font-bold text-blue-700">${formatMoney(platingTotal)}</td></tr>)}
                                {(data.customItems || []).map((item, i) => (<tr key={`c-${i}`}><td>{item.name}</td><td className="text-right font-mono text-slate-500">${formatMoney(item.price)}</td><td className="text-center text-slate-500">{item.qty}</td><td className="text-right font-mono font-bold">${formatMoney((item.price||0)*(item.qty||1))}</td></tr>))}
-                               {data.busInfo?.enabled && (<tr className="bg-indigo-50/50"><td className="text-indigo-800 font-bold">旅遊巴安排 (Bus Fee)</td><td className="text-right text-slate-400">-</td><td className="text-center text-slate-400">1</td><td className="text-right font-mono font-bold text-indigo-700">{busCost > 0 ? `$${formatMoney(busCost)}` : '免費 / FREE'}</td></tr>)}
+                               {data.busInfo?.enabled && (<tr className="bg-indigo-50/50"><td className="text-indigo-800 font-bold">旅遊巴安排 (Bus Fee)</td><td className="text-right text-slate-400">-</td><td className="text-center text-slate-400">1</td><td className="text-right font-mono font-bold text-indigo-700">{busTotal > 0 ? `$${formatMoney(busTotal)}` : '免費 / FREE'}</td></tr>)}
                           </tbody>
+                          {/* FOOTER */}
                           <tfoot>
-                               <tr className="border-t-2 border-slate-300"><td colSpan="3" className="text-right font-bold pt-1">總金額</td><td className="text-right font-bold font-mono pt-1 text-sm">${formatMoney(Number(data.totalAmount) + busCost)}</td></tr>
-                               <tr><td colSpan="3" className="text-right text-slate-500">已付訂金</td><td className="text-right font-mono text-slate-500">-${formatMoney((Number(data.deposit1)||0)+(Number(data.deposit2)||0)+(Number(data.deposit3)||0))}</td></tr>
-                               <tr><td colSpan="3" className="text-right font-bold text-red-600">尚餘尾數</td><td className="text-right font-bold font-mono text-red-600">${formatMoney((Number(data.totalAmount) + busCost) - ((Number(data.deposit1)||0)+(Number(data.deposit2)||0)+(Number(data.deposit3)||0)))}</td></tr>
+                               <tr className="border-t-2 border-slate-300">
+                                   <td colSpan="3" className="text-right font-bold pt-2 text-slate-500 text-[10px]">小計 (Subtotal)</td>
+                                   <td className="text-right font-mono pt-2 text-slate-500">${formatMoney(subtotal)}</td>
+                               </tr>
+                               {serviceChargeVal > 0 && (
+                                   <tr>
+                                       <td colSpan="3" className="text-right font-bold text-slate-500 text-[10px]">服務費 ({scLabel})</td>
+                                       <td className="text-right font-mono text-slate-500">+${formatMoney(serviceChargeVal)}</td>
+                                   </tr>
+                               )}
+                               {discountVal > 0 && (
+                                   <tr>
+                                       <td colSpan="3" className="text-right font-bold text-red-500 text-[10px]">折扣 (Discount)</td>
+                                       <td className="text-right font-mono text-red-500">-${formatMoney(discountVal)}</td>
+                                   </tr>
+                               )}
+                               <tr className="border-t border-slate-800">
+                                   <td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (TOTAL)</td>
+                                   <td className="text-right font-bold font-mono pt-1 text-sm text-black">${formatMoney(finalTotal)}</td>
+                               </tr>
+                               {/* DEPOSIT BREAKDOWN WITH STATUS */}
+                               {[
+                                 { l: '訂金 1', a: data.deposit1, d: data.deposit1Date, received: data.deposit1Received },
+                                 { l: '訂金 2', a: data.deposit2, d: data.deposit2Date, received: data.deposit2Received },
+                                 { l: '訂金 3', a: data.deposit3, d: data.deposit3Date, received: data.deposit3Received }
+                               ].map((item, i) => Number(item.a) > 0 && (
+                                   <tr key={i}>
+                                       <td colSpan="3" className="text-right text-slate-500 text-[10px] py-1">
+                                           {item.l} {item.d && <span className="ml-1 font-mono">[{item.d}]</span>}
+                                           {item.received ? 
+                                              <span className="ml-2 font-bold text-emerald-600 border border-emerald-600 px-1 rounded text-[9px]">已收款 PAID</span> : 
+                                              <span className="ml-2 font-bold text-red-400 border border-red-400 px-1 rounded text-[9px]">未收款 UNPAID</span>
+                                           }
+                                       </td>
+                                       <td className="text-right font-mono text-slate-500 text-[10px] py-1">-${formatMoney(item.a)}</td>
+                                   </tr>
+                               ))}
+                               <tr>
+                                   <td colSpan="3" className="text-right font-bold text-red-600 pt-2">尚餘尾數 (Outstanding Balance)</td>
+                                   <td className="text-right font-bold font-mono text-red-600 pt-2 text-base">${formatMoney(outstandingBalance)}</td>
+                               </tr>
+                               {data.balanceReceived && (
+                                   <tr><td colSpan="4" className="text-right pt-1"><span className="font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-xs border border-emerald-200">✅ 尾數已結清 (BALANCE PAID)</span></td></tr>
+                               )}
                           </tfoot>
                       </table>
                       
@@ -2797,7 +3115,7 @@ const PrintableEO = ({ data, printMode }) => {
                                       <colgroup><col className="w-[15%]"/><col className="w-[40%]"/><col className="w-[15%]"/><col className="w-[10%]"/><col className="w-[15%]"/><col className="w-[5%]"/></colgroup>
                                       <thead><tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-600"><th className="text-left py-1 px-2">部門</th><th className="text-left py-1 px-2">項目</th><th className="text-right py-1 px-2">單價</th><th className="text-center py-1 px-2">數量</th><th className="text-right py-1 px-2">總額</th><th className="text-right py-1 px-2">%</th></tr></thead>
                                       <tbody className="divide-y divide-slate-100">
-                                          {Object.values(detailedAlloc).map((dept, i) => {
+                                          {Object.values(displayAlloc).map((dept, i) => {
                                               if (dept.total === 0 && dept.items.length === 0) return null;
                                               return (<React.Fragment key={i}>
                                                   {dept.items.map((item, idx) => (<tr key={`${i}-${idx}`} className={idx === 0 ? "border-t border-slate-200" : ""}><td className={`py-1 px-2 align-top ${idx === 0 ? 'font-bold' : ''}`}>{idx === 0 ? dept.label : ''}</td><td className="py-1 px-2 align-top text-slate-600">{item.name}</td><td className="py-1 px-2 text-right font-mono text-slate-500">${formatMoney(item.unit)}</td><td className="py-1 px-2 text-center text-slate-500">{item.qty}</td><td className="py-1 px-2 text-right font-mono font-medium">${formatMoney(item.amount)}</td><td className="py-1 px-2"></td></tr>))}
@@ -2814,15 +3132,13 @@ const PrintableEO = ({ data, printMode }) => {
               )}
             </div>
             
-            {/* PAGE BREAK AFTER EACH COPY */}
             <div className="page-break"></div>
           </div>
         ))}
 
-        {/* --- PAGE 4: APPENDIX (PHOTOS) - VISIBILITY FIXED --- */}
+        {/* --- PAGE 4 & 5 (APPENDIX / KITCHEN) REMAIN THE SAME --- */}
         {(data.stageDecorPhoto || data.venueDecorPhoto) && (
             <>
-                {/* 1. Content Container */}
                 <div className="print-page">
                     <Header title="附錄" copyType="參考圖片" badgeColor="bg-slate-500" />
                     <div className="grid grid-cols-1 gap-6 mt-4">
@@ -2840,12 +3156,11 @@ const PrintableEO = ({ data, printMode }) => {
                         )}
                     </div>
                 </div>
-                {/* 2. Break AFTER Content */}
                 <div className="page-break"></div>
             </>
         )}
 
-        {/* --- PAGE 5: KITCHEN COPY (HIGH CONTRAST) - VISIBILITY FIXED --- */}
+        {/* --- PAGE 5: KITCHEN COPY --- */}
         <div className="print-page">
            <div className="flex justify-between items-end border-b-4 border-black pb-2 mb-4">
               <div>

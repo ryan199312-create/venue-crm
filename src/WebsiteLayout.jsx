@@ -5,145 +5,176 @@ import { Menu, X, MessageCircle, ChevronDown, Star } from 'lucide-react';
 import { db } from './firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
-// --- 1. NAVIGATION COMPONENT (Updated with Logo) ---
+// --- 1. SEPARATED NAVBAR & DROPDOWN ---
 const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
-  const [scrolled, setScrolled] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [scrollCompact, setScrollCompact] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
+  // Logic: Compact ONLY if scrolled down AND not hovered AND menu closed
+  const isCompact = scrollCompact && !isHovered && !isMobileMenuOpen;
+
+  // Scroll Listener
   useEffect(() => {
     const handleScroll = () => {
-      const isScrolled = window.scrollY > 50;
-      setScrolled(isScrolled);
-      if (!isScrolled) setIsExpanded(false); 
+      setScrollCompact(window.scrollY > 50);
+      if (window.scrollY > 50) setIsMobileMenuOpen(false); // Close menu on scroll
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const isCompact = scrolled && !isExpanded;
 
   const navItems = [
     { label: lang === 'en' ? 'Home' : '主頁', path: '/' },
     { label: lang === 'en' ? 'Weddings' : '婚宴', path: '/weddings' },
-    { label: lang === 'en' ? 'Corporate' : '企業', path: '/' }, 
-    { label: lang === 'en' ? 'Dining' : '餐飲', path: '/' },       
+    { label: lang === 'en' ? 'Corporate' : '企業', path: '/corporate' }, 
+    { label: lang === 'en' ? 'Dining' : '餐飲', path: '/dining' },       
   ];
 
+  // Stable Configuration
+  const transition = { duration: 0.4, ease: [0.25, 1, 0.5, 1] };
+
   return (
-    <div className="fixed top-6 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+    <div className="fixed top-6 inset-x-0 z-50 flex flex-col items-center pointer-events-none">
+      
+      {/* --- PART A: THE NAVBAR (Always stays a pill) --- */}
       <motion.nav
-        layout
-        transition={{ type: "spring", stiffness: 120, damping: 20 }}
-        onMouseEnter={() => scrolled && setIsExpanded(true)}
-        onMouseLeave={() => scrolled && setIsExpanded(false)}
-        onClick={() => scrolled && setIsExpanded(true)}
-        className={`
-          pointer-events-auto relative bg-white/90 backdrop-blur-md border border-white/50 shadow-xl shadow-stone-900/5 overflow-hidden
-          ${isExpanded ? 'rounded-[32px] px-2' : 'rounded-full'} 
-          flex items-center
-        `}
-        style={{ 
-          // Circle Logic: Force 50px width when compact
-          width: isCompact ? '50px' : '100%', 
-          height: isCompact ? '50px' : 'auto',
-          maxWidth: isCompact ? '50px' : '800px',
-          justifyContent: isCompact ? 'center' : 'space-between',
-          padding: isCompact ? '0' : '0.5rem 0.5rem'
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={() => setScrollCompact(false)}
+        
+        initial={false}
+        animate={{
+          // WIDTH: If compact=50, If MobileOpen=340 (to match dropdown width), else Auto
+          width: isCompact ? 50 : (isMobileMenuOpen ? 340 : 'auto'),
+          height: isCompact ? 50 : 60, // Fixed height! Does not grow for menu.
+          borderRadius: isCompact ? 25 : 32,
         }}
+        transition={transition}
+        
+        className={`
+          pointer-events-auto relative bg-white/95 backdrop-blur-xl border border-white/60 shadow-xl shadow-stone-900/10 
+          overflow-hidden flex flex-col justify-center items-center z-50
+          ${isCompact ? 'cursor-pointer' : 'cursor-default'}
+        `}
       >
-        {/* LOGO SECTION */}
-        <Link to="/" className="flex items-center gap-3 cursor-pointer group shrink-0">
-          {/* UPDATED LOGO IMAGE */}
-          <motion.img 
-            layout="position" 
-            src="https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2Flogo%2FScreenshot%202026-01-29%20at%206.09.03%20PM.png?alt=media&token=3133c9f6-5756-4e60-98d6-2a2ecc96bc5b"
-            className="w-10 h-10 rounded-full object-cover border border-stone-100"
-            alt="King Lung Heen Logo"
-          />
+        <div 
+          className={`
+            flex items-center w-full h-full transition-all duration-300
+            ${isCompact ? 'px-1 justify-center' : 'px-1.5 justify-between'} 
+          `}
+        >
           
-          <AnimatePresence>
-            {!isCompact && (
-              <motion.span 
-                initial={{ opacity: 0, width: 0 }} 
-                animate={{ opacity: 1, width: 'auto' }} 
-                exit={{ opacity: 0, width: 0 }} 
-                className="font-serif font-bold text-[#1a1a1a] tracking-wide whitespace-nowrap overflow-hidden"
-              >
-                璟瓏軒
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </Link>
-
-        {/* LINKS SECTION */}
-        {!isCompact && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
-            className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2"
-          >
-            {navItems.map((item) => (
-              <Link 
-                key={item.label} 
-                to={item.path} 
-                className={`px-4 py-2 text-sm font-medium transition-colors ${location.pathname === item.path && item.path !== '/' ? 'text-[#C5A059]' : 'text-stone-500 hover:text-[#C5A059]'}`}
-              >
-                {item.label}
-              </Link>
-            ))}
+          {/* LEFT: LOGO */}
+          <motion.div layout="position" className="shrink-0 z-20">
+            <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="block">
+              <img 
+                src="https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2Flogo%2FScreenshot%202026-01-29%20at%206.09.03%20PM.png?alt=media&token=3133c9f6-5756-4e60-98d6-2a2ecc96bc5b"
+                className="w-10 h-10 rounded-full object-cover border border-stone-100"
+                alt="Logo"
+              />
+            </Link>
           </motion.div>
-        )}
 
-        {/* RIGHT ACTIONS */}
-        <AnimatePresence>
-          {!isCompact && (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }} 
-              className="flex items-center gap-2"
-            >
-              <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} className="w-8 h-8 rounded-full bg-stone-100 text-stone-600 text-xs font-bold hover:bg-[#C5A059] hover:text-white transition-colors">
+          {/* CONTENT WRAPPER */}
+          <motion.div
+            initial={false}
+            animate={{
+              width: isCompact ? 0 : "auto",
+              opacity: isCompact ? 0 : 1,
+            }}
+            transition={transition}
+            className="flex items-center overflow-hidden whitespace-nowrap h-full flex-1"
+          >
+            {/* BRAND NAME */}
+            <div className="pl-3 font-serif font-bold text-[#1a1a1a] tracking-wide text-lg whitespace-nowrap mr-auto">
+              璟瓏軒
+            </div>
+
+            {/* DESKTOP LINKS (Hidden on Mobile) */}
+            <div className="hidden md:flex items-center gap-1 mr-4">
+              {navItems.map((item) => (
+                <Link 
+                  key={item.label} 
+                  to={item.path} 
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${location.pathname === item.path && item.path !== '/' ? 'bg-stone-100 text-[#C5A059]' : 'text-stone-500 hover:text-[#1a1a1a] hover:bg-stone-50'}`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+
+            {/* RIGHT ACTIONS */}
+            <div className="flex items-center gap-2 pr-1">
+              {/* Desktop Buttons (Hidden Mobile) */}
+              <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} className="hidden md:flex w-9 h-9 items-center justify-center rounded-full bg-stone-100 text-stone-600 text-xs font-bold hover:bg-[#C5A059] hover:text-white transition-colors">
                 {lang === 'en' ? '繁' : 'EN'}
               </button>
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={onOpenBooking} className="bg-[#1a1a1a] text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg hover:bg-[#C5A059] transition-colors whitespace-nowrap">
+              <button onClick={onOpenBooking} className="hidden md:block bg-[#1a1a1a] text-white px-6 py-2.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#C5A059] transition-colors whitespace-nowrap">
                 {lang === 'en' ? 'Book' : '預約'}
-              </motion.button>
-              
-              <button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="md:hidden w-8 h-8 flex items-center justify-center bg-stone-100 rounded-full ml-1">
-                {isExpanded ? <X size={16}/> : <Menu size={16}/>}
               </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* MOBILE MENU */}
-        <AnimatePresence>
-          {isExpanded && !isCompact && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }} 
-              animate={{ opacity: 1, height: 'auto' }} 
-              exit={{ opacity: 0, height: 0 }} 
-              className="md:hidden w-full overflow-hidden absolute top-14 left-0 bg-white/95 backdrop-blur-xl rounded-[24px] border border-white/50 shadow-2xl"
-            >
-              <div className="pt-2 pb-4 px-4 flex flex-col gap-2">
-                {navItems.map((item) => (
-                  <Link 
-                    key={item.label} 
-                    to={item.path} 
-                    onClick={() => setIsExpanded(false)} 
-                    className={`block px-4 py-3 text-center rounded-2xl font-medium ${location.pathname === item.path ? 'bg-[#C5A059] text-white' : 'text-stone-800 bg-stone-50'}`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              
+              {/* Mobile Toggle (Visible Mobile) */}
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(!isMobileMenuOpen); }} 
+                className="md:hidden w-9 h-9 flex items-center justify-center bg-stone-100 rounded-full text-stone-600 transition-colors hover:bg-stone-200"
+              >
+                {isMobileMenuOpen ? <X size={18}/> : <Menu size={18}/>}
+              </button>
+            </div>
+          </motion.div>
+        </div>
       </motion.nav>
+
+      {/* --- PART B: THE DROPDOWN (Detached & Floating Below) --- */}
+      <AnimatePresence>
+        {isMobileMenuOpen && !isCompact && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 8, scale: 1 }} // Adds gap of 8px below nav
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="pointer-events-auto w-[340px] bg-white/95 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl overflow-hidden z-40 p-2"
+          >
+            <div className="flex flex-col gap-1">
+              {/* 1. NAV PAGES */}
+              {navItems.map((item) => (
+                <Link 
+                  key={item.label} 
+                  to={item.path} 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`
+                    block px-4 py-3 text-center rounded-xl font-medium text-sm transition-all
+                    ${location.pathname === item.path 
+                      ? 'bg-[#1a1a1a] text-white shadow-md' 
+                      : 'bg-stone-50 text-stone-600 hover:bg-stone-100'}
+                  `}
+                >
+                  {item.label}
+                </Link>
+              ))}
+              
+              {/* 2. MOBILE ACTIONS (Language & Book) */}
+              <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-stone-100/50">
+                <button 
+                  onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} 
+                  className="px-4 py-3 rounded-xl bg-stone-50 text-stone-600 text-xs font-bold hover:bg-stone-100 transition-colors uppercase tracking-wider"
+                >
+                  {lang === 'en' ? '繁 / EN' : 'EN / 繁'}
+                </button>
+                <button 
+                  onClick={() => { onOpenBooking(); setIsMobileMenuOpen(false); }}
+                  className="px-4 py-3 rounded-xl bg-[#C5A059] text-white text-xs font-bold shadow-md hover:bg-[#b08d4d] transition-colors uppercase tracking-wider"
+                >
+                  {lang === 'en' ? 'Book' : '預約'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

@@ -42,7 +42,10 @@ import {
   Languages,
   History,
   Eye,
-  Send 
+  Send,
+  Copy,
+  Check,
+  BarChart3,
 } from 'lucide-react';
 
 // 2. Shared Connection (from your new file)
@@ -79,6 +82,10 @@ import {
   getDownloadURL 
 } from "firebase/storage";
 
+//6. AI feature
+import { useAI } from './hooks/useAI';
+import AiAssistant from './components/AiAssistant';
+import DataAssistant from './components/DataAssistant';
 // ==========================================
 // SECTION 1: CONFIGURATION & CONSTANTS
 // ==========================================
@@ -2591,45 +2598,38 @@ const PrintableEO = ({ data, printMode }) => {
     );
   }
 
+// ==========================================
+  // VIEW 8: MENU CONFIRMATION (BOXES IN FOOTER)
   // ==========================================
-  // VIEW 8: MENU CONFIRMATION (SINGLE PAGE + BILINGUAL + CHECKBOX + DATE FIX)
+// ==========================================
+// ==========================================
+  // VIEW 8: MENU CONFIRMATION (ORGANIZED FOOTER)
   // ==========================================
   if (printMode === 'MENU_CONFIRM') {
     const BRAND_COLOR = '#A57C00'; 
     const verNum = (data.menuVersions?.length || 0) + 1;
     const versionLabel = `v${verNum}`;
 
-    // 1. Get Custom Font Size from Settings (Default to 18px if not set)
     const fontSizePx = data.printSettings?.menu?.fontSizeOverride || 18;
     const defaultExpiry = new Date(new Date().setDate(new Date().getDate() + 14)).toLocaleDateString('zh-HK');
 
-    // 2. Custom Date Formatter: YYYY/MM/DD (Day) e.g., 2026/01/28 (Wed)
     const formatMenuDate = (dateStr) => {
         if (!dateStr) return '-';
         const d = new Date(dateStr);
-        const datePart = d.toLocaleDateString('zh-HK'); // 2026/1/28
-        const dayPart = d.toLocaleDateString('en-US', { weekday: 'short' }); // Wed
-        return `${datePart} (${dayPart})`;
+        return `${d.toLocaleDateString('zh-HK')} (${d.toLocaleDateString('en-US', { weekday: 'short' })})`;
     };
 
     return (
     <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-6 h-screen flex flex-col justify-between overflow-hidden relative">
-      {/* ✅ UPDATED CSS FOOTER */}
       <style>{`
         @media print { 
-          @page { 
-            margin: 5mm; 
-            size: A4; 
-            @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
-            @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
-            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; }
-          } 
+          @page { margin: 5mm; size: A4; } 
           body { -webkit-print-color-adjust: exact; } 
           html, body { height: 100%; overflow: hidden; }
         }
       `}</style>
         
-        {/* --- 1. HEADER (Compact) --- */}
+        {/* --- 1. HEADER --- */}
         <div className="flex-shrink-0 flex justify-between items-start border-b border-slate-200 pb-2 mb-2">
             <div>
                 <span className="text-lg font-black uppercase tracking-widest" style={{ color: BRAND_COLOR }}>璟瓏軒</span>
@@ -2641,37 +2641,34 @@ const PrintableEO = ({ data, printMode }) => {
             </div>
         </div>
 
-        {/* --- 2. EVENT INFO (Compact) --- */}
+        {/* --- 2. EVENT INFO --- */}
         <div className="flex-shrink-0 text-center mb-2">
             <h1 className="text-3xl font-black text-slate-900 mb-1 uppercase tracking-tight leading-none">
                 {data.eventName}
             </h1>
-            <div className="flex justify-center items-center gap-3 text-sm font-bold text-slate-600 border-y border-slate-900 py-1 inline-flex mx-auto">
-                <span>{data.clientName}</span>
-                <span className="text-slate-300">|</span>
-                {/* ✅ UPDATED DATE FORMAT HERE */}
-                <span>{formatMenuDate(data.date)}</span>
-                <span className="text-slate-300">|</span>
-                <span>{data.tableCount} 席 ({data.guestCount} Pax)</span>
+            <div className="flex flex-col justify-center items-center border-y border-slate-900 py-1 mx-auto">
+                <div className="flex gap-3 text-sm font-bold text-slate-600">
+                    <span>{data.clientName}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{formatMenuDate(data.date)}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{data.tableCount} 席 ({data.guestCount} Pax)</span>
+                </div>
             </div>
         </div>
 
-        {/* --- 3. THE MENU (Flexible Space) --- */}
+        {/* --- 3. THE MENU CONTENT --- */}
         <div className="flex-1 flex flex-col items-center justify-center w-full overflow-hidden min-h-0 py-2">
             {(data.menus || []).map((menu, i) => (
                 <div key={i} className="w-full text-center flex flex-col h-full justify-center">
-                    
-                    {/* Menu Title */}
                     <div className="flex-shrink-0 mb-3">
                         <div className="flex items-baseline justify-center gap-2">
                             <h3 className="text-2xl font-black text-slate-900 uppercase tracking-widest">{menu.title}</h3>
                             <span className="text-xs font-bold text-slate-400 border border-slate-200 px-1 rounded">{versionLabel}</span>
                         </div>
-                        <p className="text-xs font-bold text-slate-500 mt-1 tracking-widest">(供10-12 位用 / For 10-12 Persons)</p>
                         <div className="h-0.5 w-10 bg-slate-900 mx-auto rounded-full mt-2"></div>
                     </div>
                     
-                    {/* Content - Controlled by "Print Config" Slider */}
                     <div className="px-4 flex-1 flex flex-col justify-center">
                         <p className="font-medium text-slate-800 whitespace-pre-wrap leading-relaxed font-serif" 
                            style={{ fontSize: `${fontSizePx}px` }}>
@@ -2681,101 +2678,104 @@ const PrintableEO = ({ data, printMode }) => {
                 </div>
             ))}
 
-            {/* Respectfully Await Reply */}
-            <div className="flex-shrink-0 mt-4 mb-2 text-center">
+            {/* ALLERGY WARNING ABOVE RSVP */}
+            <div className="flex-shrink-0 mt-6 text-center">
+                <p className="text-[8px] font-bold text-slate-500 italic">
+                   食物可能有微量致敏原，如對食物有過敏反應，請通知服務員。
+                </p>
+                <p className="text-[8px] font-bold text-slate-500 mb-2 italic">
+                   Food may contain trace amounts of allergens. If you have an allergic reaction, please inform the server.
+                </p>
                 <p className="text-sm font-black text-slate-900 tracking-[0.3em] border-b border-slate-300 pb-1 inline-block">
                     **敬候賜覆 RSVP**
                 </p>
             </div>
         </div>
 
-        {/* --- 4. FOOTER (Fixed at bottom) --- */}
-        <div className="flex-shrink-0 mt-2 pt-2 border-t border-slate-200 grid grid-cols-2 gap-4">
-            
-            {/* Left: Disclaimers & Allergy Warning */}
-            <div className="flex flex-col justify-end text-[9px] text-slate-600 leading-tight">
-                 <div className="space-y-1 mb-2 font-medium">
-                    {/* Date Override Logic */}
-                    <div>
-                        <p>• 上列內容有效期至: <span className="font-bold underline">{data.printSettings?.menu?.validityDateOverride || defaultExpiry}</span> 或前預訂</p>
-                        <p className="text-[8px] text-slate-400">Valid until {data.printSettings?.menu?.validityDateOverride || defaultExpiry} or prior booking.</p>
-                    </div>
+        {/* --- 4. FOOTER (Organized Section) --- */}
+        <div className="flex-shrink-0 mt-4 pt-4 border-t-2 border-slate-900">
+            <div className="grid grid-cols-2 gap-8 items-stretch">
+                
+                {/* LEFT SIDE: Requirements & Style */}
+                <div className="flex flex-col justify-between">
+                    <div className="space-y-3">
+                        {/* SERVING STYLE SECTION */}
+                        <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                            <p className="font-black text-slate-900 text-[11px] mb-2 uppercase">上菜方式 Serving Style</p>
+                            {data.servingStyle && data.servingStyle.trim() !== "" ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 bg-slate-900 rounded-sm flex items-center justify-center">
+                                        <div className="w-1.5 h-2.5 border-r-2 border-b-2 border-white rotate-45 mb-0.5"></div>
+                                    </div>
+                                    <span className="font-black text-slate-900 text-sm underline decoration-2 underline-offset-4">{data.servingStyle}</span>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                    {['位上', '圍餐', '分菜', '自助餐'].map(style => (
+                                        <div key={style} className="flex items-center gap-1.5">
+                                            <div className="w-4 h-4 border-2 border-slate-900 rounded-sm"></div>
+                                            <span className="text-[11px] font-black text-slate-800">{style}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-                    {/* Concise "No Reduction" Disclaimer */}
-                    <div>
-                        <p>• 同桌個別特別餐膳 (例:素食餐) 需另收費用及加一服務費；菜單如有更改，費用只加不減。</p>
-                        <p className="text-[8px] text-slate-400 leading-tight">
-                            Special meals (e.g. Vegetarian) are subject to extra charge + 10% service charge. Menu changes will only incur additional costs; no price reduction.
-                        </p>
+                        {/* DISCLAIMERS */}
+                        <div className="text-[9px] text-slate-600 leading-tight space-y-1 pl-1">
+                            <p className="flex items-start gap-1">
+                                <span className="font-bold">•</span> 
+                                <span>上列內容有效期至: <span className="font-bold underline text-slate-900">{data.printSettings?.menu?.validityDateOverride || defaultExpiry}</span></span>
+                            </p>
+                            <p className="flex items-start gap-1">
+                                <span className="font-bold">•</span>
+                                <span>同桌個別特別餐膳需另收費用及加一服務費；菜單如有更改，費用只加不減。</span>
+                            </p>
+                            
+                            {!data.servingStyle && (
+                                <div className="bg-amber-50 border-l-4 border-amber-400 p-1.5 mt-2">
+                                    <p className="font-bold text-slate-900">
+                                        如需分菜位上, 每桌需額外收取 HKD800 及加一服務費
+                                    </p>
+                                    <p className="text-[8px] text-slate-500 font-medium">Individual plating service: HKD800/table + 10% service charge.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* RIGHT SIDE: Signature Box */}
+                <div className="border-2 border-slate-900 p-4 rounded-xl flex flex-col justify-between bg-slate-50/30">
+                    <div className="text-center">
+                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">客戶確認 Confirmation</p>
+                        <p className="text-[9px] text-slate-400 mt-1 italic">I confirm the above menu and arrangements.</p>
                     </div>
                     
-                    {/* ✅ UPDATED: Plating Fee Disclaimer with Checkbox */}
-                    {(data.printSettings?.menu?.showPlatingFeeDisclaimer !== false) && (
-                        <div className="flex items-start gap-1.5 mt-1">
-                            {/* The Checkbox for printing */}
-                            <div className="w-3 h-3 border border-slate-800 flex-shrink-0 mt-0.5"></div>
-                            <div>
-                                <p>如需分菜位上, 每桌需額外收取 HKD800 及加一服務費</p>
-                                <p className="text-[8px] text-slate-400 leading-tight">Individual plating service is subject to an extra HKD800/table + 10%.</p>
-                            </div>
+                    <div className="flex justify-between items-end gap-6 mt-8">
+                        <div className="flex-1 text-center">
+                            <div className="border-b-2 border-slate-900 mb-1 h-8"></div>
+                            <p className="text-[9px] font-black text-slate-900 uppercase">簽署 Signature</p>
                         </div>
-                    )}
-                 </div>
-
-                 {/* Allergy Statement */}
-                 <div className="border-t border-slate-100 pt-1.5 mt-1">
-                     <div className="mb-1">
-                         <p className="font-bold text-slate-500">
-                            食物可能有微量致敏原, 如你對食物會有過敏性反應或不耐性, 請通知我們的服務員。
-                         </p>
-                         <p className="text-[8px] text-slate-400 italic">
-                            Food may contain traces of allergens. Please inform our staff if you have any food allergies or intolerance.
-                         </p>
-                     </div>
-                     
-                     {/* Existing Remarks */}
-                     {data.drinksPackage && (
-                        <div className="mt-1">
-                            <p className="truncate"><span className="font-bold text-slate-900">飲料供應 (Beverage):</span> {data.drinksPackage}</p>
+                        <div className="w-28 text-center">
+                            <div className="border-b-2 border-slate-900 mb-1 h-8"></div>
+                            <p className="text-[9px] font-black text-slate-900 uppercase">日期 Date</p>
                         </div>
-                     )}
-                     {(data.specialMenuReq || data.allergies) && (
-                        <p className="text-red-600 font-bold truncate mt-1">
-                            ⚠️ {data.specialMenuReq} {data.specialMenuReq && data.allergies && '|'} {data.allergies}
-                        </p>
-                     )}
-                 </div>
+                    </div>
+                </div>
             </div>
 
-            {/* Right: Signature Box */}
-            <div className="border border-slate-800 p-2 rounded bg-slate-50/50 flex flex-col justify-between h-auto min-h-[90px]">
-                <div>
-                    <p className="text-[9px] text-slate-500 text-center uppercase tracking-widest mb-1">
-                        Client Confirmation (客戶確認)
-                    </p>
-                    <div className="text-center leading-tight">
-                        <p className="text-[8px] text-slate-400">本人確認以上菜譜及酒水安排無誤。</p>
-                        <p className="text-[7px] text-slate-400">I confirm the above menu and beverage arrangements are correct.</p>
-                    </div>
+            {/* Bottom Contact / Drinks */}
+            <div className="mt-6 pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] font-bold text-slate-400">
+                <div className="flex gap-6 uppercase tracking-widest">
+                    {data.drinksPackage && <span><span className="text-slate-300 mr-1">Beverage:</span> {data.drinksPackage}</span>}
+                    {data.venueLocation && <span><span className="text-slate-300 mr-1">Venue:</span> {data.venueLocation}</span>}
                 </div>
-                
-                <div className="flex justify-between items-end gap-3 px-1 mt-2">
-                    <div className="flex-1 text-center">
-                        <div className="border-b border-slate-800 h-px mb-1"></div>
-                        <p className="text-[8px] font-bold text-slate-400">Sign</p>
-                    </div>
-                    <div className="w-16 text-center">
-                        <div className="border-b border-slate-800 h-px mb-1"></div>
-                        <p className="text-[8px] font-bold text-slate-400">Date</p>
-                    </div>
-                </div>
+                <div className="font-mono">{data.orderId}</div>
             </div>
         </div>
-
-      </div>
+    </div>
     );
   }
-  // ... inside PrintableEO ...
 
 // ==========================================
   // VIEW 7: STANDARD EO (HYBRID: STANDARD MANAGER/FINANCE + BRIEFING STYLE BANQUET)
@@ -3765,7 +3765,7 @@ const SettingsView = ({ settings, onSave, addToast }) => {
 // SECTION 7: DASHBOARD COMPONENTS
 // ==========================================
 
-const DashboardView = ({ events, openEditModal }) => {
+const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
 
@@ -3915,7 +3915,19 @@ const DashboardView = ({ events, openEditModal }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">儀表板 (Dashboard)</h2>
+          <p className="text-sm text-slate-500 font-medium mt-1">實時營業數據與訂單追蹤</p>
+        </div>
+        <button 
+          onClick={() => setIsDataAiOpen(true)}
+          className="group relative px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm"
+        >
+          <BarChart3 size={18} className="text-emerald-100 group-hover:-translate-y-0.5 transition-transform" />
+          <span>AI 數據分析 (Ask DB)</span>
+        </button>
+      </div>
       {/* 0. Payment Alerts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {overduePayments.length > 0 && (
@@ -4123,177 +4135,6 @@ const DashboardView = ({ events, openEditModal }) => {
 };
 
 
-const AiAssistant = ({ formData, setFormData, onClose, initialPrompt = '', initialMessage = null }) => {
-  const [prompt, setPrompt] = useState(initialPrompt);
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null);
-  const [mode, setMode] = useState('edit');
-
-  // --- FIX: React to initialMessage prop changes ---
-  useEffect(() => {
-    if (initialMessage) {
-        setResult({ type: 'text', content: initialMessage });
-        setMode('whatsapp'); // Auto-switch to WhatsApp tab
-    } else {
-        setResult(null);
-        setPrompt(initialPrompt); // Reset prompt if needed
-        setMode('edit');
-    }
-  }, [initialMessage, initialPrompt]);
-
-  const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101"; 
-  const SLEEKFLOW_API_KEY = "l103V8DT4I65XqdUEnoZ8UGPztiJ75VFwHsJAO8TrXI"; 
-
-  const handleAiAction = async () => {
-    if (!prompt) return;
-    setLoading(true);
-    setResult(null);
-
-    const total = Number(formData.totalAmount) || 0;
-    const d1 = Number(formData.deposit1) || 0;
-    const d2 = Number(formData.deposit2) || 0;
-    const d3 = Number(formData.deposit3) || 0;
-    const totalPaid = (formData.deposit1Received ? d1 : 0) + (formData.deposit2Received ? d2 : 0) + (formData.deposit3Received ? d3 : 0);
-    const balance = total - totalPaid;
-
-    const contextData = {
-      eventName: formData.eventName, clientName: formData.clientName, eventDate: formData.date,
-      payments: {
-        totalAmount: total, totalPaid: totalPaid, outstandingBalance: balance,
-        breakdown: [
-          { name: "1st Deposit", amount: d1, dueDate: formData.deposit1Date, status: formData.deposit1Received ? "PAID" : "UNPAID (DUE)" },
-          { name: "2nd Deposit", amount: d2, dueDate: formData.deposit2Date, status: formData.deposit2Received ? "PAID" : "UNPAID" },
-          { name: "Final Balance", amount: balance, dueDate: formData.balanceDueDateType === '10daysPrior' ? "10 Days Before Event" : "Event Day", status: formData.balanceReceived ? "PAID" : "UNPAID" }
-        ]
-      }
-    };
-
-    try {
-      let systemContent = "";
-      if (mode === 'edit') {
-        systemContent = `You are a helper. Return JSON only. Context: ${JSON.stringify(contextData)}`;
-      } else if (mode === 'email') {
-        systemContent = `You are a Banquet Manager writing an email. CONTEXT: ${JSON.stringify(contextData)} TASK: Write a professional email in Traditional Chinese. RULES: 1. Start directly with the greeting. 2. ALWAYS use 'HKD'.`;
-      } else {
-        systemContent = `You are a Banquet Manager writing a WhatsApp message. CONTEXT: ${JSON.stringify(contextData)} TASK: Write a short, friendly message in Traditional Chinese. RULES: 1. Keep it brief. 2. ALWAYS use 'HKD'.`;
-      }
-
-      const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${API_KEY}` },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [{ role: "system", content: systemContent }, { role: "user", content: prompt }],
-          temperature: 0.7,
-          response_format: mode === 'edit' ? { type: "json_object" } : { type: "text" }
-        })
-      });
-
-      if (!response.ok) throw new Error("API Error");
-      const data = await response.json();
-      const aiContent = data.choices[0].message.content;
-
-      if (mode === 'edit') {
-        try {
-          const cleanJson = aiContent.replace(/```json/g, '').replace(/```/g, '').trim();
-          setResult({ type: 'json', content: JSON.parse(cleanJson) });
-        } catch (e) { setResult({ type: 'error', content: "JSON Error" }); }
-      } else {
-        setResult({ type: 'text', content: aiContent });
-      }
-    } catch (error) {
-      setResult({ type: 'error', content: "Connection Error" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const applyChanges = () => {
-    if (result && result.type === 'json') {
-      setFormData(prev => ({ ...prev, ...result.content }));
-      onClose();
-    }
-  };
-
-  const sendViaSleekFlow = async () => {
-    if (!result || !result.content) return;
-    setSending(true);
-
-    let phone = formData.clientPhone || "";
-    phone = phone.replace(/[^0-9]/g, ''); 
-    if (phone.length === 8) phone = "852" + phone; 
-
-    try {
-      const payload = {
-        channel: "whatsappcloudapi",
-        from: "85252226066", 
-        to: phone,           
-        messageType: "text",
-        messageContent: result.content, 
-        analyticTags: ["CRM_Auto", "Event_EO"]
-      };
-
-      const response = await fetch("https://api.sleekflow.io/api/message/send/json", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Sleekflow-Api-Key": SLEEKFLOW_API_KEY },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        alert("✅ Message sent via SleekFlow!");
-        onClose();
-      } else {
-        const txt = await response.text();
-        alert(`❌ Send Failed: ${txt}`);
-      }
-    } catch (error) {
-      alert("❌ Network Error");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleOpenEmailApp = () => {
-    if (!result || !result.content) return;
-    const subject = `【璟瓏軒】活動確認: ${formData.eventName} (${formData.date})`;
-    window.location.href = `mailto:${formData.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(result.content)}`;
-  };
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-        <div className="bg-[#4e6ef2] p-4 flex justify-between items-center text-white">
-          <h3 className="font-bold flex items-center"><Sparkles className="mr-2" size={18}/> DeepSeek AI</h3>
-          <button onClick={onClose}><X size={20}/></button>
-        </div>
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex gap-2">
-          <button onClick={() => {setMode('edit'); setResult(null);}} className={`flex-1 py-2 rounded-lg text-sm font-bold ${mode === 'edit' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Modify</button>
-          <button onClick={() => {setMode('email'); setResult(null);}} className={`flex-1 py-2 rounded-lg text-sm font-bold ${mode === 'email' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Email</button>
-          <button onClick={() => {setMode('whatsapp'); setResult(null);}} className={`flex-1 py-2 rounded-lg text-sm font-bold ${mode === 'whatsapp' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-slate-500'}`}>SleekFlow</button>
-        </div>
-        <div className="p-4 flex-1 overflow-y-auto">
-          {!result && <textarea className="w-full border border-slate-300 rounded-xl p-3 text-sm resize-none h-32" placeholder="Describe what you need..." value={prompt} onChange={e => setPrompt(e.target.value)} />}
-          {result && (
-            <div className={`border p-3 rounded-lg mt-2 ${mode === 'whatsapp' ? 'bg-green-50' : 'bg-blue-50'}`}>
-               <span className="text-xs font-bold uppercase mb-2 block opacity-70">{mode === 'edit' ? "JSON Data" : "Draft Message"}</span>
-               {result.type === 'json' ? <pre className="text-xs overflow-x-auto">{JSON.stringify(result.content, null, 2)}</pre> : 
-               <textarea className="w-full h-48 p-2 text-sm bg-white border rounded" value={result.content} onChange={(e) => setResult(prev => ({ ...prev, content: e.target.value }))} />}
-            </div>
-          )}
-        </div>
-        <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-2">
-          {!result && <button onClick={handleAiAction} disabled={loading} className="flex-1 bg-[#4e6ef2] text-white py-2 rounded-lg font-bold">{loading ? "Thinking..." : "Generate"}</button>}
-          {result?.type === 'json' && <button onClick={applyChanges} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold">Confirm</button>}
-          {mode === 'whatsapp' && result && <button onClick={sendViaSleekFlow} disabled={sending} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold">{sending ? "Sending..." : "Send via SleekFlow"}</button>}
-          {mode === 'email' && result && <button onClick={handleOpenEmailApp} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Open Email App</button>}
-          {result && <button onClick={() => setResult(null)} className="px-3 bg-slate-100 rounded-lg text-slate-600"><Sparkles size={16}/></button>}
-        </div>
-      </div>
-    </div>
-  );
-  
-};
 
 // ==========================================
 // SECTION 8: MAIN APP LOGIC
@@ -4307,7 +4148,62 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isDataAiOpen, setIsDataAiOpen] = useState(false);
   const [isTranslatingDrinks, setIsTranslatingDrinks] = useState(false);
+  const { generate, loading } = useAI();
+  // ✅ PASTE THIS INSIDE App()
+  const handleAiAction = async (channel, intent) => {
+    if (!formData.clientName || !formData.date) {
+      addToast("請先填寫客戶名稱及日期 (Client Name & Date required)", "error"); // Use your addToast helper
+      return;
+    }
+
+    // 1. Build Context
+    const eventDetails = `
+      Client: ${formData.clientName}
+      Date: ${formData.date}
+      Venue: ${formData.venueLocation || "King Lung Heen"}
+      Tables: ${formData.tableCount || "TBD"}
+      Deposit: ${formData.deposit1 || "0"}
+      Total Balance: ${formData.totalAmount || "TBD"}
+    `;
+
+    let systemPrompt = "";
+    let userPrompt = "";
+
+    // 2. Define Prompts
+    if (channel === 'EMAIL') {
+      systemPrompt = "You are a professional Banquet Manager at King Lung Heen. Write a formal, polite email in Traditional Chinese (Cantonese context). Return JSON format with keys: 'subject' and 'body'.";
+      if (intent === 'payment') userPrompt = `Write a payment reminder. Event details: ${eventDetails}. Balance is due.`;
+      else if (intent === 'summary') userPrompt = `Write an event summary confirmation. Details: ${eventDetails}. Ask for confirmation.`;
+    } else if (channel === 'WHATSAPP') {
+      systemPrompt = "You are a helpful assistant. Write a short, friendly WhatsApp message in Traditional Chinese. Use emojis 🎂🥂. Do not include a subject line.";
+      if (intent === 'payment') userPrompt = `Friendly reminder to settle balance for event on ${formData.date}.`;
+      else if (intent === 'summary') userPrompt = `Confirmation message looking forward to event on ${formData.date}.`;
+    }
+
+    // 3. Call AI
+    const aiResponse = await generate(
+      userPrompt + (channel === 'EMAIL' ? " Output as JSON." : ""), 
+      systemPrompt
+    );
+
+    // 4. Update State
+    if (aiResponse) {
+      if (channel === 'EMAIL') {
+        try {
+          const json = JSON.parse(aiResponse);
+          setFormData(prev => ({ ...prev, emailSubject: json.subject, emailBody: json.body }));
+          addToast("Email Draft Generated!", "success");
+        } catch (e) {
+          setFormData(prev => ({ ...prev, emailBody: aiResponse }));
+        }
+      } else {
+        setFormData(prev => ({ ...prev, whatsappDraft: aiResponse }));
+        addToast("WhatsApp Draft Generated!", "success");
+      }
+    }
+  };
   // UI State for Toast & Modals
   const [toasts, setToasts] = useState([]);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
@@ -4487,6 +4383,10 @@ export default function App() {
           showClientInfo: true,           // Default: Show Client Name/Details
         }
       },
+    //AI feature
+    emailSubject: '',
+    emailBody: '',
+    whatsappDraft: '',
  };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -4533,14 +4433,14 @@ export default function App() {
     }
     
     setTranslatingMenuId(menuId);
-    const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101";
+
 
     try {
       const response = await fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json", 
-          "Authorization": `Bearer ${API_KEY}` 
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}` 
         },
         body: JSON.stringify({
           model: "deepseek-chat",
@@ -4600,14 +4500,13 @@ export default function App() {
     }
     
     setIsTranslatingDrinks(true);
-    const API_KEY = "sk-2525b0605e7641b1a62cd405a7c37101";
 
     try {
       const response = await fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json", 
-          "Authorization": `Bearer ${API_KEY}` 
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}` 
         },
         body: JSON.stringify({
           model: "deepseek-chat",
@@ -5375,35 +5274,39 @@ const openEditModal = (event) => {
       });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) return;
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!user) return;
 
-    const ref = collection(db, 'artifacts', appId, 'private', 'data', 'events');
-    const menuString = formData.menus.map(m => m.content).join('\n\n');
+  const privateRef = collection(db, 'artifacts', appId, 'private', 'data', 'events');
+  const publicCalendarRef = collection(db, 'artifacts', appId, 'public_calendar');
 
-    const payload = {
-      ...formData,
-      menuType: menuString,
-      totalAmount: Number(formData.totalAmount) || 0,
-      updatedAt: serverTimestamp(),
-      lastEditor: userProfile?.displayName || user.uid
-    };
+  try {
+    let docId;
+    if (editingEvent) {
+      docId = editingEvent.id;
+      await updateDoc(doc(privateRef, docId), formData);
+    } else {
+      const newDoc = await addDoc(privateRef, { ...formData, createdAt: serverTimestamp() });
+      docId = newDoc.id;
+    }
 
-    try {
-      if (editingEvent) {
-        await updateDoc(doc(ref, editingEvent.id), payload);
-        addToast("訂單已更新", "success");
-      } else {
-        await addDoc(ref, { ...payload, createdAt: serverTimestamp(), creatorId: user.uid });
-        addToast("新訂單已建立", "success");
-      }
-      setIsModalOpen(false);
-    } catch (err) {
-      console.error(err);
-      addToast("儲存失敗: " + err.message, "error");
-    }
-  };
+    // --- SYNC TO PUBLIC CALENDAR FOR SLEEKFLOW ---
+    await setDoc(doc(publicCalendarRef, docId), {
+      date: formData.date,
+      venue: formData.venueLocation || "Main Hall",
+      // Only send 'busy' if the status is confirmed or tentative
+      isAvailable: formData.status === 'cancelled' ? true : false,
+      status: formData.status
+    });
+
+    addToast("Saved & Calendar Synced", "success");
+    setIsModalOpen(false);
+  } catch (err) {
+    console.error(err);
+    addToast("Save failed", "error");
+  }
+};
 
   const handleDelete = async (id) => {
     if (!user) return;
@@ -5600,7 +5503,7 @@ const openEditModal = (event) => {
 
           <div className="flex-1 overflow-auto p-4 md:p-8">
             <div className="max-w-7xl mx-auto space-y-6 pb-20">
-              {activeTab === 'dashboard' && <DashboardView events={events} openEditModal={openEditModal} onRemind={handleQuickRemind}/>}
+              {activeTab === 'dashboard' && <DashboardView events={events} openEditModal={openEditModal} setIsDataAiOpen={setIsDataAiOpen} />}
               {activeTab === 'events' && <EventsListView />}
               {activeTab === 'settings' && (<SettingsView 
                 settings={appSettings} 
@@ -7016,23 +6919,26 @@ const openEditModal = (event) => {
                 </div>
               </div>
             )}
-            {/* Footer inside the Modal */}
+{/* Footer inside the Modal */}
             <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-10 gap-4">
               
               {/* LEFT SIDE: AI & Print Tools */}
-              <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar">
+              <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1"> 
                  
                  {/* 1. NEW AI BUTTON */}
-                 <button
-                   type="button"
-                   onClick={() => setIsAiOpen(true)}
-                   className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 rounded-lg font-medium flex items-center shadow-md text-sm whitespace-nowrap"
-                 >
-                   <Sparkles size={16} className="mr-2" /> AI 助手
-                 </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAiOpen(true)}
+                  className="group relative px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-full font-bold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm shrink-0"
+                >
+                  <Sparkles size={16} className="text-yellow-200 group-hover:rotate-12 transition-transform" />
+                  <span>AI 智能助手</span>
+                  {/* Optional: Shine effect */}
+                  <div className="absolute inset-0 rounded-full ring-1 ring-white/20 group-hover:ring-white/40"></div>
+                </button> {/* ✅ THIS CLOSING TAG WAS MISSING */}
 
                  {/* 2. Divider (Only show if we have print buttons next to it) */}
-                 {editingEvent && <div className="h-6 w-px bg-slate-300 mx-2"></div>}
+                 {editingEvent && <div className="h-6 w-px bg-slate-300 mx-2 shrink-0"></div>}
 
                  {/* 3. Existing Print Buttons */}
                  {editingEvent && (
@@ -7040,36 +6946,34 @@ const openEditModal = (event) => {
                     <button
                       type="button"
                       onClick={handlePrintEO}
-                      className="px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium flex items-center border border-slate-200 text-sm whitespace-nowrap"
+                      className="px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium flex items-center border border-slate-200 text-sm whitespace-nowrap shrink-0"
                     >
                       <Printer size={16} className="mr-2" /> EO
                     </button>
                     <button
                       type="button"
                       onClick={handlePrintBriefing}
-                      className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm whitespace-nowrap"
+                      className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm whitespace-nowrap shrink-0"
                     >
                       <Users size={16} className="mr-2" /> Brief
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                          // Check if there are multiple menus
                           if (formData.menus && formData.menus.length > 1) {
-                              setIsMenuSelectOpen(true); // Open selector
+                              setIsMenuSelectOpen(true); 
                           } else {
-                              // If only 1 menu, print directly
                               handleMenuPrintSelection('all');
                           }
                       }}
-                      className="px-3 py-2 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg font-medium flex items-center border border-violet-200 text-sm whitespace-nowrap ml-2"
+                      className="px-3 py-2 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg font-medium flex items-center border border-violet-200 text-sm whitespace-nowrap ml-2 shrink-0"
                     >
                       <Utensils size={16} className="mr-2" /> 菜譜
                     </button>
                     <button
                       type="button"
                       onClick={handlePrintQuotation}
-                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm whitespace-nowrap"
+                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm whitespace-nowrap shrink-0"
                     >
                       <FileText size={16} className="mr-2" /> Quotation
                     </button>
@@ -7080,9 +6984,9 @@ const openEditModal = (event) => {
                           setPrintMode('INVOICE');
                           setTimeout(() => window.print(), 100);
                       }}
-                      className="px-3 py-2 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-lg font-medium flex items-center border border-blue-200 text-sm whitespace-nowrap ml-2"
+                      className="px-3 py-2 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-lg font-medium flex items-center border border-blue-200 text-sm whitespace-nowrap ml-2 shrink-0"
                     >
-                      <FileText size={16} className="mr-2" /> Invoice (發票)
+                      <FileText size={16} className="mr-2" /> Invoice
                     </button>
                     <button
                       type="button"
@@ -7091,7 +6995,7 @@ const openEditModal = (event) => {
                           setPrintMode('CONTRACT');
                           setTimeout(() => window.print(), 100);
                       }}
-                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap"
+                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap shrink-0"
                     >
                       <FileText size={16} className="mr-2" /> Contract
                     </button>
@@ -7101,7 +7005,7 @@ const openEditModal = (event) => {
                           setPrintMode('CONTRACT_CN');
                           setTimeout(() => window.print(), 100);
                       }}
-                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap ml-2"
+                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap ml-2 shrink-0"
                     >
                       <FileText size={16} className="mr-2" /> 中文合約
                     </button>
@@ -7155,7 +7059,20 @@ const openEditModal = (event) => {
       </div>
 
       {/* ======================================================== */}
-
+    {/* AI Assistant Popup */}
+      {isAiOpen && (
+        <AiAssistant 
+          formData={formData} 
+          setFormData={setFormData} 
+          onClose={() => setIsAiOpen(false)} 
+        />
+      )}
+      {isDataAiOpen && (
+        <DataAssistant 
+          events={events} 
+          onClose={() => setIsDataAiOpen(false)} 
+        />
+      )}
     </>
   );
   

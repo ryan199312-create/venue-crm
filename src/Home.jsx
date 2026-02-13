@@ -52,7 +52,7 @@ const content = {
         title: "締造永恆",
         subtitle: "浪漫婚宴",
         desc: "在歷史與天際線的見證下，許下愛的承諾。我們無柱式宴會大廳，配以水晶吊燈與維港全景，為您的婚禮增添無盡氣派與浪漫。",
-        img: "https://images.unsplash.com/photo-1519225468359-2996bc017507?q=80&w=2070",
+        img: "https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2FlandingPage%2Fcouple1.JPEG?alt=media&token=4c25be90-339e-4bd6-a85d-53f47a7b449f",
         cta: "查看婚宴套餐"
       },
       {
@@ -60,7 +60,7 @@ const content = {
         title: "運籌帷幄",
         subtitle: "企業活動",
         desc: "無論是董事會議還是週年晚宴，我們靈活多變的場地與頂尖視聽設備，助您展現專業形象，讓每一場商務盛事圓滿成功。",
-        img: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=2069",
+        img: "https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2FlandingPage%2FDesign%20Trust.jpeg?alt=media&token=5da50a4c-c3ad-43dc-aba9-dd8e563babed",
         cta: "策劃商務活動"
       },
       {
@@ -68,7 +68,7 @@ const content = {
         title: "匠心獨運",
         subtitle: "精緻粵菜",
         desc: "嚴選上乘時令食材，由米芝蓮級廚藝團隊精心炮製。每一道菜餚都是對傳統工藝的致敬，為您呈獻最正宗的廣東滋味。",
-        img: "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974",
+        img: "https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2FlandingPage%2Froasted%20goose.JPG?alt=media&token=3c1c42c2-9e62-4efc-8887-3311b053ca8f",
         cta: "瀏覽菜單"
       }
     ]
@@ -84,7 +84,7 @@ const Hero = ({ onOpenBooking, t }) => (
         initial={{ scale: 1.1 }}
         animate={{ scale: 1 }}
         transition={{ duration: 15, ease: "easeOut" }}
-        src="https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=2070" 
+        src="https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2FlandingPage%2Flobster.jpg?alt=media&token=db4ba26e-03d6-48be-83e1-60343ebc8bf0" 
         className="w-full h-full object-cover"
         alt="Hero"
       />

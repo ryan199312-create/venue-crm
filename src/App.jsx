@@ -8,6 +8,8 @@ import ScrollToTop from './ScrollToTop'; // <--- IMPORT THIS
 import WebsiteLayout from './WebsiteLayout';
 import Home from './Home';
 import Weddings from './Weddings';
+import Corporate from './Corporate';
+import Dining from './Dining';
 import VMS from './VMS';
 
 export default function App() {
@@ -20,9 +22,8 @@ export default function App() {
         <Route element={<WebsiteLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/weddings" element={<Weddings />} />
-          {/* You can map /corporate and /dining to Home for now if you haven't made those pages yet */}
-          <Route path="/corporate" element={<Navigate to="/" replace />} /> 
-          <Route path="/dining" element={<Navigate to="/" replace />} />
+          <Route path="/corporate" element={<Corporate />} /> 
+          <Route path="/dining" element={<Dining />} />
         </Route>
 
         {/* ADMIN ROUTE */}

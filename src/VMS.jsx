@@ -2889,7 +2889,6 @@ const PrintableEO = ({ data, printMode }) => {
                             <div className="w-[70%]">
                                 <div className="flex items-center gap-3 mb-1">
                                     <h1 className="text-4xl font-black uppercase leading-none tracking-tight">{data.eventName}</h1>
-                                    <span className={`text-white px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wider ${copy.color}`}>樓面工作單</span>
                                 </div>
                                 <div className="text-xl font-bold text-slate-600 flex items-center gap-2">
                                     <span>{cleanLocation(data.venueLocation)}</span>
@@ -2897,8 +2896,12 @@ const PrintableEO = ({ data, printMode }) => {
                                     <span>{formatDateWithDay(data.date)}</span>
                                 </div>
                             </div>
-                            <div className="w-[30%] text-right">
-                                <div className="bg-black text-white text-center p-2 rounded-lg shadow-sm">
+                            <div className="w-[30%] flex flex-col items-end">
+                                {/* ✅ MOVED BADGE HERE */}
+                                <span className={`text-white px-3 py-1 text-[10px] font-bold rounded uppercase tracking-wider mb-2 ${copy.color}`}>
+                                    {copy.name}
+                                </span>
+                                <div className="bg-black text-white text-center p-2 rounded-lg shadow-sm w-full">
                                     <div className="text-xs uppercase font-bold text-slate-400">Time</div>
                                     <div className="text-2xl font-black leading-none">{data.startTime} - {data.endTime}</div>
                                 </div>
@@ -3007,14 +3010,17 @@ const PrintableEO = ({ data, printMode }) => {
                      <div className="flex-1">
                         <div className="flex items-center gap-3">
                            <h1 className="text-2xl font-black uppercase tracking-tight leading-none">{data.eventName}</h1>
-                           <span className={`text-white px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wider ${copy.color}`}>{copy.name}</span>
                         </div>
                         <div className="flex gap-4 mt-1 text-xs font-bold text-slate-600 font-mono">
-                            <span>編號: {data.orderId}</span>
-                            <span>建立日期: {new Date().toLocaleDateString('zh-HK')}</span>
+                           <span>編號: {data.orderId}</span>
+                           <span>建立日期: {new Date().toLocaleDateString('zh-HK')}</span>
                         </div>
                      </div>
-                     <div className="text-right">
+                     <div className="text-right flex flex-col items-end">
+                        {/* ✅ MOVED BADGE HERE */}
+                        <span className={`text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider mb-1 ${copy.color}`}>
+                           {copy.name}
+                        </span>
                         <div className="text-sm font-bold text-slate-900">{formatDateWithDay(data.date)}</div>
                         <div className="text-xs text-slate-500">{data.startTime} - {data.endTime}</div>
                      </div>
@@ -3091,7 +3097,7 @@ const PrintableEO = ({ data, printMode }) => {
                                                   <div><span className="font-bold text-indigo-600 block text-[9px] mb-0.5">接載:</span>{(!data.busInfo.arrivals || data.busInfo.arrivals.length === 0) ? <span className="text-slate-400 italic text-[9px]">-</span> : data.busInfo.arrivals.map((bus, i) => (<div key={i} className="mb-1 leading-tight"><div className="flex gap-1 items-baseline"><span className="font-mono font-bold text-black">{bus.time}</span>{bus.plate && <span className="text-slate-500 text-[9px]">({bus.plate})</span>}</div><div className="text-slate-700 break-words">{bus.location || '---'}</div></div>))}</div>
                                                   <div><span className="font-bold text-indigo-600 block text-[9px] mb-0.5">散席:</span>{(!data.busInfo.departures || data.busInfo.departures.length === 0) ? <span className="text-slate-400 italic text-[9px]">-</span> : data.busInfo.departures.map((bus, i) => (<div key={i} className="mb-1 leading-tight"><div className="flex gap-1 items-baseline"><span className="font-mono font-bold text-black">{bus.time}</span>{bus.plate && <span className="text-slate-500 text-[9px]">({bus.plate})</span>}</div><div className="text-slate-700 break-words">{bus.location || '---'}</div></div>))}</div>
                                               </div>
-                                              {data.busInfo.customRoutes?.length > 0 && (<div className="mt-2 pt-1 border-t border-indigo-200"><span className="font-bold text-indigo-600 block text-[9px] mb-0.5">自訂路線:</span>{data.busInfo.customRoutes.map(r => (<div key={r.id} className="flex gap-2 text-indigo-800 leading-tight"><span className="font-mono font-bold text-black">{r.time}</span><span>{r.route}</span>{r.plate && <span className="text-slate-500">({r.plate})</span>}</div>))}</div>)}
+                                              
                                           </div>
                                       )}
                                       <div className="flex justify-between items-center"><span className="font-bold text-slate-500">泊車安排</span><span className="bg-slate-100 px-2 rounded font-bold">{data.parkingInfo?.ticketQty || 0} 張 x {data.parkingInfo?.ticketHours || 0} 小時</span></div>
@@ -3224,24 +3230,31 @@ const PrintableEO = ({ data, printMode }) => {
           </div>
         ))}
 
-        {/* --- PAGE 4 & 5 (APPENDIX / KITCHEN) REMAIN THE SAME --- */}
-        {(data.stageDecorPhoto || data.venueDecorPhoto) && (
+{/* --- PAGE 4: APPENDIX (Now handles arrays of photos) --- */}
+        {((data.stageDecorPhotos && data.stageDecorPhotos.length > 0) || (data.venueDecorPhotos && data.venueDecorPhotos.length > 0) || data.stageDecorPhoto || data.venueDecorPhoto) && (
             <>
                 <div className="print-page">
-                    <Header title="附錄" copyType="參考圖片" badgeColor="bg-slate-500" />
-                    <div className="grid grid-cols-1 gap-6 mt-4">
-                        {data.stageDecorPhoto && (
-                            <div className="break-inside-avoid border border-slate-200 rounded p-2 bg-slate-50">
-                                <h3 className="text-sm font-bold text-slate-700 mb-2">舞台/花藝參考圖</h3>
-                                <img src={data.stageDecorPhoto} alt="Stage" className="w-full h-auto max-h-[110mm] object-contain mx-auto" />
+                    <Header title="附錄 (Appendix)" copyType="參考圖片" badgeColor="bg-slate-500" />
+                    
+                    {/* We use a 2-column grid so multiple images fit nicely on one page */}
+                    <div className="grid grid-cols-2 gap-6 mt-4">
+                        
+                        {/* Map stage decor photos (merges new arrays with old legacy string) */}
+                        {(data.stageDecorPhotos || (data.stageDecorPhoto ? [data.stageDecorPhoto] : [])).map((url, idx) => (
+                            <div key={`stage-${idx}`} className="break-inside-avoid border border-slate-200 rounded p-2 bg-slate-50">
+                                <h3 className="text-sm font-bold text-slate-700 mb-2">舞台/花藝參考圖 {idx + 1}</h3>
+                                <img src={url} alt={`Stage ${idx}`} className="w-full h-auto max-h-[110mm] object-contain mx-auto" />
                             </div>
-                        )}
-                        {data.venueDecorPhoto && (
-                            <div className="break-inside-avoid border border-slate-200 rounded p-2 bg-slate-50">
-                                <h3 className="text-sm font-bold text-slate-700 mb-2">場地佈置參考圖</h3>
-                                <img src={data.venueDecorPhoto} alt="Venue" className="w-full h-auto max-h-[110mm] object-contain mx-auto" />
+                        ))}
+                        
+                        {/* Map venue decor photos (merges new arrays with old legacy string) */}
+                        {(data.venueDecorPhotos || (data.venueDecorPhoto ? [data.venueDecorPhoto] : [])).map((url, idx) => (
+                            <div key={`venue-${idx}`} className="break-inside-avoid border border-slate-200 rounded p-2 bg-slate-50">
+                                <h3 className="text-sm font-bold text-slate-700 mb-2">場地佈置參考圖 {idx + 1}</h3>
+                                <img src={url} alt={`Venue ${idx}`} className="w-full h-auto max-h-[110mm] object-contain mx-auto" />
                             </div>
-                        )}
+                        ))}
+                        
                     </div>
                 </div>
                 <div className="page-break"></div>
@@ -3264,7 +3277,7 @@ const PrintableEO = ({ data, printMode }) => {
            <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-slate-100 p-4 border-l-8 border-slate-800">
                  <span className="block text-xs font-bold text-slate-500 uppercase">活動名稱</span>
-                 <span className="block text-xl font-bold leading-tight">{data.eventName}</span>
+                 <span className="block text-xs font-bold leading-tight">{data.eventName}</span>
               </div>
               <div className="bg-slate-100 p-4 border-l-8 border-black text-center">
                  <span className="block text-xs font-bold text-slate-500 uppercase">席數</span>
@@ -4426,7 +4439,7 @@ export default function App() {
   const [translatingMenuId, setTranslatingMenuId] = useState(null);
 
   // --- AI 菜單翻譯處理函式 (Updated with specific rules) ---
-  const handleTranslateMenu = async (menuId, content) => {
+const handleTranslateMenu = async (menuId, content) => {
     if (!content) {
       addToast("請先輸入菜單內容", "error");
       return;
@@ -4434,50 +4447,29 @@ export default function App() {
     
     setTranslatingMenuId(menuId);
 
-
     try {
-      const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json", 
-          "Authorization": `Bearer ${DEEPSEEK_API_KEY}` 
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { 
-              role: "system", 
-              content: `You are a professional banquet menu translator. 
-              Task: Translate the given menu items from Chinese to English line by line.
-              
-              STRICT RULES:
-              1. **Brand Names:** ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'.
-              2. **Format:** Output the original Chinese line, followed immediately by the English translation on the next line.
-              3. **Spacing:** Remove ALL empty lines between items. The output must be compact.
-              4. **Punctuation:** Do NOT add full stops (periods) at the end of any line.
-              5. **Cleanliness:** Do not add bullet points, numbering, or extra explanations.
-              
-              Example Output:
-              鴻運金豬全體
-              Roasted Whole Suckling Pig
-              璟瓏軒炒飯
-              King Lung Heen Fried Rice`
-            }, 
-            { 
-              role: "user", 
-              content: content 
-            }
-          ],
-          temperature: 0.2, // Lower temperature for more deterministic/strict formatting
-        })
-      });
+      const systemPrompt = `You are a professional banquet menu translator. 
+        Task: Translate the given menu items from Chinese to English line by line.
+        
+        STRICT RULES:
+        1. **Brand Names:** ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'.
+        2. **Format:** Output the original Chinese line, followed immediately by the English translation on the next line.
+        3. **Spacing:** Remove ALL empty lines between items. The output must be compact.
+        4. **Punctuation:** Do NOT add full stops (periods) at the end of any line.
+        5. **Cleanliness:** Do not add bullet points, numbering, or extra explanations.
+        
+        Example Output:
+        鴻運金豬全體
+        Roasted Whole Suckling Pig
+        璟瓏軒炒飯
+        King Lung Heen Fried Rice`;
 
-      if (!response.ok) throw new Error("Translation API Failed");
-      
-      const data = await response.json();
-      let translatedText = data.choices[0].message.content;
+      // ✅ Use your secure backend hook instead of a raw fetch
+      let translatedText = await generate(content, systemPrompt);
 
-      // Double-check cleanup: Remove double newlines just in case
+      if (!translatedText) throw new Error("Translation API Failed");
+
+      // Cleanup formatting
       translatedText = translatedText.replace(/\n\s*\n/g, '\n').trim();
 
       handleMenuChange(menuId, 'content', translatedText);
@@ -4492,7 +4484,7 @@ export default function App() {
   };
 
   // --- NEW: Beverage Translation Handler ---
-  const handleTranslateDrinks = async () => {
+const handleTranslateDrinks = async () => {
     const content = formData.drinksPackage;
     if (!content) {
       addToast("請先輸入酒水內容", "error");
@@ -4502,44 +4494,26 @@ export default function App() {
     setIsTranslatingDrinks(true);
 
     try {
-      const response = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json", 
-          "Authorization": `Bearer ${DEEPSEEK_API_KEY}` 
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { 
-              role: "system", 
-              content: `You are a professional banquet translator. 
-              Task: Translate the beverage list from Chinese to English line by line.
-              
-              STRICT RULES:
-              1. **Format:** Output the original Chinese line, followed immediately by the English translation on the next line.
-              2. **Spacing:** Remove ALL empty lines.
-              3. **Punctuation:** Do NOT add full stops.
-              
-              Example:
-              無限量供應汽水
-              Unlimited Soft Drinks
-              指定紅酒
-              House Red Wine`
-            }, 
-            { 
-              role: "user", 
-              content: content 
-            }
-          ],
-          temperature: 0.2,
-        })
-      });
+      const systemPrompt = `You are a professional banquet translator. 
+        Task: Translate the beverage list from Chinese to English line by line.
+        
+        STRICT RULES:
+        1. **Format:** Output the original Chinese line, followed immediately by the English translation on the next line.
+        2. **Spacing:** Remove ALL empty lines.
+        3. **Punctuation:** Do NOT add full stops.
+        
+        Example:
+        無限量供應汽水
+        Unlimited Soft Drinks
+        指定紅酒
+        House Red Wine`;
 
-      if (!response.ok) throw new Error("Translation API Failed");
+      // ✅ Use your secure backend hook
+      let translatedText = await generate(content, systemPrompt);
+
+      if (!translatedText) throw new Error("Translation API Failed");
       
-      const data = await response.json();
-      let translatedText = data.choices[0].message.content;
+      // Cleanup formatting
       translatedText = translatedText.replace(/\n\s*\n/g, '\n').trim();
 
       setFormData(prev => ({ ...prev, drinksPackage: translatedText }));
@@ -4806,7 +4780,31 @@ const handleMenuPrintSelection = (selection) => {
     });
     return () => unsubscribe();
   }, [user]);
+useEffect(() => {
+    if (events.length === 0) return;
+    
+    // Get today's date in strictly YYYY-MM-DD format (local timezone)
+    const todayStr = new Date().toLocaleDateString('en-CA'); 
 
+    events.forEach(async (event) => {
+      // If the event date is strictly in the past, and it's not already completed or cancelled
+      if (event.date && event.date < todayStr && (event.status === 'confirmed' || event.status === 'tentative')) {
+        try {
+          // 1. Update the main private database
+          const eventRef = doc(db, 'artifacts', appId, 'private', 'data', 'events', event.id);
+          await updateDoc(eventRef, { status: 'completed' });
+          
+          // 2. Update the public calendar (so SleekFlow knows the date is free again)
+          const publicRef = doc(db, 'artifacts', appId, 'public_calendar', event.id);
+          await updateDoc(publicRef, { status: 'completed' });
+          
+          console.log(`Auto-completed past event: ${event.eventName}`);
+        } catch (err) {
+          console.error("Auto-complete failed:", err);
+        }
+      }
+    });
+  }, [events]);
 // Fetch Settings
   useEffect(() => {
     if (!user) return;
@@ -5228,6 +5226,8 @@ const openEditModal = (event) => {
       menuPriceType: event.menuPriceType || 'perTable',
       drinksPrice: event.drinksPrice || '',
       drinksPriceType: event.drinksPriceType || 'perTable',
+      stageDecorPhotos: event.stageDecorPhotos || (event.stageDecorPhoto ? [event.stageDecorPhoto] : []),
+      venueDecorPhotos: event.venueDecorPhotos || (event.venueDecorPhoto ? [event.venueDecorPhoto] : []),
     };
     setFormData(safeData); 
     
@@ -5249,16 +5249,30 @@ const openEditModal = (event) => {
     return await getDownloadURL(storageRef);
   };
 
-  const handleImageUpload = async (file, fieldName) => {
-    if (!user) return;
-    const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
-    try {
-       await uploadBytes(storageRef, file);
-       const url = await getDownloadURL(storageRef);
-       setFormData(prev => ({ ...prev, [fieldName]: url }));
-       addToast("圖片上傳成功", "success");
-    } catch (e) {
-       addToast("上傳失敗", "error");
+const handleMultiImageUpload = async (files, fieldName) => {
+    if (!user || !files || files.length === 0) return;
+    
+    addToast(`正在上傳 ${files.length} 張圖片... (Uploading...)`, "info");
+    const newUrls = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+      try {
+         await uploadBytes(storageRef, file);
+         const url = await getDownloadURL(storageRef);
+         newUrls.push(url);
+      } catch (e) {
+         addToast(`上傳 ${file.name} 失敗`, "error");
+      }
+    }
+    
+    if (newUrls.length > 0) {
+      setFormData(prev => ({ 
+          ...prev, 
+          [fieldName]: [...(prev[fieldName] || []), ...newUrls] 
+      }));
+      addToast("圖片上傳完成！", "success");
     }
   };
   
@@ -5342,90 +5356,234 @@ const handleSubmit = async (e) => {
 
   // --- Views ---
 
-  const EventsListView = () => {
-    const [filter, setFilter] = useState('');
-    const filtered = events.filter(e => 
-      (e.eventName || '').toLowerCase().includes(filter.toLowerCase()) || 
-      (e.clientName || '').toLowerCase().includes(filter.toLowerCase()) ||
-      (e.orderId || '').toLowerCase().includes(filter.toLowerCase())
-    );
+const EventsListView = () => {
+    const [filter, setFilter] = useState('');
+    // 1. New State for Status Filter & Pagination
+    const [statusFilter, setStatusFilter] = useState('incomplete'); // 'incomplete', 'completed', 'all'
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 30;
 
-    return (
-      <Card className="animate-in fade-in">
-        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="搜尋訂單編號、活動名稱或客戶..." 
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </div>
-          <button onClick={openNewEventModal} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center font-medium">
-            <Plus size={18} className="mr-2" /> 新增訂單 (New EO)
-          </button>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
-              <tr>
-                <th className="px-6 py-4">活動詳情 (Event)</th>
-                <th className="px-6 py-4">客戶 (Client)</th>
-                <th className="px-6 py-4">席數/人數 (Pax)</th>
-                <th className="px-6 py-4">狀態 (Status)</th>
-                <th className="px-6 py-4 text-right">總費用 (Total)</th>
-                <th className="px-6 py-4 text-center">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map(event => (
-                <tr key={event.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-slate-800">{event.eventName}</span>
-                      <span className="text-xs text-blue-600 font-mono mt-1">{event.orderId}</span>
-                      <div className="text-xs text-slate-500 mt-1 flex items-center">
-                        <CalendarIcon size={12} className="mr-1"/> {event.date}
-                        <span className="mx-1">•</span>
-                        {event.startTime}-{event.endTime}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-medium text-slate-900">{event.clientName}</p>
-                    <p className="text-xs text-slate-500">{event.clientPhone}</p>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    <div>{event.tableCount ? `${event.tableCount} 席` : '-'}</div>
-                    <div className="text-xs text-slate-400">{event.guestCount ? `${event.guestCount} 人` : '-'}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge status={event.status} />
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-slate-700">
-                    ${formatMoney(event.totalAmount)}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      <button onClick={() => openEditModal(event)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md" title="編輯">
-                        <Edit2 size={16} />
-                      </button>
-                      <button onClick={() => handleDelete(event.id)} className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-md" title="刪除">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    );
-  };
+    // Reset to page 1 whenever filters change
+    useEffect(() => {
+      setCurrentPage(1);
+    }, [filter, statusFilter]);
+
+    // 2. Filter & Sort Logic
+    const filteredAndSorted = useMemo(() => {
+      return events.filter(e => {
+        // Status Filter Logic
+        // "未完成" (Incomplete) = Tentative or Confirmed. Excludes Completed & Cancelled.
+        if (statusFilter === 'completed' && e.status !== 'completed') return false;
+        if (statusFilter === 'incomplete' && (e.status === 'completed' || e.status === 'cancelled')) return false;
+
+        // Text Search Filter
+        const searchLower = filter.toLowerCase();
+        const matchesSearch = 
+          (e.eventName || '').toLowerCase().includes(searchLower) || 
+          (e.clientName || '').toLowerCase().includes(searchLower) ||
+          (e.orderId || '').toLowerCase().includes(searchLower);
+        
+        if (!matchesSearch) return false;
+
+        return true;
+      });
+    }, [events, filter, statusFilter]);
+
+    // 3. Pagination Logic
+    const totalPages = Math.ceil(filteredAndSorted.length / ITEMS_PER_PAGE);
+    const paginatedEvents = filteredAndSorted.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE, 
+      currentPage * ITEMS_PER_PAGE
+    );
+
+    // 4. Inject "Month Header" Rows
+    const tableRows = useMemo(() => {
+      const rows = [];
+      let currentMonthStr = '';
+
+      paginatedEvents.forEach(event => {
+        if (!event.date) {
+          rows.push({ type: 'event', data: event, id: event.id });
+          return;
+        }
+        
+        const dateObj = new Date(event.date);
+        const monthStr = `${dateObj.getFullYear()}年 ${dateObj.getMonth() + 1}月`;
+        
+        // If the month changes, push a Header Row first
+        if (monthStr !== currentMonthStr) {
+          rows.push({ type: 'month-header', label: monthStr, id: `header-${monthStr}-${event.id}` });
+          currentMonthStr = monthStr;
+        }
+        
+        // Then push the actual event
+        rows.push({ type: 'event', data: event, id: event.id });
+      });
+
+      return rows;
+    }, [paginatedEvents]);
+
+    return (
+      <Card className="animate-in fade-in flex flex-col h-full">
+        {/* TOP BAR: Search & Filters */}
+        <div className="p-5 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          
+          {/* Search Box */}
+          <div className="relative max-w-sm w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="搜尋訂單編號、活動名稱或客戶..." 
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
+
+          {/* Filter & Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* Status Filter Toggles */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 w-full sm:w-auto">
+              <button 
+                onClick={() => setStatusFilter('incomplete')} 
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'incomplete' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                未完成
+              </button>
+              <button 
+                onClick={() => setStatusFilter('completed')} 
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'completed' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                已完成
+              </button>
+              <button 
+                onClick={() => setStatusFilter('all')} 
+                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                全部
+              </button>
+            </div>
+
+            <button onClick={openNewEventModal} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center font-medium shadow-sm whitespace-nowrap w-full sm:w-auto justify-center">
+              <Plus size={18} className="mr-2" /> 新增訂單 (New EO)
+            </button>
+          </div>
+        </div>
+        
+        {/* TABLE AREA */}
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th className="px-6 py-4">活動詳情 (Event)</th>
+                <th className="px-6 py-4">客戶 (Client)</th>
+                <th className="px-6 py-4">席數/人數 (Pax)</th>
+                <th className="px-6 py-4">狀態 (Status)</th>
+                <th className="px-6 py-4 text-right">總費用 (Total)</th>
+                <th className="px-6 py-4 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {tableRows.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-12 text-slate-400">
+                    找不到符合條件的訂單 (No records found)
+                  </td>
+                </tr>
+              ) : (
+                tableRows.map(row => {
+                  
+                  // A. Render Month Separator Row
+                  if (row.type === 'month-header') {
+                    return (
+                      <tr key={row.id} className="bg-indigo-50/50 border-y border-indigo-100">
+                        <td colSpan="6" className="px-6 py-2">
+                          <div className="flex items-center text-sm font-black text-indigo-800 tracking-widest">
+                             <CalendarIcon size={16} className="mr-2 text-indigo-500" />
+                             {row.label}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // B. Render Standard Event Row
+                  const event = row.data;
+                  return (
+                    <tr key={row.id} className="hover:bg-slate-50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-800 text-base">{event.eventName}</span>
+                          <span className="text-xs text-blue-600 font-mono mt-1">{event.orderId}</span>
+                          <div className="text-xs text-slate-500 mt-1 flex items-center">
+                            <Clock size={12} className="mr-1"/> {event.date}
+                            <span className="mx-1">•</span>
+                            {event.startTime}-{event.endTime}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-bold text-slate-900">{event.clientName}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{event.clientPhone}</p>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        <div className="font-bold">{event.tableCount ? `${event.tableCount} 席` : '-'}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{event.guestCount ? `${event.guestCount} 人` : '-'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge status={event.status} />
+                      </td>
+                      <td className="px-6 py-4 text-right font-bold text-slate-800 font-mono">
+                        ${formatMoney(event.totalAmount)}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <button onClick={() => openEditModal(event)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="編輯">
+                            <Edit2 size={16} />
+                          </button>
+                          <button onClick={() => handleDelete(event.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="刪除">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* BOTTOM BAR: Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl shrink-0">
+            <span className="text-sm font-bold text-slate-500">
+              顯示第 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSorted.length)} 項，共 {filteredAndSorted.length} 項
+            </span>
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors flex items-center"
+              >
+                <ChevronLeft size={16} className="mr-1" /> 上一頁
+              </button>
+              <div className="text-sm font-bold text-slate-700 px-3 font-mono">
+                {currentPage} / {totalPages}
+              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors flex items-center"
+              >
+                下一頁 <ChevronRight size={16} className="ml-1" />
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+    );
+  };
 
   // --- Render Logic ---
 
@@ -6232,13 +6390,18 @@ const handleSubmit = async (e) => {
                       </div>
                     ))}
 
-                    {/* ✅ 6. BUS FEE ROW (Standardized Grid Format) */}
+{/* ✅ 6. BUS FEE ROW (Standardized Style + SC Toggle) */}
                     {formData.busInfo?.enabled && (
-                        <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center bg-indigo-50/20 border-t border-indigo-100 hover:bg-indigo-50/40 transition-colors">
+                        <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors border-b border-slate-100">
                             <div className="col-span-5">
                                 <div className="flex items-center">
-                                    <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded mr-3 flex-shrink-0"><Truck size={14}/></div>
-                                    <div><span className="font-bold text-indigo-900 block text-sm">旅遊巴安排 (Bus Fee)</span><span className="text-xs text-indigo-400">來源: 物流分頁</span></div>
+                                    <div className="p-1.5 bg-slate-100 text-slate-500 rounded mr-3 flex-shrink-0">
+                                        <Truck size={14}/>
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-slate-700 block text-sm">旅遊巴安排 (Bus Fee)</span>
+                                        <span className="text-xs text-slate-400">來源: 物流分頁</span>
+                                    </div>
                                 </div>
                             </div>
                             <div className="col-span-2 flex items-center justify-end">
@@ -6248,15 +6411,30 @@ const handleSubmit = async (e) => {
                                     value={formData.busCharge} 
                                     onChange={e => setFormData(prev => {
                                         const newData = { ...prev, busCharge: e.target.value };
-                                        return { ...newData, totalAmount: calculateTotalAmount(newData) }; // ✅ Updates Total Immediately
+                                        return { ...newData, totalAmount: calculateTotalAmount(newData) }; 
                                     })}
-                                    className="w-20 text-right bg-transparent border-b border-indigo-200 focus:border-indigo-500 outline-none text-sm font-mono text-indigo-700 font-bold"
+                                    className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700"
                                     placeholder="0"
                                 />
                             </div>
-                            <div className="col-span-2 text-center text-sm text-slate-500">1 (固定)</div>
-                            <div className="col-span-2 text-right text-sm font-bold font-mono text-indigo-700">${formatMoney(Number(formData.busCharge) || 0)}</div>
-                            <div className="col-span-1 text-center"><span className="text-slate-300 text-[10px]">-</span></div>
+                            <div className="col-span-2 text-center text-sm text-slate-500">1</div>
+                            <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
+                                ${formatMoney(Number(formData.busCharge) || 0)}
+                            </div>
+                            <div className="col-span-1 flex justify-center">
+                                {/* ✅ NEW: SC Toggle Button */}
+                                <button 
+                                    type="button" 
+                                    onClick={() => setFormData(prev => ({
+                                        ...prev, 
+                                        busApplySC: !prev.busApplySC, 
+                                        totalAmount: calculateTotalAmount({...prev, busApplySC: !prev.busApplySC})
+                                    }))} 
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${formData.busApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 opacity-50'}`}
+                                >
+                                    SC
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -6289,29 +6467,58 @@ const handleSubmit = async (e) => {
                         )}
                     </div>
 
-                    {/* Calculator */}
-                    <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                          <label className="flex items-center cursor-pointer text-sm text-slate-600 select-none">
-                              <input type="checkbox" checked={formData.enableServiceCharge !== false} onChange={e => setFormData(prev => ({...prev, enableServiceCharge: e.target.checked, totalAmount: calculateTotalAmount({...prev, enableServiceCharge: e.target.checked}) }))} className="mr-2 rounded text-blue-600 focus:ring-blue-500"/>
-                              服務費 (10%)
-                          </label>
-                          <div className="relative w-16">
-                            <input type="text" value={formData.serviceCharge} disabled className="w-full text-right text-sm border-b border-transparent outline-none font-mono text-slate-500"/>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                          <span className="text-sm text-slate-600">折扣 (Discount)</span>
-                          <div className="relative w-24">
-                              <span className="absolute left-0 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span>
-                              <input type="text" value={formData.discount} onChange={handlePriceChange} name="discount" className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono pl-4" placeholder="0"/>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center pt-2">
-                          <span className="text-base font-bold text-slate-800">總金額 (Total)</span>
-                          <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(formData.totalAmount)}</span>
-                        </div>
-                    </div>
+{/* Calculator */}
+                    {(() => {
+                        // 1. Dynamically calculate the 10% fee based on active items
+                        let scBase = 0;
+                        (formData.menus || []).forEach(m => { if(m.applySC !== false) scBase += (parseFloat(m.price)||0) * (parseFloat(m.qty)||1); });
+                        const platingTotal = (formData.servingStyle === '位上') ? (parseFloat(formData.platingFee)||0) * (parseFloat(formData.tableCount)||0) : 0;
+                        if (platingTotal > 0 && formData.platingFeeApplySC !== false) scBase += platingTotal;
+                        if (formData.drinksApplySC !== false) scBase += (parseFloat(formData.drinksPrice)||0) * (parseFloat(formData.drinksQty)||1);
+                        (formData.customItems || []).forEach(i => { if(i.applySC) scBase += (parseFloat(i.price)||0) * (parseFloat(i.qty)||1); });
+                        if (formData.busInfo?.enabled && formData.busApplySC) scBase += (parseFloat(formData.busCharge)||0);
+                        
+                        const scAmount = formData.enableServiceCharge !== false ? scBase * 0.1 : 0;
+
+                        return (
+                            <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                  <label className="flex items-center cursor-pointer text-sm text-slate-600 select-none hover:text-blue-600 transition-colors">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={formData.enableServiceCharge !== false} 
+                                        onChange={e => setFormData(prev => ({...prev, enableServiceCharge: e.target.checked, totalAmount: calculateTotalAmount({...prev, enableServiceCharge: e.target.checked}) }))} 
+                                        className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                                      />
+                                      <span className="font-bold">服務費 (10%)</span>
+                                  </label>
+                                  <div className="text-right">
+                                      <span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>
+                                          + ${formatMoney(scAmount)}
+                                      </span>
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                  <span className="text-sm font-bold text-slate-600">折扣 (Discount)</span>
+                                  <div className="relative w-28">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span>
+                                      <input 
+                                        type="text" 
+                                        value={formData.discount} 
+                                        onChange={handlePriceChange} 
+                                        name="discount" 
+                                        className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono font-bold pl-6 pb-1" 
+                                        placeholder="0"
+                                      />
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center pt-2">
+                                  <span className="text-base font-bold text-slate-800">總金額 (Total)</span>
+                                  <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(formData.totalAmount)}</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* 8. PAYMENT SCHEDULE */}
@@ -6402,35 +6609,32 @@ const handleSubmit = async (e) => {
                         </div>
                     </div>
 
-                    {/* NEW: Stage Decor with Photo */}
-                    <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-4">
-                       <label className="block text-sm font-bold text-slate-700">舞台/花藝佈置 (Stage/Floral)</label>
-                       <div className="flex gap-4">
-                          <textarea 
-                             name="stageDecor" 
-                             rows={3} 
-                             value={formData.stageDecor} 
-                             onChange={handleInputChange} 
-                             placeholder="描述..." 
-                             className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none"
-                          />
-                          <div className="w-32 flex flex-col items-center">
-                             {formData.stageDecorPhoto ? (
-                                <div className="relative w-full h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
-                                   {/* Click to Open/Enlarge */}
-                                   <a href={formData.stageDecorPhoto} target="_blank" rel="noreferrer" className="block w-full h-full cursor-zoom-in" title="點擊放大 (Click to Enlarge)">
-                                      <img src={formData.stageDecorPhoto} alt="Decor" className="w-full h-full object-cover" />
-                                   </a>
-                                   <button type="button" onClick={() => setFormData(prev => ({...prev, stageDecorPhoto: ''}))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
-                                </div>
-                             ) : (
-                                <label className="w-full h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors">
-                                   <ImageIcon size={20} className="mb-1"/>
-                                   <span className="text-[10px]">上傳照片</span>
-                                   <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e.target.files[0], 'stageDecorPhoto')} />
-                                </label>
-                             )}
-                          </div>
+{/* NEW MULTI-PHOTO: Stage Decor */}
+
+                    {/* NEW MULTI-PHOTO: General Decor */}
+                    <div className="border-t border-slate-100 pt-4 mt-4">
+                       <label className="block text-sm font-bold text-slate-700 mb-2">其他佈置補充 (General Decor Notes)</label>
+                       <textarea 
+                          rows={2} 
+                          placeholder="文字描述 (Description)..." 
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none mb-3"
+                          value={formData.venueDecor || ''} 
+                          onChange={(e) => setFormData(prev => ({...prev, venueDecor: e.target.value}))}
+                       />
+                       <div className="flex flex-wrap gap-3">
+                          {(formData.venueDecorPhotos || []).map((url, idx) => (
+                              <div key={idx} className="relative w-24 h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
+                                 <a href={url} target="_blank" rel="noreferrer" className="block w-full h-full cursor-zoom-in" title="點擊放大">
+                                    <img src={url} alt="Venue Decor" className="w-full h-full object-cover" />
+                                 </a>
+                                 <button type="button" onClick={() => setFormData(prev => ({...prev, venueDecorPhotos: prev.venueDecorPhotos.filter((_, i) => i !== idx)}))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"><X size={12}/></button>
+                              </div>
+                          ))}
+                          <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-colors">
+                             <ImageIcon size={20} className="mb-1"/>
+                             <span className="text-[10px] font-bold">新增照片 (多選)</span>
+                             <input type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleMultiImageUpload(e.target.files, 'venueDecorPhotos')} />
+                          </label>
                        </div>
                     </div>
                   </div>
@@ -6497,30 +6701,7 @@ const handleSubmit = async (e) => {
                         </div>
                       </div>
 
-                      {/* NEW: General Decor Text & Photo */}
-                      <div className="flex gap-4">
-                          <textarea 
-                             rows={2} 
-                             placeholder="其他佈置補充 (General Decor Notes)..." 
-                             className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none"
-                             value={formData.venueDecor || ''} 
-                             onChange={(e) => setFormData(prev => ({...prev, venueDecor: e.target.value}))}
-                          />
-                          <div className="w-32 flex flex-col items-center">
-                             {formData.venueDecorPhoto ? (
-                                <div className="relative w-full h-16 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
-                                   <img src={formData.venueDecorPhoto} alt="Decor" className="w-full h-full object-cover" />
-                                   <button type="button" onClick={() => setFormData(prev => ({...prev, venueDecorPhoto: ''}))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10}/></button>
-                                </div>
-                             ) : (
-                                <label className="w-full h-16 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors">
-                                   <ImageIcon size={16} className="mb-1"/>
-                                   <span className="text-[9px]">上傳照片</span>
-                                   <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e.target.files[0], 'venueDecorPhoto')} />
-                                </label>
-                             )}
-                          </div>
-                      </div>
+
                     </div>
                   </div>
 
@@ -6696,40 +6877,6 @@ const handleSubmit = async (e) => {
                                            </div>
                                        ))}
                                    </div>
-                               </div>
-                           </div>
-
-                           {/* C. CUSTOM ROUTES */}
-                           <div>
-                               <div className="flex justify-between items-center mb-2 border-t border-slate-100 pt-2">
-                                   <span className="text-xs font-bold text-slate-500">其他自訂路線 (Custom Routes)</span>
-                                   <button 
-                                      type="button" 
-                                      onClick={() => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: [...(prev.busInfo.customRoutes||[]), {id: Date.now(), route: '', time: '', plate: '', price: ''}]}}))} 
-                                      className="text-[10px] bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
-                                   >
-                                      + 新增
-                                   </button>
-                               </div>
-                               <div className="space-y-2">
-                                   {(formData.busInfo?.customRoutes || []).map((route, idx) => (
-                                       <div key={route.id} className="flex gap-2 items-center">
-                                           <input type="text" placeholder="Time" className="w-14 text-sm border rounded px-2 py-1 text-center" value={route.time} onChange={e => {
-                                               const newRoutes = [...formData.busInfo.customRoutes]; newRoutes[idx].time = e.target.value; setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
-                                           }}/>
-                                           <input type="text" placeholder="描述 (Description)" className="flex-1 text-sm border rounded px-2 py-1" value={route.route} onChange={e => {
-                                               const newRoutes = [...formData.busInfo.customRoutes]; newRoutes[idx].route = e.target.value; setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
-                                           }}/>
-                                           <input type="text" placeholder="車牌" className="w-20 text-sm border rounded px-2 py-1" value={route.plate} onChange={e => {
-                                               const newRoutes = [...formData.busInfo.customRoutes]; newRoutes[idx].plate = e.target.value; setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
-                                           }}/>
-                                           {/* PRICE INPUT */}
-                                           <input type="number" placeholder="$0" className="w-16 text-sm border rounded px-1 py-1 text-right font-mono" value={route.price} onChange={e => {
-                                               const newRoutes = [...formData.busInfo.customRoutes]; newRoutes[idx].price = e.target.value; setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: newRoutes}}));
-                                           }}/>
-                                           <button type="button" onClick={() => setFormData(prev => ({...prev, busInfo: {...prev.busInfo, customRoutes: prev.busInfo.customRoutes.filter((_, i) => i !== idx)}}))} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>
-                                       </div>
-                                   ))}
                                </div>
                            </div>
                            

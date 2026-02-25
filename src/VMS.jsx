@@ -1628,9 +1628,9 @@ const PrintableEO = ({ data, printMode }) => {
                 </div>
                 <div className="space-y-1 bg-slate-50 p-3 rounded border border-slate-100">
                   {[
-                    { label: '1st Deposit', date: data.deposit1Date, amount: billing.dep1 },
-                    { label: '2nd Deposit', date: data.deposit2Date, amount: billing.dep2 },
-                    { label: '3rd Deposit', date: data.deposit3Date, amount: billing.dep3 },
+                    { label: '1st Payment', date: data.deposit1Date, amount: billing.dep1 },
+                    { label: '2nd Payment', date: data.deposit2Date, amount: billing.dep2 },
+                    { label: '3rd Payment', date: data.deposit3Date, amount: billing.dep3 },
                   ].map((item, idx) => (
                     item.amount > 0 && (
                       <div key={idx} className="flex justify-between items-center text-xs">
@@ -1990,9 +1990,9 @@ const PrintableEO = ({ data, printMode }) => {
                   <thead><tr className="text-[8px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200"><th className="pb-2">{isEn ? 'Installment' : '期數'}</th><th className="pb-2">{isEn ? 'Due Date' : '付款日期'}</th><th className="pb-2 text-right">{isEn ? 'Amount' : '金額'}</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {[
-                      { l: isEn ? 'Initial Deposit' : '第一期訂金', a: billing.dep1, d: data.deposit1Date },
-                      { l: isEn ? 'Second Deposit' : '第二期訂金', a: billing.dep2, d: data.deposit2Date },
-                      { l: isEn ? 'Third Deposit' : '第三期訂金', a: billing.dep3, d: data.deposit3Date },
+                      { l: isEn ? 'Initial Payment' : '第一期訂金', a: billing.dep1, d: data.deposit1Date },
+                      { l: isEn ? 'Second Payment' : '第二期訂金', a: billing.dep2, d: data.deposit2Date },
+                      { l: isEn ? 'Third Payment' : '第三期訂金', a: billing.dep3, d: data.deposit3Date },
                     ].map((item, i) => item.a > 0 && (
                       <tr key={i} className="text-xs">
                         <td className="py-2.5 font-bold text-slate-700">{item.l}</td>
@@ -2048,14 +2048,14 @@ const PrintableEO = ({ data, printMode }) => {
             <div className="legal-header">1. Payment Terms</div>
             <p className="mb-3">
               {isEn 
-                ? "Payment Methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Deposits must be paid by the specified due dates. The final balance must be settled immediately upon conclusion. No personal cheques are accepted on the event day."
+                ? "Payment Methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be paid by the specified due dates. The final balance must be settled immediately upon conclusion. No personal cheques are accepted on the event day."
                 : "付款方式包括現金、信用卡或銀行轉賬 (中銀 012-875-2-082180-1)。訂金須於指定日期前支付，尾數須於宴會結束後即時結清。恕不接受宴會當日以個人支票支付尾數。"}
             </p>
 
             <div className="legal-header">2. Postponement & Cancellation</div>
             <p className="mb-3">
               {isEn 
-                ? "Events may be postponed once with >3 months notice. Cancellation forfeit depends on notice: Confirmed period (1st & 2nd deposit); 1 month prior (90% min spend); 1 week prior (100% min spend)."
+                ? "Events may be postponed once with >3 months notice. Cancellation forfeit depends on notice: Confirmed period (1st & 2nd payment); 1 month prior (90% min spend); 1 week prior (100% min spend)."
                 : "活動可於3個月前通知下延期一次。取消罰則：確認期內（扣除第一及二期訂金）；活動前1個月（扣除最低消費90%）；活動前1週（扣除最低消費100%）。"}
             </p>
 
@@ -3081,7 +3081,7 @@ const LoginView = ({ onLogin, onGuestLogin, error }) => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl shadow-lg mb-4">
             <MapPin size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">VenueMgr</h1>
+          <h1 className="text-2xl font-bold text-white">璟瓏軒</h1>
           <p className="text-blue-200 text-sm mt-1">Venue & Event Management System</p>
         </div>
 
@@ -3490,9 +3490,9 @@ const SettingsView = ({ settings, onSave, addToast }) => {
 
                         {/* Visual Timeline Bar */}
                         <div className="flex h-2 w-full rounded-full overflow-hidden bg-slate-100 mt-3">
-                          <div style={{ width: `${rule.deposit1}%` }} className="bg-emerald-400" title={`1st Deposit: ${rule.deposit1}%`}></div>
-                          <div style={{ width: `${rule.deposit2}%` }} className="bg-emerald-300" title={`2nd Deposit: ${rule.deposit2}%`}></div>
-                          <div style={{ width: `${rule.deposit3}%` }} className="bg-emerald-200" title={`3rd Deposit: ${rule.deposit3}%`}></div>
+                          <div style={{ width: `${rule.deposit1}%` }} className="bg-emerald-400" title={`1st Payment: ${rule.deposit1}%`}></div>
+                          <div style={{ width: `${rule.deposit2}%` }} className="bg-emerald-300" title={`2nd Payment: ${rule.deposit2}%`}></div>
+                          <div style={{ width: `${rule.deposit3}%` }} className="bg-emerald-200" title={`3rd Payment: ${rule.deposit3}%`}></div>
                         </div>
                         <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
                           <span>Dep 1: {rule.deposit1}%</span>
@@ -5379,7 +5379,7 @@ export default function App() {
         <aside className="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all">
           <div className="p-6 border-b border-slate-800 flex items-center space-x-3 text-white">
             <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/50"><MapPin size={20} /></div>
-            <span className="text-lg font-bold">VenueMgr</span>
+            <span className="text-l font-bold">璟瓏軒宴會管理系統</span>
           </div>
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {[
@@ -5415,7 +5415,7 @@ export default function App() {
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-screen bg-slate-50">
           <header className="md:hidden bg-white border-b p-4 flex justify-between items-center flex-shrink-0 shadow-sm z-20">
-            <span className="font-bold text-slate-900 flex items-center"><MapPin size={18} className="mr-2 text-blue-600" /> VenueMgr</span>
+            <span className="font-bold text-slate-900 flex items-center"><MapPin size={18} className="mr-2 text-blue-600" /> 璟瓏軒宴會管理系統</span>
             <div className="space-x-4 text-sm font-medium">
               <button onClick={() => setActiveTab('dashboard')} className={activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-500'}>Home</button>
               <button onClick={() => setActiveTab('events')} className={activeTab === 'events' ? 'text-blue-600' : 'text-slate-500'}>EOs</button>

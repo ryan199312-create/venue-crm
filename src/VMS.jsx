@@ -7550,22 +7550,6 @@ export default function App() {
         <PrintableEO data={tempPrintData || formData} printMode={printMode} />
       </div>
 
-      {/* ======================================================== */}
-      {/* AI Assistant Popup */}
-      {isAiOpen && (
-        <AiAssistant
-          formData={formData}
-          setFormData={setFormData}
-          onClose={() => setIsAiOpen(false)}
-        />
-      )}
-      {isDataAiOpen && (
-        <DataAssistant
-          events={events}
-          onClose={() => setIsDataAiOpen(false)}
-        />
-      )}
     </>
   );
-
 }

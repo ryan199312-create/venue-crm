@@ -66,7 +66,8 @@ import {
   Video, // Added for Projector
   Wind, // Added for Flower Aisle
   X,
-  Zap // Added for Entrance Light
+  Zap, // Added for Entrance Light
+  Receipt
 } from 'lucide-react';
 
 // 2. Shared Connection (from your new file)
@@ -184,119 +185,119 @@ const decorationMap = {
   hasCeremonyChair: '證婚椅子 (Chairs)'
 };
 
-  const generateBillingSummary = (eventData) => {
-    let subtotal = 0;
-    let scBase = 0;
+const generateBillingSummary = (eventData) => {
+  let subtotal = 0;
+  let scBase = 0;
 
-    // 1. Menus
-    const parsedMenus = (eventData.menus || []).map(m => {
-      const price = safeFloat(m.price);
-      const qty = safeFloat(m.qty);
-      const amount = price * qty;
-      subtotal += amount;
-      if (m.applySC !== false) scBase += amount;
-      return { ...m, cleanPrice: price, cleanQty: qty, amount };
-    });
+  // 1. Menus
+  const parsedMenus = (eventData.menus || []).map(m => {
+    const price = safeFloat(m.price);
+    const qty = safeFloat(m.qty);
+    const amount = price * qty;
+    subtotal += amount;
+    if (m.applySC !== false) scBase += amount;
+    return { ...m, cleanPrice: price, cleanQty: qty, amount };
+  });
 
-    // 2. Plating Fee
-    let plating = null;
-    if (eventData.servingStyle === '位上' && safeFloat(eventData.platingFee) > 0) {
-      const price = safeFloat(eventData.platingFee);
-      const qty = safeFloat(eventData.tableCount);
-      const amount = price * qty;
-      subtotal += amount;
-      if (eventData.platingFeeApplySC !== false) scBase += amount;
-      plating = { price, qty, amount };
-    }
+  // 2. Plating Fee
+  let plating = null;
+  if (eventData.servingStyle === '位上' && safeFloat(eventData.platingFee) > 0) {
+    const price = safeFloat(eventData.platingFee);
+    const qty = safeFloat(eventData.tableCount);
+    const amount = price * qty;
+    subtotal += amount;
+    if (eventData.platingFeeApplySC !== false) scBase += amount;
+    plating = { price, qty, amount };
+  }
 
-    // 3. Drinks
-    let drinks = null;
-    if (safeFloat(eventData.drinksPrice) > 0) {
-      const price = safeFloat(eventData.drinksPrice);
-      const qty = safeFloat(eventData.drinksQty);
-      const amount = price * qty;
-      subtotal += amount;
-      if (eventData.drinksApplySC !== false) scBase += amount;
-      drinks = { label: eventData.drinksPackage || 'Standard Package', price, qty, amount };
-    }
-    
-    // 4. Bus Arrangement
-    let bus = null;
-    if (eventData.busInfo?.enabled) {
-      const amount = safeFloat(eventData.busCharge);
-      subtotal += amount;
-      if (eventData.busApplySC) scBase += amount;
-      bus = { 
-        amount, 
-        arrivals: eventData.busInfo.arrivals || [], 
-        departures: eventData.busInfo.departures || [] 
-      };
-    }
+  // 3. Drinks
+  let drinks = null;
+  if (safeFloat(eventData.drinksPrice) > 0) {
+    const price = safeFloat(eventData.drinksPrice);
+    const qty = safeFloat(eventData.drinksQty);
+    const amount = price * qty;
+    subtotal += amount;
+    if (eventData.drinksApplySC !== false) scBase += amount;
+    drinks = { label: eventData.drinksPackage || 'Standard Package', price, qty, amount };
+  }
 
-    // 5. 🌟 NEW: Category Packages (Setup, AV, Decor) 🌟
-    const setupPackagePrice = safeFloat(eventData.setupPackagePrice);
-    const avPackagePrice = safeFloat(eventData.avPackagePrice);
-    const decorPackagePrice = safeFloat(eventData.decorPackagePrice);
-
-    if (setupPackagePrice > 0) {
-      subtotal += setupPackagePrice;
-      if (eventData.setupApplySC !== false) scBase += setupPackagePrice;
-    }
-    if (avPackagePrice > 0) {
-      subtotal += avPackagePrice;
-      if (eventData.avApplySC !== false) scBase += avPackagePrice;
-    }
-    if (decorPackagePrice > 0) {
-      subtotal += decorPackagePrice;
-      if (eventData.decorApplySC !== false) scBase += decorPackagePrice;
-    }
-
-    // 6. Custom Items
-    const parsedCustomItems = (eventData.customItems || []).map(i => {
-      const price = safeFloat(i.price);
-      const qty = safeFloat(i.qty);
-      const amount = price * qty;
-      subtotal += amount;
-      if (i.applySC) scBase += amount;
-      return { ...i, cleanPrice: price, cleanQty: qty, amount };
-    });
-
-    // 7. Service Charge (STRICT 10%)
-    let serviceChargeVal = 0;
-    let scLabel = '10%'; // Locks the print layout label to "10%" instead of "Fixed"
-    if (eventData.enableServiceCharge !== false) {
-      serviceChargeVal = scBase * 0.1;
-    }
-    const discountVal = safeFloat(eventData.discount);
-
-    // 8. Surcharge & Grand Total
-    const baseTotal = subtotal + serviceChargeVal - discountVal;
-    const ccSurcharge = eventData.paymentMethod === '信用卡' ? baseTotal * 0.03 : 0;
-    const grandTotal = Math.round(baseTotal + ccSurcharge);
-
-    // 9. Deposits & Balances
-    const dep1 = safeFloat(eventData.deposit1);
-    const dep2 = safeFloat(eventData.deposit2);
-    const dep3 = safeFloat(eventData.deposit3);
-    const totalDeposits = dep1 + dep2 + dep3;
-    
-    let totalPaid = 0;
-    if (eventData.deposit1Received) totalPaid += dep1;
-    if (eventData.deposit2Received) totalPaid += dep2;
-    if (eventData.deposit3Received) totalPaid += dep3;
-    if (eventData.balanceReceived) totalPaid = grandTotal;
-    
-    const balanceDue = grandTotal - totalPaid;
-
-    // 10. Return EVERYTHING
-    return {
-      parsedMenus, plating, drinks, bus, parsedCustomItems,
-      setupPackagePrice, avPackagePrice, decorPackagePrice, 
-      subtotal, serviceChargeVal, scLabel, discountVal, ccSurcharge, 
-      grandTotal, totalDeposits, totalPaid, balanceDue,
-      dep1, dep2, dep3
+  // 4. Bus Arrangement
+  let bus = null;
+  if (eventData.busInfo?.enabled) {
+    const amount = safeFloat(eventData.busCharge);
+    subtotal += amount;
+    if (eventData.busApplySC) scBase += amount;
+    bus = {
+      amount,
+      arrivals: eventData.busInfo.arrivals || [],
+      departures: eventData.busInfo.departures || []
     };
-  }; 
+  }
+
+  // 5. 🌟 NEW: Category Packages (Setup, AV, Decor) 🌟
+  const setupPackagePrice = safeFloat(eventData.setupPackagePrice);
+  const avPackagePrice = safeFloat(eventData.avPackagePrice);
+  const decorPackagePrice = safeFloat(eventData.decorPackagePrice);
+
+  if (setupPackagePrice > 0) {
+    subtotal += setupPackagePrice;
+    if (eventData.setupApplySC !== false) scBase += setupPackagePrice;
+  }
+  if (avPackagePrice > 0) {
+    subtotal += avPackagePrice;
+    if (eventData.avApplySC !== false) scBase += avPackagePrice;
+  }
+  if (decorPackagePrice > 0) {
+    subtotal += decorPackagePrice;
+    if (eventData.decorApplySC !== false) scBase += decorPackagePrice;
+  }
+
+  // 6. Custom Items
+  const parsedCustomItems = (eventData.customItems || []).map(i => {
+    const price = safeFloat(i.price);
+    const qty = safeFloat(i.qty);
+    const amount = price * qty;
+    subtotal += amount;
+    if (i.applySC) scBase += amount;
+    return { ...i, cleanPrice: price, cleanQty: qty, amount };
+  });
+
+  // 7. Service Charge (STRICT 10%)
+  let serviceChargeVal = 0;
+  let scLabel = '10%'; // Locks the print layout label to "10%" instead of "Fixed"
+  if (eventData.enableServiceCharge !== false) {
+    serviceChargeVal = scBase * 0.1;
+  }
+  const discountVal = safeFloat(eventData.discount);
+
+  // 8. Surcharge & Grand Total
+  const baseTotal = subtotal + serviceChargeVal - discountVal;
+  const ccSurcharge = eventData.paymentMethod === '信用卡' ? baseTotal * 0.03 : 0;
+  const grandTotal = Math.round(baseTotal + ccSurcharge);
+
+  // 9. Deposits & Balances
+  const dep1 = safeFloat(eventData.deposit1);
+  const dep2 = safeFloat(eventData.deposit2);
+  const dep3 = safeFloat(eventData.deposit3);
+  const totalDeposits = dep1 + dep2 + dep3;
+
+  let totalPaid = 0;
+  if (eventData.deposit1Received) totalPaid += dep1;
+  if (eventData.deposit2Received) totalPaid += dep2;
+  if (eventData.deposit3Received) totalPaid += dep3;
+  if (eventData.balanceReceived) totalPaid = grandTotal;
+
+  const balanceDue = grandTotal - totalPaid;
+
+  // 10. Return EVERYTHING
+  return {
+    parsedMenus, plating, drinks, bus, parsedCustomItems,
+    setupPackagePrice, avPackagePrice, decorPackagePrice,
+    subtotal, serviceChargeVal, scLabel, discountVal, ccSurcharge,
+    grandTotal, totalDeposits, totalPaid, balanceDue,
+    dep1, dep2, dep3
+  };
+};
 
 const calculateDepartmentSplit = (data) => {
   // 1. Initialize with NEW keys
@@ -1343,7 +1344,7 @@ const PrintableEO = ({ data, printMode }) => {
     );
   }
 
-// ==========================================
+  // ==========================================
   // VIEW 2: QUOTATION MODE (EN) - FIXED TOTALS & STYLING
   // ==========================================
   if (printMode === 'QUOTATION') {
@@ -1362,14 +1363,14 @@ const PrintableEO = ({ data, printMode }) => {
       if (data.equipment?.hasCake && data.cakePounds) items.push(`Wedding Cake: ${data.cakePounds} Lbs`);
       return items.join(', ');
     };
-    
+
     const getAVEnStr = () => {
       return Object.entries(data.equipment || {}).filter(([k, v]) => v === true && typeof avMap !== 'undefined' && avMap[k]).map(([k]) => {
         const match = avMap[k].match(/\((.*?)\)/);
         return match ? match[1] : avMap[k];
       }).join(', ');
     };
-    
+
     const getDecorEnStr = () => {
       let items = Object.entries(data.decoration || {}).filter(([k, v]) => v === true && typeof decorationMap !== 'undefined' && decorationMap[k]).map(([k]) => {
         const match = decorationMap[k].match(/\((.*?)\)/);
@@ -1605,7 +1606,7 @@ const PrintableEO = ({ data, printMode }) => {
                 <span className="font-mono">-${formatMoney(billing.discountVal)}</span>
               </div>
             )}
-            
+
             {/* Credit Card Surcharge Row */}
             {billing.ccSurcharge > 0 && (
               <div className="flex justify-between text-xs text-slate-600 font-bold">
@@ -1683,7 +1684,7 @@ const PrintableEO = ({ data, printMode }) => {
     );
   }
 
-// ==========================================
+  // ==========================================
   // VIEW 4 & 5: CONTRACT MODE (EN & CHINESE) - REFINED VERSION
   // ==========================================
   if (printMode === 'CONTRACT' || printMode === 'CONTRACT_CN') {
@@ -1785,8 +1786,8 @@ const PrintableEO = ({ data, printMode }) => {
           </h1>
           <div className="w-12 h-0.5 mx-auto mb-4" style={{ backgroundColor: BRAND_COLOR }}></div>
           <p className="text-[11px] text-slate-600 leading-relaxed italic px-4">
-            {isEn 
-              ? `Thank you for choosing King Lung Heen as your event venue. We are truly honored to be part of your upcoming special occasion and are committed to providing you and your guests with an exceptional experience. This agreement outlines the confirmed arrangements and terms for your event, "${data.eventName || 'the event'}", to be held on ${formatDateEn(data.date)}.` 
+            {isEn
+              ? `Thank you for choosing King Lung Heen as your event venue. We are truly honored to be part of your upcoming special occasion and are committed to providing you and your guests with an exceptional experience. This agreement outlines the confirmed arrangements and terms for your event, "${data.eventName || 'the event'}", to be held on ${formatDateEn(data.date)}.`
               : `感謝閣下選擇璟瓏軒作為您的宴會場地。我們深感榮幸能參與您的重要時刻，並承諾為您及賓客提供最優質的餐飲體驗。本合約旨在確認將於 ${formatDateEn(data.date)} 舉行的「${data.eventName || '閣下宴會'}」之相關安排與條款。`}
           </p>
         </div>
@@ -1892,7 +1893,7 @@ const PrintableEO = ({ data, printMode }) => {
                     <div className="w-24 text-right font-mono font-bold text-slate-900">${formatMoney(m.amount)}</div>
                   </div>
                 ))}
-                
+
                 {billing.plating && (
                   <div className="flex text-[11px] items-baseline text-slate-700">
                     <div className="flex-1 pr-4 font-medium">{isEn ? 'Plating Service Fee' : '位上服務費'}</div>
@@ -1901,7 +1902,7 @@ const PrintableEO = ({ data, printMode }) => {
                     <div className="w-24 text-right font-mono font-bold">${formatMoney(billing.plating.amount)}</div>
                   </div>
                 )}
-                
+
                 {billing.drinks && (
                   <div className="flex text-[11px] items-baseline text-slate-700">
                     <div className="flex-1 pr-4 font-medium">{billing.drinks.label}</div>
@@ -1956,7 +1957,7 @@ const PrintableEO = ({ data, printMode }) => {
                     <div className="w-24 text-right font-mono font-bold">{billing.bus.amount > 0 ? `$${formatMoney(billing.bus.amount)}` : (isEn ? 'COMP' : '免費')}</div>
                   </div>
                 )}
-                
+
                 {billing.parsedCustomItems.map((item, i) => (
                   <div key={`c-${i}`} className="flex text-[11px] items-baseline text-slate-700">
                     <div className="flex-1 pr-4 font-medium">{item.name}</div>
@@ -2013,7 +2014,7 @@ const PrintableEO = ({ data, printMode }) => {
                   </tbody>
                 </table>
               </div>
-              
+
               <div className="w-full md:w-64 border-l border-slate-200 md:pl-8">
                 <p className="font-bold text-slate-800 mb-3 text-[9px] uppercase tracking-widest border-b border-slate-200 pb-1">{isEn ? 'Bank Transfer Info' : '銀行轉賬資料'}</p>
                 <div className="space-y-2 text-[9px] text-slate-600 leading-tight">
@@ -2047,49 +2048,49 @@ const PrintableEO = ({ data, printMode }) => {
           <div className="columns-2 gap-10 legal-text text-slate-700">
             <div className="legal-header">1. Payment Terms</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "Payment Methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be paid by the specified due dates. The final balance must be settled immediately upon conclusion. No personal cheques are accepted on the event day."
                 : "付款方式包括現金、信用卡或銀行轉賬 (中銀 012-875-2-082180-1)。訂金須於指定日期前支付，尾數須於宴會結束後即時結清。恕不接受宴會當日以個人支票支付尾數。"}
             </p>
 
             <div className="legal-header">2. Postponement & Cancellation</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "Events may be postponed once with >3 months notice. Cancellation forfeit depends on notice: Confirmed period (1st & 2nd payment); 1 month prior (90% min spend); 1 week prior (100% min spend)."
                 : "活動可於3個月前通知下延期一次。取消罰則：確認期內（扣除第一及二期訂金）；活動前1個月（扣除最低消費90%）；活動前1週（扣除最低消費100%）。"}
             </p>
 
             <div className="legal-header">3. Weather Policy</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "In Signal 8 or Black Rain, the event may be rescheduled within 3 months. In Signal 3 or Red/Yellow Rain, the event proceeds as scheduled; cancellation is treated as standard."
                 : "八號風球或黑雨警告下，活動可於3個月內延期。三號風球或紅/黃雨警告下，活動如常舉行；如取消將視作一般取消處理。"}
             </p>
 
             <div className="legal-header">4. House Rules</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "No outside food/drink without consent. Decorations must only use 'Blu-tack'. Smoking is prohibited. The Venue reserves the right to stop unsafe activities."
                 : "未經許可不得自攜飲食。佈置僅限使用寶貼(Blu-tack)。全場禁煙。場地保留終止不安全活動之權利。"}
             </p>
 
             <div className="legal-header">5. Liability</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "The Client is liable for damages caused by guests or contractors and agrees to indemnify the venue against losses arising from the event."
                 : "客戶須對賓客或承辦商造成之損壞負責，並同意賠償因活動引起之場地損失。"}
             </p>
 
             <div className="legal-header">6. Force Majeure</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "If the event is cancelled due to government restrictions or acts of God, a full refund or free rescheduling will be offered."
                 : "如因政府禁令或不可抗力導致活動取消，場地將提供全數退款或免費延期。"}
             </p>
 
             <div className="legal-header">7. General</div>
             <p className="mb-3">
-              {isEn 
+              {isEn
                 ? "Governed by HK laws. Terms are confidential. Credit card payments incur a 3% surcharge."
                 : "受香港法律管轄。條款內容保密。信用卡付款需加收3%附加費。"}
             </p>
@@ -2138,14 +2139,14 @@ const PrintableEO = ({ data, printMode }) => {
       if (data.equipment?.hasCake && data.cakePounds) items.push(`Wedding Cake: ${data.cakePounds} Lbs`);
       return items.join(', ');
     };
-    
+
     const getAVEnStr = () => {
       return Object.entries(data.equipment || {}).filter(([k, v]) => v === true && typeof avMap !== 'undefined' && avMap[k]).map(([k]) => {
         const match = avMap[k].match(/\((.*?)\)/);
         return match ? match[1] : avMap[k];
       }).join(', ');
     };
-    
+
     const getDecorEnStr = () => {
       let items = Object.entries(data.decoration || {}).filter(([k, v]) => v === true && typeof decorationMap !== 'undefined' && decorationMap[k]).map(([k]) => {
         const match = decorationMap[k].match(/\((.*?)\)/);
@@ -2177,7 +2178,7 @@ const PrintableEO = ({ data, printMode }) => {
     return (
       <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 min-h-screen relative flex flex-col text-xs leading-tight">
         <style>{`@media print { @page { margin: 10mm; size: A4; @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; } } body { -webkit-print-color-adjust: exact; } }`}</style>
-        
+
         {/* Header */}
         <div className="flex justify-between items-start border-b-4 pb-4 mb-6" style={{ borderColor: BRAND_COLOR }}>
           <div className="max-w-[60%]">
@@ -2216,7 +2217,7 @@ const PrintableEO = ({ data, printMode }) => {
           <table className="w-full text-xs">
             <thead><tr className="border-b-2 border-slate-800 text-slate-600"><th className="text-left py-1 w-[55%]">Description</th><th className="text-right py-1 w-[15%]">Unit Price</th><th className="text-center py-1 w-[10%]">Qty</th><th className="text-right py-1 w-[20%]">Amount (HKD)</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              
+
               {/* 1. MENUS */}
               {billing.parsedMenus.map((m, i) => (
                 <tr key={`m-${i}`}>
@@ -2226,7 +2227,7 @@ const PrintableEO = ({ data, printMode }) => {
                   <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney(m.amount)}</td>
                 </tr>
               ))}
-              
+
               {/* 2. PLATING FEE */}
               {billing.plating && (
                 <tr>
@@ -2236,7 +2237,7 @@ const PrintableEO = ({ data, printMode }) => {
                   <td className="py-2 text-right font-bold text-slate-900 font-mono">${formatMoney(billing.plating.amount)}</td>
                 </tr>
               )}
-              
+
               {/* 3. BEVERAGE PACKAGE */}
               {billing.drinks && (
                 <tr>
@@ -2286,7 +2287,7 @@ const PrintableEO = ({ data, printMode }) => {
                   <td className="py-2 text-right align-top font-bold text-slate-900 font-mono">${formatMoney(billing.decorPackagePrice)}</td>
                 </tr>
               )}
-              
+
               {/* 5. BUS ARRANGEMENT */}
               {billing.bus && (
                 <tr>
@@ -2304,7 +2305,7 @@ const PrintableEO = ({ data, printMode }) => {
                   </td>
                 </tr>
               )}
-              
+
               {/* 6. CUSTOM ITEMS */}
               {billing.parsedCustomItems.map((item, i) => (
                 <tr key={`c-${i}`}>
@@ -2325,12 +2326,12 @@ const PrintableEO = ({ data, printMode }) => {
             {billing.serviceChargeVal > 0 && <div className="flex justify-between text-xs text-slate-600"><span>Service Charge (10%)</span><span className="font-mono">+${formatMoney(billing.serviceChargeVal)}</span></div>}
             {billing.discountVal > 0 && <div className="flex justify-between text-xs text-red-600 font-bold"><span>Discount</span><span className="font-mono">-${formatMoney(billing.discountVal)}</span></div>}
             {billing.ccSurcharge > 0 && <div className="flex justify-between text-xs text-slate-600 font-bold"><span>Credit Card Surcharge (3%)</span><span className="font-mono">+${formatMoney(billing.ccSurcharge)}</span></div>}
-            
+
             <div className="border-t border-slate-800 my-2"></div>
-            
+
             <div className="flex justify-between text-base font-bold text-slate-900"><span>Total Amount</span><span className="font-mono">${formatMoney(billing.grandTotal)}</span></div>
             <div className="flex justify-between text-xs text-emerald-600 font-bold mt-2"><span>Less: Paid Amount</span><span className="font-mono">-${formatMoney(billing.totalPaid)}</span></div>
-            
+
             <div className="border-t-2 border-slate-800 mt-2 pt-2">
               <div className="flex justify-between text-xl font-black text-slate-900"><span>TOTAL DUE</span><span className="font-mono">${formatMoney(billing.balanceDue > 0 ? billing.balanceDue : 0)}</span></div>
             </div>
@@ -2358,7 +2359,149 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     );
   }
+  // ==========================================
+  // VIEW: RECEIPT MODE (NEW)
+  // ==========================================
+  if (printMode === 'RECEIPT') {
+    const BRAND_COLOR = '#A57C00';
+    const billing = generateBillingSummary(data);
 
+    // Calculate actual received payments dynamically
+    const paidItems = [];
+    let totalPaid = 0;
+
+    if (data.deposit1Received && safeFloat(data.deposit1) > 0) {
+      totalPaid += safeFloat(data.deposit1);
+      paidItems.push({ label: '第一期訂金 (1st Deposit)', amount: safeFloat(data.deposit1), date: data.deposit1Date });
+    }
+    if (data.deposit2Received && safeFloat(data.deposit2) > 0) {
+      totalPaid += safeFloat(data.deposit2);
+      paidItems.push({ label: '第二期訂金 (2nd Deposit)', amount: safeFloat(data.deposit2), date: data.deposit2Date });
+    }
+    if (data.deposit3Received && safeFloat(data.deposit3) > 0) {
+      totalPaid += safeFloat(data.deposit3);
+      paidItems.push({ label: '第三期訂金 (3rd Deposit)', amount: safeFloat(data.deposit3), date: data.deposit3Date });
+    }
+    if (data.balanceReceived) {
+      // If balance is marked received, calculate exactly how much that remainder was
+      const remainder = billing.grandTotal - totalPaid;
+      if (remainder > 0) {
+        totalPaid += remainder;
+        paidItems.push({ label: '尾數結算 (Balance Payment)', amount: remainder, date: data.balanceDate || formatDateEn(new Date()) });
+      }
+    }
+
+    const isFullyPaid = data.balanceReceived || (totalPaid > 0 && totalPaid >= billing.grandTotal);
+
+    return (
+      <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 min-h-screen relative flex flex-col text-xs leading-tight">
+        <style>{`@media print { @page { margin: 10mm; size: A4; @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; } } body { -webkit-print-color-adjust: exact; } }`}</style>
+
+        {/* 🌟 PAID WATERMARK 🌟 */}
+        {isFullyPaid && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10 z-0">
+            <span className="text-9xl font-black text-emerald-500 border-8 border-emerald-500 rounded-3xl px-12 py-6 rotate-[-15deg] tracking-widest">
+              PAID
+            </span>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-4 pb-4 mb-6 relative z-10" style={{ borderColor: BRAND_COLOR }}>
+          <div className="max-w-[60%]">
+            <div className="mb-1" style={{ color: BRAND_COLOR }}>
+              <span className="text-3xl font-black tracking-tight block leading-none">璟瓏軒</span>
+              <span className="text-xs font-bold tracking-widest uppercase block mt-1">King Lung Heen</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-2 font-medium">
+              <p>4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon</p>
+              <p>Tel: +852 2788 3939 | Email: banquet@kinglungheen.com</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <h1 className="text-4xl font-light text-slate-800 uppercase tracking-widest mb-1">RECEIPT</h1>
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">官方收據</h2>
+            <div className="text-right space-y-1">
+              <p className="text-xs"><span className="font-bold text-slate-600">Receipt No:</span> {data.orderId}</p>
+              <p className="text-xs"><span className="font-bold text-slate-600">Date:</span> {formatDateEn(new Date())}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bill To & Event Info */}
+        <div className="flex gap-8 mb-8 bg-slate-50 p-4 rounded border border-slate-100 relative z-10">
+          <div className="flex-1">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Received From (付款人):</h3>
+            <p className="font-bold text-sm text-slate-900">{data.clientName}</p>
+            {data.companyName && <p className="text-xs text-slate-600">{data.companyName}</p>}
+            <p className="text-xs text-slate-500 mt-1">{data.clientPhone}</p>
+          </div>
+          <div className="flex-1 border-l border-slate-200 pl-8">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Event Details (活動):</h3>
+            <div className="grid grid-cols-[60px_1fr] gap-y-1 text-xs">
+              <span className="text-slate-500">Event:</span><span className="font-bold">{data.eventName}</span>
+              <span className="text-slate-500">Date:</span><span className="font-bold">{formatDateEn(data.date)}</span>
+              <span className="text-slate-500">Venue:</span><span className="font-bold">{getVenueEn(data.venueLocation)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Breakdown Table */}
+        <div className="mb-6 flex-1 relative z-10">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b-2 border-slate-800 text-slate-600">
+                <th className="text-left py-2 w-[40%]">Payment Description (付款項目)</th>
+                <th className="text-center py-2 w-[30%]">Payment Date (收款日期)</th>
+                <th className="text-right py-2 w-[30%]">Amount (金額)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {paidItems.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="py-8 text-center text-slate-400 italic">系統中暫無已確認的收款記錄 (No confirmed payments found).</td>
+                </tr>
+              ) : (
+                paidItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="py-3 font-bold text-slate-900">{item.label}</td>
+                    <td className="py-3 text-center text-slate-600 font-mono">{item.date || '-'}</td>
+                    <td className="py-3 text-right font-bold text-slate-900 font-mono">${formatMoney(item.amount)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="flex justify-end mb-8 border-t border-slate-200 pt-6 relative z-10 break-inside-avoid">
+          <div className="flex-1 space-y-2 text-right w-1/2">
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Grand Total (活動總額)</span>
+              <span className="font-mono">${formatMoney(billing.grandTotal)}</span>
+            </div>
+            <div className="flex justify-between text-base font-bold text-emerald-600 border-b-2 border-slate-800 pb-2">
+              <span>Total Received (已收總額)</span>
+              <span className="font-mono">${formatMoney(totalPaid)}</span>
+            </div>
+            <div className="flex justify-between text-sm font-bold text-red-600 pt-1">
+              <span>Balance Due (尚欠尾數)</span>
+              <span className="font-mono">${formatMoney(Math.max(0, billing.grandTotal - totalPaid))}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Signature */}
+        <div className="mt-auto pt-8 border-t border-slate-200 flex justify-between items-end relative z-10">
+          <div>
+            <p className="text-[10px] text-slate-400 italic">This is a computer-generated receipt. No signature is required.</p>
+            <p className="text-[10px] text-slate-400 italic mt-1">此收據由電腦自動生成，毋須簽名。</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   // ==========================================
   // VIEW 8: MENU CONFIRMATION (BOXES IN FOOTER)
   // ==========================================
@@ -2537,7 +2680,7 @@ const PrintableEO = ({ data, printMode }) => {
       </div>
     );
   }
-// ==========================================
+  // ==========================================
   // VIEW 7: STANDARD EO (HYBRID: STANDARD MANAGER/FINANCE + BRIEFING STYLE BANQUET)
   // ==========================================
   if (!printMode || printMode === 'EO') {
@@ -2741,7 +2884,7 @@ const PrintableEO = ({ data, printMode }) => {
                         <div className="p-3 grid grid-cols-2 gap-2 text-xs">
                           <div className="p-2 bg-white border border-slate-200 rounded text-center"><span className="block text-[9px] text-slate-400 uppercase">Table Cloth</span><span className="block font-bold text-slate-900">{data.tableClothColor || 'Std'}</span></div>
                           <div className="p-2 bg-white border border-slate-200 rounded text-center"><span className="block text-[9px] text-slate-400 uppercase">Chair Cover</span><span className="block font-bold text-slate-900">{data.chairCoverColor || 'Std'}</span></div>
-                          
+
                           {/* 🌟 INTEGRATED PACKAGES FOR OPS 🌟 */}
                           <div className="col-span-2 p-2 bg-white border border-slate-200 rounded">
                             <span className="block text-[9px] text-slate-400 uppercase">設備與佈置 (Equipment & Decor)</span>
@@ -2749,7 +2892,7 @@ const PrintableEO = ({ data, printMode }) => {
                               {[setupStr, avStr, decorStr].filter(Boolean).join(' / ') || 'Standard Setup'}
                             </div>
                           </div>
-                          
+
                           {data.otherNotes && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-red-500 font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
                         </div>
                       </div>
@@ -2833,7 +2976,7 @@ const PrintableEO = ({ data, printMode }) => {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* 🌟 INTEGRATED PACKAGES FOR MANAGER OPS 🌟 */}
                         <div className="border border-slate-300 rounded overflow-hidden break-inside-avoid">
                           <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-xs">場地、影音與佈置</div>
@@ -2841,7 +2984,7 @@ const PrintableEO = ({ data, printMode }) => {
                             <div className="grid grid-cols-2 gap-2 mb-2"><div><span className="text-[9px] text-slate-400 block font-bold">檯布顏色</span>{data.tableClothColor || '標準'}</div><div><span className="text-[9px] text-slate-400 block font-bold">椅套顏色</span>{data.chairCoverColor || '標準'}</div></div>
                             <div><span className="text-[9px] text-slate-400 block font-bold">主家席</span>{data.headTableColorType === 'custom' ? data.headTableCustomColor : '同客席'}</div>
                             {data.venueDecor && <div className="bg-slate-50 p-2 rounded italic text-[10px] border border-slate-100"><span className="font-bold not-italic">佈置備註:</span> {data.venueDecor}</div>}
-                            
+
                             <div className="border-t border-slate-100 pt-2 space-y-1">
                               {setupStr && <div><span className="text-[9px] text-slate-400 font-bold">舞台與接待設備:</span> <span className="text-[10px] font-medium text-slate-700">{setupStr}</span></div>}
                               {avStr && <div><span className="text-[9px] text-slate-400 font-bold">影音設備:</span> <span className="text-[10px] font-medium text-slate-700">{avStr}</span></div>}
@@ -2882,60 +3025,60 @@ const PrintableEO = ({ data, printMode }) => {
                       <table className="w-full text-xs compact-table">
                         <thead><tr><th className="text-left w-[50%]">項目</th><th className="text-right w-[15%]">單價</th><th className="text-center w-[10%]">數量</th><th className="text-right w-[25%]">金額</th></tr></thead>
                         <tbody>
-                             {billing.parsedMenus.map((m, i) => (<tr key={`m-${i}`}><td className="font-medium">{m.title}</td><td className="text-right font-mono text-slate-500">${formatMoney(m.cleanPrice)}</td><td className="text-center text-slate-500">{m.cleanQty}</td><td className="text-right font-mono font-bold">${formatMoney(m.amount)}</td></tr>))}
-                             {billing.drinks && (<tr><td className="font-medium">酒水套餐 ({billing.drinks.label})</td><td className="text-right font-mono text-slate-500">${formatMoney(billing.drinks.price)}</td><td className="text-center text-slate-500">{billing.drinks.qty}</td><td className="text-right font-mono font-bold">${formatMoney(billing.drinks.amount)}</td></tr>)}
-                             {billing.plating && (<tr><td className="font-medium">位上服務費</td><td className="text-right font-mono text-slate-500">${formatMoney(billing.plating.price)}</td><td className="text-center text-slate-500">{billing.plating.qty}</td><td className="text-right font-mono font-bold">${formatMoney(billing.plating.amount)}</td></tr>)}
-                             
-                             {/* 🌟 NEW PACKAGE ROWS FOR FINANCE 🌟 */}
-                             {billing.setupPackagePrice > 0 && (
-                               <tr>
-                                 <td className="font-medium pt-1">舞台與接待設備套票<div className="text-[9px] text-slate-400 font-normal leading-tight mt-0.5">{setupStr}</div></td>
-                                 <td className="text-right font-mono text-slate-500 align-top pt-1">${formatMoney(billing.setupPackagePrice)}</td>
-                                 <td className="text-center text-slate-500 align-top pt-1">1</td>
-                                 <td className="text-right font-mono font-bold align-top pt-1">${formatMoney(billing.setupPackagePrice)}</td>
-                               </tr>
-                             )}
-                             {billing.avPackagePrice > 0 && (
-                               <tr>
-                                 <td className="font-medium pt-1">影音設備套票<div className="text-[9px] text-slate-400 font-normal leading-tight mt-0.5">{avStr}</div></td>
-                                 <td className="text-right font-mono text-slate-500 align-top pt-1">${formatMoney(billing.avPackagePrice)}</td>
-                                 <td className="text-center text-slate-500 align-top pt-1">1</td>
-                                 <td className="text-right font-mono font-bold align-top pt-1">${formatMoney(billing.avPackagePrice)}</td>
-                               </tr>
-                             )}
-                             {billing.decorPackagePrice > 0 && (
-                               <tr>
-                                 <td className="font-medium pt-1">場地佈置套票<div className="text-[9px] text-slate-400 font-normal leading-tight mt-0.5">{decorStr}</div></td>
-                                 <td className="text-right font-mono text-slate-500 align-top pt-1">${formatMoney(billing.decorPackagePrice)}</td>
-                                 <td className="text-center text-slate-500 align-top pt-1">1</td>
-                                 <td className="text-right font-mono font-bold align-top pt-1">${formatMoney(billing.decorPackagePrice)}</td>
-                               </tr>
-                             )}
+                          {billing.parsedMenus.map((m, i) => (<tr key={`m-${i}`}><td className="font-medium">{m.title}</td><td className="text-right font-mono text-slate-500">${formatMoney(m.cleanPrice)}</td><td className="text-center text-slate-500">{m.cleanQty}</td><td className="text-right font-mono font-bold">${formatMoney(m.amount)}</td></tr>))}
+                          {billing.drinks && (<tr><td className="font-medium">酒水套餐 ({billing.drinks.label})</td><td className="text-right font-mono text-slate-500">${formatMoney(billing.drinks.price)}</td><td className="text-center text-slate-500">{billing.drinks.qty}</td><td className="text-right font-mono font-bold">${formatMoney(billing.drinks.amount)}</td></tr>)}
+                          {billing.plating && (<tr><td className="font-medium">位上服務費</td><td className="text-right font-mono text-slate-500">${formatMoney(billing.plating.price)}</td><td className="text-center text-slate-500">{billing.plating.qty}</td><td className="text-right font-mono font-bold">${formatMoney(billing.plating.amount)}</td></tr>)}
 
-                             {billing.parsedCustomItems.map((item, i) => (<tr key={`c-${i}`}><td>{item.name}</td><td className="text-right font-mono text-slate-500">${formatMoney(item.cleanPrice)}</td><td className="text-center text-slate-500">{item.cleanQty}</td><td className="text-right font-mono font-bold">${formatMoney(item.amount)}</td></tr>))}
-                             {billing.bus && (<tr><td className="font-bold">旅遊巴安排</td><td className="text-right font-mono text-slate-500">${formatMoney(billing.bus.amount)}</td><td className="text-center text-slate-500">1</td><td className="text-right font-mono font-bold">${formatMoney(billing.bus.amount)}</td></tr>)}
+                          {/* 🌟 NEW PACKAGE ROWS FOR FINANCE 🌟 */}
+                          {billing.setupPackagePrice > 0 && (
+                            <tr>
+                              <td className="font-medium pt-1">舞台與接待設備套票<div className="text-[9px] text-slate-400 font-normal leading-tight mt-0.5">{setupStr}</div></td>
+                              <td className="text-right font-mono text-slate-500 align-top pt-1">${formatMoney(billing.setupPackagePrice)}</td>
+                              <td className="text-center text-slate-500 align-top pt-1">1</td>
+                              <td className="text-right font-mono font-bold align-top pt-1">${formatMoney(billing.setupPackagePrice)}</td>
+                            </tr>
+                          )}
+                          {billing.avPackagePrice > 0 && (
+                            <tr>
+                              <td className="font-medium pt-1">影音設備套票<div className="text-[9px] text-slate-400 font-normal leading-tight mt-0.5">{avStr}</div></td>
+                              <td className="text-right font-mono text-slate-500 align-top pt-1">${formatMoney(billing.avPackagePrice)}</td>
+                              <td className="text-center text-slate-500 align-top pt-1">1</td>
+                              <td className="text-right font-mono font-bold align-top pt-1">${formatMoney(billing.avPackagePrice)}</td>
+                            </tr>
+                          )}
+                          {billing.decorPackagePrice > 0 && (
+                            <tr>
+                              <td className="font-medium pt-1">場地佈置套票<div className="text-[9px] text-slate-400 font-normal leading-tight mt-0.5">{decorStr}</div></td>
+                              <td className="text-right font-mono text-slate-500 align-top pt-1">${formatMoney(billing.decorPackagePrice)}</td>
+                              <td className="text-center text-slate-500 align-top pt-1">1</td>
+                              <td className="text-right font-mono font-bold align-top pt-1">${formatMoney(billing.decorPackagePrice)}</td>
+                            </tr>
+                          )}
+
+                          {billing.parsedCustomItems.map((item, i) => (<tr key={`c-${i}`}><td>{item.name}</td><td className="text-right font-mono text-slate-500">${formatMoney(item.cleanPrice)}</td><td className="text-center text-slate-500">{item.cleanQty}</td><td className="text-right font-mono font-bold">${formatMoney(item.amount)}</td></tr>))}
+                          {billing.bus && (<tr><td className="font-bold">旅遊巴安排</td><td className="text-right font-mono text-slate-500">${formatMoney(billing.bus.amount)}</td><td className="text-center text-slate-500">1</td><td className="text-right font-mono font-bold">${formatMoney(billing.bus.amount)}</td></tr>)}
                         </tbody>
                         <tfoot className="break-inside-avoid">
-                             <tr className="border-t-2 border-slate-300"><td colSpan="3" className="text-right font-bold pt-2 text-slate-500 text-[10px]">小計 (Subtotal)</td><td className="text-right font-mono pt-2 text-slate-500">${formatMoney(billing.subtotal)}</td></tr>
-                             {billing.serviceChargeVal > 0 && (<tr><td colSpan="3" className="text-right font-bold text-slate-500 text-[10px]">服務費 (10%)</td><td className="text-right font-mono text-slate-500">+${formatMoney(billing.serviceChargeVal)}</td></tr>)}
-                             {billing.discountVal > 0 && (<tr><td colSpan="3" className="text-right font-bold text-red-500 text-[10px]">折扣 (Discount)</td><td className="text-right font-mono text-red-500">-${formatMoney(billing.discountVal)}</td></tr>)}
-                             {billing.ccSurcharge > 0 && (<tr><td colSpan="3" className="text-right font-bold text-amber-700 text-[10px]">信用卡附加費 (3%)</td><td className="text-right font-mono text-amber-700">+${formatMoney(billing.ccSurcharge)}</td></tr>)}
-                             <tr className="border-t border-slate-800"><td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (TOTAL)</td><td className="text-right font-bold font-mono pt-1 text-sm text-black">${formatMoney(billing.grandTotal)}</td></tr>
-                             
-                             {[
-                               { l: '訂金 1', a: billing.dep1, d: data.deposit1Date, received: data.deposit1Received },
-                               { l: '訂金 2', a: billing.dep2, d: data.deposit2Date, received: data.deposit2Received },
-                               { l: '訂金 3', a: billing.dep3, d: data.deposit3Date, received: data.deposit3Received }
-                             ].map((item, i) => (item.a > 0 ? (
-                                 <tr key={i}>
-                                     <td colSpan="3" className="text-right text-slate-500 text-[10px] py-1">
-                                         {item.l} {item.d && <span className="ml-1 font-mono">[{item.d}]</span>}
-                                         {item.received ? <span className="ml-2 font-bold text-emerald-600 border border-emerald-600 px-1 rounded text-[9px]">已收款 PAID</span> : <span className="ml-2 font-bold text-red-400 border border-red-400 px-1 rounded text-[9px]">未收款 UNPAID</span>}
-                                     </td>
-                                     <td className="text-right font-mono text-slate-500 text-[10px] py-1">{item.received ? `-$${formatMoney(item.a)}` : '$0'}</td>
-                                 </tr>
-                             ) : null))}
-                             <tr><td colSpan="3" className="text-right font-bold text-red-600 pt-2">尚餘尾數 (Outstanding Balance)</td><td className="text-right font-bold font-mono text-red-600 pt-2 text-base">${formatMoney(billing.balanceDue)}</td></tr>
+                          <tr className="border-t-2 border-slate-300"><td colSpan="3" className="text-right font-bold pt-2 text-slate-500 text-[10px]">小計 (Subtotal)</td><td className="text-right font-mono pt-2 text-slate-500">${formatMoney(billing.subtotal)}</td></tr>
+                          {billing.serviceChargeVal > 0 && (<tr><td colSpan="3" className="text-right font-bold text-slate-500 text-[10px]">服務費 (10%)</td><td className="text-right font-mono text-slate-500">+${formatMoney(billing.serviceChargeVal)}</td></tr>)}
+                          {billing.discountVal > 0 && (<tr><td colSpan="3" className="text-right font-bold text-red-500 text-[10px]">折扣 (Discount)</td><td className="text-right font-mono text-red-500">-${formatMoney(billing.discountVal)}</td></tr>)}
+                          {billing.ccSurcharge > 0 && (<tr><td colSpan="3" className="text-right font-bold text-amber-700 text-[10px]">信用卡附加費 (3%)</td><td className="text-right font-mono text-amber-700">+${formatMoney(billing.ccSurcharge)}</td></tr>)}
+                          <tr className="border-t border-slate-800"><td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (TOTAL)</td><td className="text-right font-bold font-mono pt-1 text-sm text-black">${formatMoney(billing.grandTotal)}</td></tr>
+
+                          {[
+                            { l: '訂金 1', a: billing.dep1, d: data.deposit1Date, received: data.deposit1Received },
+                            { l: '訂金 2', a: billing.dep2, d: data.deposit2Date, received: data.deposit2Received },
+                            { l: '訂金 3', a: billing.dep3, d: data.deposit3Date, received: data.deposit3Received }
+                          ].map((item, i) => (item.a > 0 ? (
+                            <tr key={i}>
+                              <td colSpan="3" className="text-right text-slate-500 text-[10px] py-1">
+                                {item.l} {item.d && <span className="ml-1 font-mono">[{item.d}]</span>}
+                                {item.received ? <span className="ml-2 font-bold text-emerald-600 border border-emerald-600 px-1 rounded text-[9px]">已收款 PAID</span> : <span className="ml-2 font-bold text-red-400 border border-red-400 px-1 rounded text-[9px]">未收款 UNPAID</span>}
+                              </td>
+                              <td className="text-right font-mono text-slate-500 text-[10px] py-1">{item.received ? `-$${formatMoney(item.a)}` : '$0'}</td>
+                            </tr>
+                          ) : null))}
+                          <tr><td colSpan="3" className="text-right font-bold text-red-600 pt-2">尚餘尾數 (Outstanding Balance)</td><td className="text-right font-bold font-mono text-red-600 pt-2 text-base">${formatMoney(billing.balanceDue)}</td></tr>
                         </tfoot>
                       </table>
 
@@ -3868,7 +4011,7 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
                             </div>
                           </div>
                           <span className={`w-2 h-2 rounded-full ${event.status === 'confirmed' ? 'bg-emerald-500' :
-                              event.status === 'completed' ? 'bg-slate-400' : 'bg-amber-500'
+                            event.status === 'completed' ? 'bg-slate-400' : 'bg-amber-500'
                             }`} title={event.status}></span>
                         </div>
                       </div>
@@ -4641,23 +4784,6 @@ export default function App() {
       }
 
       // 4. Recalculate Total Amount using the newly built newData object
-      return { 
-        ...newData, 
-        totalAmount: generateBillingSummary(newData).grandTotal 
-      };
-    });
-  };
-
-  const handlePriceChange = (e) => {
-    const { name, value } = e.target;
-    // Clean commas for numeric inputs
-    const cleanValue = value.toString().replace(/,/g, '');
-
-    setFormData(prev => {
-      // 1. Create the new data object with the updated field
-      const newData = { ...prev, [name]: cleanValue };
-
-      // 2. Feed the WHOLE newData object into the master calculator
       return {
         ...newData,
         totalAmount: generateBillingSummary(newData).grandTotal
@@ -4665,6 +4791,34 @@ export default function App() {
     });
   };
 
+  const handlePriceChange = (e) => {
+    const { name, value } = e.target;
+    const cleanValue = value.toString().replace(/,/g, '');
+
+    setFormData(prev => {
+      const newData = { ...prev, [name]: cleanValue };
+      return updateFinanceState(newData); // 🔥 Instantly syncs total AND deposits!
+    });
+  };
+
+  // 🌟 MASTER FINANCE UPDATER 🌟
+  // This automatically keeps the Grand Total and the Payment Schedule perfectly in sync
+  const updateFinanceState = (newData) => {
+    // 1. Get the true total
+    const newTotal = generateBillingSummary(newData).grandTotal;
+    let updates = { totalAmount: newTotal };
+
+    // 2. If Auto-Schedule is ON, instantly recalculate the deposits to match the new total
+    if (newData.autoSchedulePayment) {
+      const terms = calculatePaymentTerms(newTotal, newData.date);
+      if (terms) {
+        updates = { ...updates, ...terms };
+      }
+    }
+
+    // 3. Return the fully synchronized state
+    return { ...newData, ...updates };
+  };
   // --- MENU HANDLERS ---
   const handleMenuChange = (id, field, value) => {
     setFormData(prev => ({
@@ -4732,8 +4886,8 @@ export default function App() {
         title: '',
         content: '',
         price: '',
-        priceType: 'perTable', 
-        qty: prev.tableCount || 1, 
+        priceType: 'perTable',
+        qty: prev.tableCount || 1,
         applySC: true
       };
 
@@ -4746,10 +4900,7 @@ export default function App() {
       };
 
       // 3. Return the state with the calculated grandTotal
-      return {
-        ...updatedState,
-        totalAmount: generateBillingSummary(updatedState).grandTotal
-      };
+      return updateFinanceState(newData);
     });
   };
 
@@ -4759,10 +4910,7 @@ export default function App() {
       const newMenus = prev.menus.filter(m => m.id !== id);
       const newData = { ...prev, menus: newMenus };
 
-      return {
-        ...newData,
-        totalAmount: generateBillingSummary(newData).grandTotal
-      };
+      return updateFinanceState(newData);
     });
   };
   // --- MENU VERSIONING HANDLERS ---
@@ -4860,10 +5008,7 @@ export default function App() {
       }
 
       // CRITICAL FIX: Recalculate total immediately with the new data
-      return {
-        ...newData,
-        totalAmount: generateBillingSummary(newData).grandTotal
-      };
+      return updateFinanceState(newData);
     });
   };
 
@@ -5110,6 +5255,12 @@ export default function App() {
     setPrintMode('EO');
     setTimeout(() => window.print(), 100);
   };
+  const handlePrintReceipt = () => {
+    setTempPrintData(formData);
+    setPrintMode('RECEIPT');
+    setTimeout(() => window.print(), 100);
+  };
+
   // --- Briefing Sheet Handlers ---
   const handlePrintBriefing = () => {
     setTempPrintData(formData);
@@ -6035,82 +6186,82 @@ export default function App() {
                         系統將自動計算總額及服務費
                       </div>
                     </div>
-                    
-                    <div className="divide-y divide-slate-100">
-                      
-                    {/* 1. MENU ITEMS */}
-                    {(formData.menus || []).map((menu, idx) => {
-                      const subtotal = safeFloat(menu.price) * safeFloat(menu.qty);
-                      const price = safeFloat(menu.price);
-                      const allocSum = Object.values(menu.allocation || {}).reduce((a, b) => a + safeFloat(b), 0);
-                      const diff = price - allocSum;
-                      const isAllocated = Math.abs(diff) < 1;
 
-                      return (
-                        <div key={menu.id || idx} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors">
-                          <div className="col-span-5">
-                            <div className="flex items-center">
-                              <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded mr-3 flex-shrink-0"><Utensils size={14} /></div>
-                              <div>
-                                <div className="flex items-center">
-                                  <span className="font-bold text-slate-700 block text-sm mr-2">{menu.title || `Menu ${idx + 1}`}</span>
-                                  {price > 0 && !isAllocated && (
-                                    <div className="relative group z-10 cursor-pointer" onClick={() => jumpToAllocation({ type: 'menu', id: menu.id })}>
-                                      <div className="flex items-center justify-center w-4 h-4 bg-red-100 text-red-600 rounded-full border border-red-200 animate-pulse hover:bg-red-200 hover:scale-110 transition-transform"><span className="text-[10px] font-bold">!</span></div>
-                                    </div>
-                                  )}
+                    <div className="divide-y divide-slate-100">
+
+                      {/* 1. MENU ITEMS */}
+                      {(formData.menus || []).map((menu, idx) => {
+                        const subtotal = safeFloat(menu.price) * safeFloat(menu.qty);
+                        const price = safeFloat(menu.price);
+                        const allocSum = Object.values(menu.allocation || {}).reduce((a, b) => a + safeFloat(b), 0);
+                        const diff = price - allocSum;
+                        const isAllocated = Math.abs(diff) < 1;
+
+                        return (
+                          <div key={menu.id || idx} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors">
+                            <div className="col-span-5">
+                              <div className="flex items-center">
+                                <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded mr-3 flex-shrink-0"><Utensils size={14} /></div>
+                                <div>
+                                  <div className="flex items-center">
+                                    <span className="font-bold text-slate-700 block text-sm mr-2">{menu.title || `Menu ${idx + 1}`}</span>
+                                    {price > 0 && !isAllocated && (
+                                      <div className="relative group z-10 cursor-pointer" onClick={() => jumpToAllocation({ type: 'menu', id: menu.id })}>
+                                        <div className="flex items-center justify-center w-4 h-4 bg-red-100 text-red-600 rounded-full border border-red-200 animate-pulse hover:bg-red-200 hover:scale-110 transition-transform"><span className="text-[10px] font-bold">!</span></div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-slate-400">來源: 餐飲分頁</span>
                                 </div>
-                                <span className="text-xs text-slate-400">來源: 餐飲分頁</span>
                               </div>
                             </div>
-                          </div>
-                          <div className="col-span-2 flex items-center justify-end">
-                            <span className="text-slate-400 text-xs mr-1">$</span>
-                            <input type="number" value={menu.price} onChange={e => { 
-                              const newMenus = [...formData.menus]; 
-                              newMenus[idx].price = e.target.value; 
+                            <div className="col-span-2 flex items-center justify-end">
+                              <span className="text-slate-400 text-xs mr-1">$</span>
+                              <input type="number" value={menu.price} onChange={e => {
+                                const newMenus = [...formData.menus];
+                                newMenus[idx].price = e.target.value;
+                                setFormData(prev => {
+                                  const newData = { ...prev, menus: newMenus };
+                                  return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
+                                });
+                              }} className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono" placeholder="0" />
+                            </div>
+                            <div className="col-span-2">
+                              <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden shadow-sm">
+                                <select value={menu.priceType} onChange={e => {
+                                  const type = e.target.value;
+                                  let newQty = menu.qty || 1;
+                                  if (type === 'perTable') newQty = formData.tableCount || 1;
+                                  if (type === 'perPerson') newQty = formData.guestCount || 1;
+                                  const newMenus = [...formData.menus];
+                                  newMenus[idx] = { ...menu, priceType: type, qty: newQty };
+                                  setFormData(prev => {
+                                    const newData = { ...prev, menus: newMenus };
+                                    return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
+                                  });
+                                }} className="bg-slate-50 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 cursor-pointer min-w-[60px]"><option value="perTable">席</option><option value="perPerson">位</option><option value="total">固定</option></select>
+                                <input type="number" value={menu.qty || ''} onChange={e => {
+                                  const newMenus = [...formData.menus];
+                                  newMenus[idx].qty = e.target.value;
+                                  setFormData(prev => {
+                                    const newData = { ...prev, menus: newMenus };
+                                    return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
+                                  });
+                                }} className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors" />
+                              </div>
+                            </div>
+                            <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">${formatMoney(subtotal)}</div>
+                            <div className="col-span-1 flex justify-center"><button type="button" onClick={() => {
+                              const newMenus = [...formData.menus];
+                              newMenus[idx].applySC = !menu.applySC;
                               setFormData(prev => {
                                 const newData = { ...prev, menus: newMenus };
                                 return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
-                              }); 
-                            }} className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono" placeholder="0" />
+                              });
+                            }} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${menu.applySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 opacity-50'}`}>SC</button></div>
                           </div>
-                          <div className="col-span-2">
-                            <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden shadow-sm">
-                              <select value={menu.priceType} onChange={e => { 
-                                const type = e.target.value; 
-                                let newQty = menu.qty || 1; 
-                                if (type === 'perTable') newQty = formData.tableCount || 1; 
-                                if (type === 'perPerson') newQty = formData.guestCount || 1; 
-                                const newMenus = [...formData.menus]; 
-                                newMenus[idx] = { ...menu, priceType: type, qty: newQty }; 
-                                setFormData(prev => {
-                                  const newData = { ...prev, menus: newMenus };
-                                  return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
-                                }); 
-                              }} className="bg-slate-50 border-r border-slate-300 h-full px-2 text-[10px] outline-none text-slate-600 cursor-pointer min-w-[60px]"><option value="perTable">席</option><option value="perPerson">位</option><option value="total">固定</option></select>
-                              <input type="number" value={menu.qty || ''} onChange={e => { 
-                                const newMenus = [...formData.menus]; 
-                                newMenus[idx].qty = e.target.value; 
-                                setFormData(prev => {
-                                  const newData = { ...prev, menus: newMenus };
-                                  return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
-                                }); 
-                              }} className="w-full h-full text-center outline-none text-sm font-bold text-slate-700 focus:bg-blue-50 transition-colors" />
-                            </div>
-                          </div>
-                          <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">${formatMoney(subtotal)}</div>
-                          <div className="col-span-1 flex justify-center"><button type="button" onClick={() => { 
-                            const newMenus = [...formData.menus]; 
-                            newMenus[idx].applySC = !menu.applySC; 
-                            setFormData(prev => {
-                              const newData = { ...prev, menus: newMenus };
-                              return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
-                            }); 
-                          }} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${menu.applySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 opacity-50'}`}>SC</button></div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
 
                       {/* 2. PLATING FEE (Conditional) */}
                       {formData.servingStyle === '位上' && (
@@ -6183,12 +6334,22 @@ export default function App() {
                           </div>
                           <div className="col-span-2 flex items-center justify-end">
                             <span className="text-slate-400 text-xs mr-1">$</span>
-                            <input type="number" value={formData.setupPackagePrice || ''} onChange={e => setFormData(prev => ({ ...prev, setupPackagePrice: e.target.value, totalAmount: generateBillingSummary({ ...prev, setupPackagePrice: e.target.value }) }))} className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700" placeholder="0" />
+                            <input
+                              type="number"
+                              value={formData.setupPackagePrice || ''}
+                              onChange={e => setFormData(prev => updateFinanceState({ ...prev, setupPackagePrice: e.target.value }))}
+                              className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700"
+                              placeholder="0"
+                            />
                           </div>
                           <div className="col-span-2 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tight">固定套票</div>
                           <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">${formatMoney(safeFloat(formData.setupPackagePrice))}</div>
                           <div className="col-span-1 flex justify-center">
-                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, setupApplySC: !prev.setupApplySC, totalAmount: generateBillingSummary({ ...prev, setupApplySC: !prev.setupApplySC }) }))} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${formData.setupApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200'}`}>SC</button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => updateFinanceState({ ...prev, setupApplySC: !prev.setupApplySC }))}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${formData.setupApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200'}`}
+                            >SC</button>
                           </div>
                         </div>
                       )}
@@ -6212,17 +6373,28 @@ export default function App() {
                           </div>
                           <div className="col-span-2 flex items-center justify-end">
                             <span className="text-slate-400 text-xs mr-1">$</span>
-                            <input type="number" value={formData.avPackagePrice || ''} onChange={e => setFormData(prev => ({ ...prev, avPackagePrice: e.target.value, totalAmount: generateBillingSummary({ ...prev, avPackagePrice: e.target.value }) }))} className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-indigo-500 outline-none text-sm font-mono text-slate-700" placeholder="0" />
+                            <input
+                              type="number"
+                              value={formData.avPackagePrice || ''}
+                              onChange={e => setFormData(prev => updateFinanceState({ ...prev, avPackagePrice: e.target.value }))}
+                              className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-indigo-500 outline-none text-sm font-mono text-slate-700"
+                              placeholder="0"
+                            />
                           </div>
                           <div className="col-span-2 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tight">固定套票</div>
                           <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">${formatMoney(safeFloat(formData.avPackagePrice))}</div>
                           <div className="col-span-1 flex justify-center">
-                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, avApplySC: !prev.avApplySC, totalAmount: generateBillingSummary({ ...prev, avApplySC: !prev.avApplySC }) }))} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${formData.avApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200'}`}>SC</button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => updateFinanceState({ ...prev, avApplySC: !prev.avApplySC }))}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${formData.avApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200'}`}
+                            >SC</button>
                           </div>
                         </div>
                       )}
 
                       {/* 6. DECORATION PACKAGE */}
+
                       {Object.values(formData.decoration || {}).some(v => v === true) && (
                         <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors">
                           <div className="col-span-5">
@@ -6245,32 +6417,106 @@ export default function App() {
                           </div>
                           <div className="col-span-2 flex items-center justify-end">
                             <span className="text-slate-400 text-xs mr-1">$</span>
-                            <input type="number" value={formData.decorPackagePrice || ''} onChange={e => setFormData(prev => ({ ...prev, decorPackagePrice: e.target.value, totalAmount: generateBillingSummary({ ...prev, decorPackagePrice: e.target.value }) }))} className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-rose-500 outline-none text-sm font-mono text-slate-700" placeholder="0" />
+                            <input
+                              type="number"
+                              value={formData.decorPackagePrice || ''}
+                              onChange={e => setFormData(prev => updateFinanceState({ ...prev, decorPackagePrice: e.target.value }))}
+                              className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-rose-500 outline-none text-sm font-mono text-slate-700"
+                              placeholder="0"
+                            />
                           </div>
                           <div className="col-span-2 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tight">固定套票</div>
                           <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">${formatMoney(safeFloat(formData.decorPackagePrice))}</div>
                           <div className="col-span-1 flex justify-center">
-                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, decorApplySC: !prev.decorApplySC, totalAmount: generateBillingSummary({ ...prev, decorApplySC: !prev.decorApplySC }) }))} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${formData.decorApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200'}`}>SC</button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => updateFinanceState({ ...prev, decorApplySC: !prev.decorApplySC }))}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${formData.decorApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200'}`}
+                            >SC</button>
                           </div>
                         </div>
                       )}
 
-                      {/* 5. CUSTOM ITEMS */}
+                      {/* 7. CUSTOM ITEMS */}
                       {(formData.customItems || []).map((item, idx) => (
                         <div key={item.id || idx} className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-slate-50 transition-colors border-t border-slate-50">
                           <div className="col-span-5 flex items-center">
                             <div className="p-1.5 bg-slate-100 text-slate-500 rounded mr-3 flex-shrink-0"><Plus size={14} /></div>
-                            <input type="text" value={item.name} placeholder="額外項目名稱" onChange={e => { const newItems = [...formData.customItems]; newItems[idx].name = e.target.value; setFormData(prev => ({ ...prev, customItems: newItems })); }} className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none text-sm text-slate-700" />
+                            <input
+                              type="text"
+                              value={item.name}
+                              placeholder="額外項目名稱"
+                              onChange={e => setFormData(prev => {
+                                const newItems = [...prev.customItems];
+                                newItems[idx].name = e.target.value;
+                                return { ...prev, customItems: newItems };
+                              })}
+                              className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none text-sm text-slate-700"
+                            />
                           </div>
-                          <div className="col-span-2 flex items-center justify-end"><span className="text-slate-400 text-xs mr-1">$</span><input type="number" value={item.price} onChange={e => { const newItems = [...formData.customItems]; newItems[idx].price = e.target.value; setFormData(prev => ({ ...prev, customItems: newItems, totalAmount: generateBillingSummary({ ...prev, customItems: newItems }) })); }} className="w-20 text-right bg-transparent border-b border-slate-200 outline-none text-sm font-mono" /></div>
-                          <div className="col-span-2"><div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden"><select value={item.unitType || 'fixed'} onChange={e => { const newItems = [...formData.customItems]; newItems[idx].unitType = e.target.value; setFormData(prev => ({ ...prev, customItems: newItems, totalAmount: generateBillingSummary({ ...prev, customItems: newItems }) })); }} className="bg-slate-100 border-r border-slate-300 h-full px-2 text-[10px]"><option value="fixed">固定</option><option value="perTable">席</option></select><input type="number" value={item.qty || ''} onChange={e => { const newItems = [...formData.customItems]; newItems[idx].qty = e.target.value; setFormData(prev => ({ ...prev, customItems: newItems, totalAmount: generateBillingSummary({ ...prev, customItems: newItems }) })); }} className="w-full h-full text-center outline-none text-sm font-bold" /></div></div>
-                          {/* ✅ FIXED Math */}
+                          <div className="col-span-2 flex items-center justify-end">
+                            <span className="text-slate-400 text-xs mr-1">$</span>
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={e => setFormData(prev => {
+                                const newItems = [...prev.customItems];
+                                newItems[idx].price = e.target.value;
+                                return updateFinanceState({ ...prev, customItems: newItems });
+                              })}
+                              className="w-20 text-right bg-transparent border-b border-slate-200 outline-none text-sm font-mono"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <div className="flex items-center border border-slate-300 rounded-md bg-white h-9 overflow-hidden">
+                              <select
+                                value={item.unitType || 'fixed'}
+                                onChange={e => setFormData(prev => {
+                                  const newItems = [...prev.customItems];
+                                  newItems[idx].unitType = e.target.value;
+                                  return updateFinanceState({ ...prev, customItems: newItems });
+                                })}
+                                className="bg-slate-100 border-r border-slate-300 h-full px-2 text-[10px]"
+                              >
+                                <option value="fixed">固定</option>
+                                <option value="perTable">席</option>
+                              </select>
+                              <input
+                                type="number"
+                                value={item.qty || ''}
+                                onChange={e => setFormData(prev => {
+                                  const newItems = [...prev.customItems];
+                                  newItems[idx].qty = e.target.value;
+                                  return updateFinanceState({ ...prev, customItems: newItems });
+                                })}
+                                className="w-full h-full text-center outline-none text-sm font-bold"
+                              />
+                            </div>
+                          </div>
                           <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">${formatMoney(safeFloat(item.price) * safeFloat(item.qty))}</div>
-                          <div className="col-span-1 flex justify-center gap-1"><button type="button" onClick={() => { const newItems = [...formData.customItems]; newItems[idx].applySC = !item.applySC; setFormData(prev => ({ ...prev, customItems: newItems, totalAmount: generateBillingSummary({ ...prev, customItems: newItems }) })); }} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${item.applySC ? 'text-blue-600 bg-blue-50' : 'text-slate-300'}`}>SC</button><button type="button" onClick={() => { const newItems = formData.customItems.filter((_, i) => i !== idx); setFormData(prev => ({ ...prev, customItems: newItems, totalAmount: generateBillingSummary({ ...prev, customItems: newItems }) })); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={14} /></button></div>
+                          <div className="col-span-1 flex justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => {
+                                const newItems = [...prev.customItems];
+                                newItems[idx].applySC = !item.applySC;
+                                return updateFinanceState({ ...prev, customItems: newItems });
+                              })}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${item.applySC ? 'text-blue-600 bg-blue-50' : 'text-slate-300'}`}
+                            >SC</button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => {
+                                const newItems = prev.customItems.filter((_, i) => i !== idx);
+                                return updateFinanceState({ ...prev, customItems: newItems });
+                              })}
+                              className="text-slate-300 hover:text-red-500 p-1"
+                            ><Trash2 size={14} /></button>
+                          </div>
                         </div>
                       ))}
 
-                      {/* 6. BUS FEE ROW */}
+                      {/* 8. BUS FEE ROW */}
                       {formData.busInfo?.enabled && (
                         <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors border-b border-slate-100">
                           <div className="col-span-5">
@@ -6289,27 +6535,19 @@ export default function App() {
                             <input
                               type="number"
                               value={formData.busCharge}
-                              onChange={e => setFormData(prev => {
-                                const newData = { ...prev, busCharge: e.target.value };
-                                return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
-                              })}
+                              onChange={e => setFormData(prev => updateFinanceState({ ...prev, busCharge: e.target.value }))}
                               className="w-20 text-right bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none text-sm font-mono text-slate-700"
                               placeholder="0"
                             />
                           </div>
                           <div className="col-span-2 text-center text-sm text-slate-500">1</div>
-                          {/* ✅ FIXED Math */}
                           <div className="col-span-2 text-right text-sm font-bold font-mono text-slate-800">
                             ${formatMoney(safeFloat(formData.busCharge))}
                           </div>
                           <div className="col-span-1 flex justify-center">
                             <button
                               type="button"
-                              onClick={() => setFormData(prev => ({
-                                ...prev,
-                                busApplySC: !prev.busApplySC,
-                                totalAmount: generateBillingSummary({ ...prev, busApplySC: !prev.busApplySC })
-                              }))}
+                              onClick={() => setFormData(prev => updateFinanceState({ ...prev, busApplySC: !prev.busApplySC }))}
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${formData.busApplySC !== false ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-slate-300 border-slate-200 opacity-50'}`}
                             >
                               SC
@@ -6346,115 +6584,115 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Calculator */}
                     {(() => {
-                        let scBase = 0;
-                        let subTotal = 0;
+                      let scBase = 0;
+                      let subTotal = 0;
 
-                        // 1. Menus
-                        (formData.menus || []).forEach(m => { 
-                          const amt = safeFloat(m.price) * safeFloat(m.qty);
-                          subTotal += amt;
-                          if (m.applySC !== false) scBase += amt; 
-                        });
-                        
-                        // 2. Plating
-                        const platingTotal = (formData.servingStyle === '位上') ? safeFloat(formData.platingFee) * safeFloat(formData.tableCount) : 0;
-                        if (platingTotal > 0) {
-                          subTotal += platingTotal;
-                          if (formData.platingFeeApplySC !== false) scBase += platingTotal;
-                        }
-                        
-                        // 3. Drinks
-                        const drinksTotal = safeFloat(formData.drinksPrice) * safeFloat(formData.drinksQty);
-                        subTotal += drinksTotal;
-                        if (formData.drinksApplySC !== false) scBase += drinksTotal;
-                        
-                        // 4. Custom Items
-                        (formData.customItems || []).forEach(i => { 
-                          const amt = safeFloat(i.price) * safeFloat(i.qty);
-                          subTotal += amt;
-                          if (i.applySC) scBase += amt; 
-                        });
-                        
-                        // 5. Bus Arrangement
-                        const busTotal = formData.busInfo?.enabled ? safeFloat(formData.busCharge) : 0;
-                        if (formData.busInfo?.enabled) {
-                          subTotal += busTotal;
-                          if (formData.busApplySC) scBase += busTotal;
-                        }
+                      // 1. Menus
+                      (formData.menus || []).forEach(m => {
+                        const amt = safeFloat(m.price) * safeFloat(m.qty);
+                        subTotal += amt;
+                        if (m.applySC !== false) scBase += amt;
+                      });
 
-                        // 🌟 6. CATEGORY PACKAGES (Setup, AV, Decor) 🌟
-                        const setupTotal = safeFloat(formData.setupPackagePrice);
-                        if (setupTotal > 0) {
-                          subTotal += setupTotal;
-                          if (formData.setupApplySC !== false) scBase += setupTotal;
-                        }
+                      // 2. Plating
+                      const platingTotal = (formData.servingStyle === '位上') ? safeFloat(formData.platingFee) * safeFloat(formData.tableCount) : 0;
+                      if (platingTotal > 0) {
+                        subTotal += platingTotal;
+                        if (formData.platingFeeApplySC !== false) scBase += platingTotal;
+                      }
 
-                        const avTotal = safeFloat(formData.avPackagePrice);
-                        if (avTotal > 0) {
-                          subTotal += avTotal;
-                          if (formData.avApplySC !== false) scBase += avTotal;
-                        }
+                      // 3. Drinks
+                      const drinksTotal = safeFloat(formData.drinksPrice) * safeFloat(formData.drinksQty);
+                      subTotal += drinksTotal;
+                      if (formData.drinksApplySC !== false) scBase += drinksTotal;
 
-                        const decorTotal = safeFloat(formData.decorPackagePrice);
-                        if (decorTotal > 0) {
-                          subTotal += decorTotal;
-                          if (formData.decorApplySC !== false) scBase += decorTotal;
-                        }
+                      // 4. Custom Items
+                      (formData.customItems || []).forEach(i => {
+                        const amt = safeFloat(i.price) * safeFloat(i.qty);
+                        subTotal += amt;
+                        if (i.applySC) scBase += amt;
+                      });
 
-                        // ✅ STRICT 10% CALCULATION
-                        let scAmount = 0;
-                        if (formData.enableServiceCharge !== false) {
-                            scAmount = scBase * 0.1;
-                        }
+                      // 5. Bus Arrangement
+                      const busTotal = formData.busInfo?.enabled ? safeFloat(formData.busCharge) : 0;
+                      if (formData.busInfo?.enabled) {
+                        subTotal += busTotal;
+                        if (formData.busApplySC) scBase += busTotal;
+                      }
 
-                        const discountAmt = safeFloat(formData.discount);
-                        const baseTotal = subTotal + scAmount - discountAmt;
-                        const ccSurcharge = formData.paymentMethod === '信用卡' ? baseTotal * 0.03 : 0;
-                        const grandTotal = Math.round(baseTotal + ccSurcharge);
+                      // 🌟 6. CATEGORY PACKAGES (Setup, AV, Decor) 🌟
+                      const setupTotal = safeFloat(formData.setupPackagePrice);
+                      if (setupTotal > 0) {
+                        subTotal += setupTotal;
+                        if (formData.setupApplySC !== false) scBase += setupTotal;
+                      }
 
-                        return (
-                            <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                                  <label className="flex items-center cursor-pointer text-sm text-slate-600 select-none hover:text-blue-600 transition-colors">
-                                      <input 
-                                        type="checkbox" 
-                                        checked={formData.enableServiceCharge !== false} 
-                                        onChange={e => setFormData(prev => ({...prev, enableServiceCharge: e.target.checked, totalAmount: generateBillingSummary({...prev, enableServiceCharge: e.target.checked}) }))} 
-                                        className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
-                                      />
-                                      <span className="font-bold">服務費 (10%)</span>
-                                  </label>
-                                  <div className="text-right">
-                                      <span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>
-                                        + ${formatMoney(scAmount)}
-                                      </span>
-                                  </div>
-                                </div>
-                                
-                                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                                  <span className="text-sm font-bold text-slate-600">折扣 (Discount)</span>
-                                  <div className="relative w-28">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span>
-                                      <input type="text" value={formData.discount || ''} onChange={handlePriceChange} name="discount" className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono font-bold pl-6 pb-1 bg-transparent" placeholder="0"/>
-                                  </div>
-                                </div>
+                      const avTotal = safeFloat(formData.avPackagePrice);
+                      if (avTotal > 0) {
+                        subTotal += avTotal;
+                        if (formData.avApplySC !== false) scBase += avTotal;
+                      }
 
-                                {ccSurcharge > 0 && (
-                                  <div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-5 px-5 pt-3">
-                                    <span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span>
-                                    <span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(ccSurcharge)}</span>
-                                  </div>
-                                )}
+                      const decorTotal = safeFloat(formData.decorPackagePrice);
+                      if (decorTotal > 0) {
+                        subTotal += decorTotal;
+                        if (formData.decorApplySC !== false) scBase += decorTotal;
+                      }
 
-                                <div className="flex justify-between items-center pt-2">
-                                  <span className="text-base font-bold text-slate-800">總金額 (Total)</span>
-                                  <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(grandTotal)}</span>
-                                </div>
+                      // ✅ STRICT 10% CALCULATION
+                      let scAmount = 0;
+                      if (formData.enableServiceCharge !== false) {
+                        scAmount = scBase * 0.1;
+                      }
+
+                      const discountAmt = safeFloat(formData.discount);
+                      const baseTotal = subTotal + scAmount - discountAmt;
+                      const ccSurcharge = formData.paymentMethod === '信用卡' ? baseTotal * 0.03 : 0;
+                      const grandTotal = Math.round(baseTotal + ccSurcharge);
+
+                      return (
+                        <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                          <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                            <label className="flex items-center cursor-pointer text-sm text-slate-600 select-none hover:text-blue-600 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={formData.enableServiceCharge !== false}
+                                onChange={e => setFormData(prev => ({ ...prev, enableServiceCharge: e.target.checked, totalAmount: generateBillingSummary({ ...prev, enableServiceCharge: e.target.checked }) }))}
+                                className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                              />
+                              <span className="font-bold">服務費 (10%)</span>
+                            </label>
+                            <div className="text-right">
+                              <span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>
+                                + ${formatMoney(scAmount)}
+                              </span>
                             </div>
-                        );
+                          </div>
+
+                          <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                            <span className="text-sm font-bold text-slate-600">折扣 (Discount)</span>
+                            <div className="relative w-28">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span>
+                              <input type="text" value={formData.discount || ''} onChange={handlePriceChange} name="discount" className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono font-bold pl-6 pb-1 bg-transparent" placeholder="0" />
+                            </div>
+                          </div>
+
+                          {ccSurcharge > 0 && (
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-5 px-5 pt-3">
+                              <span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span>
+                              <span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(ccSurcharge)}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center pt-2">
+                            <span className="text-base font-bold text-slate-800">總金額 (Total)</span>
+                            <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(grandTotal)}</span>
+                          </div>
+                        </div>
+                      );
                     })()}
                   </div>
 
@@ -6465,20 +6703,20 @@ export default function App() {
                       {/* Auto-Schedule Toggle */}
                       <label className="flex items-center cursor-pointer select-none">
                         <div className="relative">
-                          <input type="checkbox" className="sr-only peer" checked={formData.autoSchedulePayment || false} onChange={e => { 
-                            const isChecked = e.target.checked; 
+                          <input type="checkbox" className="sr-only peer" checked={formData.autoSchedulePayment || false} onChange={e => {
+                            const isChecked = e.target.checked;
                             setFormData(prev => {
                               const currentTotal = generateBillingSummary(prev).grandTotal;
                               let updates = { autoSchedulePayment: isChecked, totalAmount: currentTotal };
-                              if (isChecked) { 
-                                const terms = calculatePaymentTerms(currentTotal, prev.date); 
-                                if (terms) { 
-                                  updates = { ...updates, ...terms }; 
-                                  addToast("已啟用自動付款排程", "success"); 
-                                } 
-                              } 
+                              if (isChecked) {
+                                const terms = calculatePaymentTerms(currentTotal, prev.date);
+                                if (terms) {
+                                  updates = { ...updates, ...terms };
+                                  addToast("已啟用自動付款排程", "success");
+                                }
+                              }
                               return { ...prev, ...updates };
-                            }); 
+                            });
                           }} />
                           <div className="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-600"></div>
                         </div>
@@ -6507,13 +6745,13 @@ export default function App() {
                             {/* ✅ DYNAMIC CALCULATION LOGIC */}
                             {(() => {
                               const total = safeFloat(formData.totalAmount);
-                              
+
                               // Only count deposits that are actually marked as received
                               let amountAlreadyPaid = 0;
                               if (formData.deposit1Received) amountAlreadyPaid += safeFloat(formData.deposit1);
                               if (formData.deposit2Received) amountAlreadyPaid += safeFloat(formData.deposit2);
                               if (formData.deposit3Received) amountAlreadyPaid += safeFloat(formData.deposit3);
-                              
+
                               // If the final balance itself is marked received, the whole thing is paid
                               if (formData.balanceReceived) {
                                 return (
@@ -6531,7 +6769,7 @@ export default function App() {
                                 </div>
                               );
                             })()}
-                            
+
                             <p className="text-[10px] text-slate-400">
                               * 系統僅計算標記為「已收款」的項目
                             </p>
@@ -6636,7 +6874,7 @@ export default function App() {
                       <Layout size={18} className="mr-2 text-slate-500" />
                       設備與佈置清單 (Equipment & Packages)
                     </h4>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Column 1: Setup & Reception */}
                       <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -6644,27 +6882,27 @@ export default function App() {
                           <Users size={14} /> 舞台與接待設備
                         </h4>
                         <div className="grid grid-cols-1 gap-2">
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14}/></div><FormCheckbox label="禮堂舞台 (7.2x2.5m)" name="equipment.stage" checked={formData.equipment?.stage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, stage: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Mic2 size={14}/></div><FormCheckbox label="講台" name="equipment.podium" checked={formData.equipment?.podium} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, podium: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Coffee size={14}/></div><FormCheckbox label="接待桌 (180x60cm)" name="equipment.receptionTable" checked={formData.equipment?.receptionTable} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, receptionTable: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Info size={14}/></div><FormCheckbox label="標示牌 (2個)" name="equipment.signage" checked={formData.equipment?.signage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, signage: e.target.checked } }))} /></div>
-                          
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14} /></div><FormCheckbox label="禮堂舞台 (7.2x2.5m)" name="equipment.stage" checked={formData.equipment?.stage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, stage: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Mic2 size={14} /></div><FormCheckbox label="講台" name="equipment.podium" checked={formData.equipment?.podium} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, podium: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Coffee size={14} /></div><FormCheckbox label="接待桌 (180x60cm)" name="equipment.receptionTable" checked={formData.equipment?.receptionTable} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, receptionTable: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Info size={14} /></div><FormCheckbox label="標示牌 (2個)" name="equipment.signage" checked={formData.equipment?.signage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, signage: e.target.checked } }))} /></div>
+
                           {/* 禮堂字牌 */}
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="text-slate-400"><Type size={14}/></div>
+                            <div className="text-slate-400"><Type size={14} /></div>
                             <FormCheckbox label="禮堂字牌" name="equipment.nameSign" checked={formData.equipment?.nameSign} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, nameSign: e.target.checked } }))} />
                             {formData.equipment?.nameSign && (
-                              <input className="flex-1 text-[10px] border rounded px-2 py-1 bg-white outline-none focus:border-blue-400 transition-all" placeholder="輸入字牌內容..." value={formData.nameSignText || ''} onChange={(e) => setFormData({...formData, nameSignText: e.target.value})} />
+                              <input className="flex-1 text-[10px] border rounded px-2 py-1 bg-white outline-none focus:border-blue-400 transition-all" placeholder="輸入字牌內容..." value={formData.nameSignText || ''} onChange={(e) => setFormData({ ...formData, nameSignText: e.target.value })} />
                             )}
                           </div>
 
                           {/* 婚宴蛋糕 */}
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="text-slate-400"><Cake size={14}/></div>
+                            <div className="text-slate-400"><Cake size={14} /></div>
                             <FormCheckbox label="婚宴蛋糕" name="equipment.hasCake" checked={formData.equipment?.hasCake} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, hasCake: e.target.checked } }))} />
                             {formData.equipment?.hasCake && (
                               <div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200">
-                                <input type="number" className="w-10 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" placeholder="0" value={formData.cakePounds || ''} onChange={(e) => setFormData({...formData, cakePounds: e.target.value})} />
+                                <input type="number" className="w-10 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" placeholder="0" value={formData.cakePounds || ''} onChange={(e) => setFormData({ ...formData, cakePounds: e.target.value })} />
                                 <span className="text-[9px] text-slate-400 font-bold ml-1">Lbs</span>
                               </div>
                             )}
@@ -6678,15 +6916,15 @@ export default function App() {
                           <Tv size={14} /> 影音設備 (AV)
                         </h4>
                         <div className="grid grid-cols-1 gap-1.5">
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Video size={14}/></div><FormCheckbox label="大禮堂投影機" name="equipment.grandHallProjector" checked={formData.equipment?.grandHallProjector} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, grandHallProjector: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14}/></div><FormCheckbox label="小禮堂 LED Screen" name="equipment.smallHallLED" checked={formData.equipment?.smallHallLED} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, smallHallLED: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Maximize size={14}/></div><FormCheckbox label="LED 顯示屏 W6.4 x H4m" name="equipment.ledScreen" checked={formData.equipment?.ledScreen} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, ledScreen: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Smartphone size={14} className="rotate-90"/></div><FormCheckbox label="60寸電視 (直)" name="equipment.tvVertical" checked={formData.equipment?.tvVertical} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, tvVertical: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Smartphone size={14}/></div><FormCheckbox label="60寸電視 (橫)" name="equipment.tvHorizontal" checked={formData.equipment?.tvHorizontal} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, tvHorizontal: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Sun size={14}/></div><FormCheckbox label="聚光燈" name="equipment.spotlight" checked={formData.equipment?.spotlight} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, spotlight: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><RotateCw size={14}/></div><FormCheckbox label="電腦燈" name="equipment.movingHead" checked={formData.equipment?.movingHead} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, movingHead: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Zap size={14}/></div><FormCheckbox label="進場燈" name="equipment.entranceLight" checked={formData.equipment?.entranceLight} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, entranceLight: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Mic size={14}/></div><FormCheckbox label="無線麥克風 (4支)" name="equipment.wirelessMic" checked={formData.equipment?.wirelessMic} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, wirelessMic: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Video size={14} /></div><FormCheckbox label="大禮堂投影機" name="equipment.grandHallProjector" checked={formData.equipment?.grandHallProjector} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, grandHallProjector: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14} /></div><FormCheckbox label="小禮堂 LED Screen" name="equipment.smallHallLED" checked={formData.equipment?.smallHallLED} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, smallHallLED: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Maximize size={14} /></div><FormCheckbox label="LED 顯示屏 W6.4 x H4m" name="equipment.ledScreen" checked={formData.equipment?.ledScreen} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, ledScreen: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Smartphone size={14} className="rotate-90" /></div><FormCheckbox label="60寸電視 (直)" name="equipment.tvVertical" checked={formData.equipment?.tvVertical} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, tvVertical: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Smartphone size={14} /></div><FormCheckbox label="60寸電視 (橫)" name="equipment.tvHorizontal" checked={formData.equipment?.tvHorizontal} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, tvHorizontal: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Sun size={14} /></div><FormCheckbox label="聚光燈" name="equipment.spotlight" checked={formData.equipment?.spotlight} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, spotlight: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><RotateCw size={14} /></div><FormCheckbox label="電腦燈" name="equipment.movingHead" checked={formData.equipment?.movingHead} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, movingHead: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Zap size={14} /></div><FormCheckbox label="進場燈" name="equipment.entranceLight" checked={formData.equipment?.entranceLight} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, entranceLight: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Mic size={14} /></div><FormCheckbox label="無線麥克風 (4支)" name="equipment.wirelessMic" checked={formData.equipment?.wirelessMic} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, wirelessMic: e.target.checked } }))} /></div>
                         </div>
                         <input type="text" placeholder="其他 AV 補充" className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs mt-2" value={formData.avOther || ''} onChange={e => setFormData(prev => ({ ...prev, avOther: e.target.value }))} />
                       </div>
@@ -6697,21 +6935,21 @@ export default function App() {
                           <Palette size={14} /> 場地佈置與細項
                         </h4>
                         <div className="grid grid-cols-1 gap-2">
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><ImageIcon size={14}/></div><FormCheckbox label="舞台背景佈置" name="decoration.backdrop" checked={formData.decoration?.backdrop} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, backdrop: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Star size={14}/></div><FormCheckbox label="接待處佈置" name="decoration.receptionDecor" checked={formData.decoration?.receptionDecor} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, receptionDecor: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Flower2 size={14}/></div><FormCheckbox label="絲花擺設" name="decoration.silkFlower" checked={formData.decoration?.silkFlower} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, silkFlower: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><FileText size={14}/></div><FormCheckbox label="證婚桌" name="decoration.ceremonyTable" checked={formData.decoration?.ceremonyTable} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, ceremonyTable: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><PenTool size={14}/></div><FormCheckbox label="簽名冊" name="decoration.signingBook" checked={formData.decoration?.signingBook} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, signingBook: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Wind size={14}/></div><FormCheckbox label="花圈" name="decoration.flowerAisle" checked={formData.decoration?.flowerAisle} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, flowerAisle: e.target.checked } }))} /></div>
-                          <div className="flex items-center gap-2"><div className="text-slate-400"><Frame size={14}/></div><FormCheckbox label="畫架" name="decoration.easel" checked={formData.decoration?.easel} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, easel: e.target.checked } }))} /></div>
-                          
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><ImageIcon size={14} /></div><FormCheckbox label="舞台背景佈置" name="decoration.backdrop" checked={formData.decoration?.backdrop} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, backdrop: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Star size={14} /></div><FormCheckbox label="接待處佈置" name="decoration.receptionDecor" checked={formData.decoration?.receptionDecor} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, receptionDecor: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Flower2 size={14} /></div><FormCheckbox label="絲花擺設" name="decoration.silkFlower" checked={formData.decoration?.silkFlower} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, silkFlower: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><FileText size={14} /></div><FormCheckbox label="證婚桌" name="decoration.ceremonyTable" checked={formData.decoration?.ceremonyTable} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, ceremonyTable: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><PenTool size={14} /></div><FormCheckbox label="簽名冊" name="decoration.signingBook" checked={formData.decoration?.signingBook} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, signingBook: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Wind size={14} /></div><FormCheckbox label="花圈" name="decoration.flowerAisle" checked={formData.decoration?.flowerAisle} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, flowerAisle: e.target.checked } }))} /></div>
+                          <div className="flex items-center gap-2"><div className="text-slate-400"><Frame size={14} /></div><FormCheckbox label="畫架" name="decoration.easel" checked={formData.decoration?.easel} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, easel: e.target.checked } }))} /></div>
+
                           {/* 花柱 */}
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="text-slate-400"><Columns size={14}/></div>
+                            <div className="text-slate-400"><Columns size={14} /></div>
                             <FormCheckbox label="花柱佈置" name="decoration.hasFlowerPillar" checked={formData.decoration?.hasFlowerPillar} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasFlowerPillar: e.target.checked } }))} />
                             {formData.decoration?.hasFlowerPillar && (
                               <div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200">
-                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.flowerPillarQty || ''} onChange={(e)=>setFormData({...formData, flowerPillarQty: e.target.value})}/>
+                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.flowerPillarQty || ''} onChange={(e) => setFormData({ ...formData, flowerPillarQty: e.target.value })} />
                                 <span className="text-[9px] text-slate-400 font-bold ml-1">支</span>
                               </div>
                             )}
@@ -6719,11 +6957,11 @@ export default function App() {
 
                           {/* 麻雀 */}
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="text-slate-400"><Grid size={14}/></div>
+                            <div className="text-slate-400"><Grid size={14} /></div>
                             <FormCheckbox label="麻雀枱" name="decoration.hasMahjong" checked={formData.decoration?.hasMahjong} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasMahjong: e.target.checked } }))} />
                             {formData.decoration?.hasMahjong && (
                               <div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200">
-                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.mahjongTableQty || ''} onChange={(e)=>setFormData({...formData, mahjongTableQty: e.target.value})}/>
+                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.mahjongTableQty || ''} onChange={(e) => setFormData({ ...formData, mahjongTableQty: e.target.value })} />
                                 <span className="text-[9px] text-slate-400 font-bold ml-1">張</span>
                               </div>
                             )}
@@ -6731,11 +6969,11 @@ export default function App() {
 
                           {/* 喜帖 */}
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="text-slate-400"><Mail size={14}/></div>
+                            <div className="text-slate-400"><Mail size={14} /></div>
                             <FormCheckbox label="喜帖" name="decoration.hasInvitation" checked={formData.decoration?.hasInvitation} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasInvitation: e.target.checked } }))} />
                             {formData.decoration?.hasInvitation && (
                               <div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200">
-                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.invitationQty || ''} onChange={(e)=>setFormData({...formData, invitationQty: e.target.value})}/>
+                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.invitationQty || ''} onChange={(e) => setFormData({ ...formData, invitationQty: e.target.value })} />
                                 <span className="text-[9px] text-slate-400 font-bold ml-1">套</span>
                               </div>
                             )}
@@ -6743,11 +6981,11 @@ export default function App() {
 
                           {/* 婚椅 */}
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="text-slate-400"><Armchair size={14}/></div>
+                            <div className="text-slate-400"><Armchair size={14} /></div>
                             <FormCheckbox label="證婚椅子" name="decoration.hasCeremonyChair" checked={formData.decoration?.hasCeremonyChair} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasCeremonyChair: e.target.checked } }))} />
                             {formData.decoration?.hasCeremonyChair && (
                               <div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200">
-                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.ceremonyChairQty || ''} onChange={(e)=>setFormData({...formData, ceremonyChairQty: e.target.value})}/>
+                                <input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.ceremonyChairQty || ''} onChange={(e) => setFormData({ ...formData, ceremonyChairQty: e.target.value })} />
                                 <span className="text-[9px] text-slate-400 font-bold ml-1">張</span>
                               </div>
                             )}
@@ -6822,7 +7060,7 @@ export default function App() {
                     </div>
                   </div>
 
-{/* 2. BUS ARRANGEMENT */}
+                  {/* 2. BUS ARRANGEMENT */}
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4">
                       <h4 className="font-bold text-slate-800 flex items-center">
@@ -6849,7 +7087,7 @@ export default function App() {
 
                     {formData.busInfo?.enabled && (
                       <div className="space-y-6 animate-in slide-in-from-top-2">
-                        
+
                         {/* --- ARRIVALS (接載) --- */}
                         <div>
                           <div className="flex justify-between items-center mb-2">
@@ -6978,7 +7216,7 @@ export default function App() {
                           <Info size={12} className="mr-1 flex-shrink-0 mt-0.5" />
                           <span>提示：如需向客戶收費，請至「Tab 3: 收費明細 (Billing)」頁面的「旅遊巴安排」總收費欄位手動輸入總費用。</span>
                         </div>
-                        
+
                       </div>
                     )}
                   </div>
@@ -6986,7 +7224,7 @@ export default function App() {
                   {/* 3. OTHER LOGISTICS */}
                   <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
                     <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">其他物流 (Other Logistics)</h4>
-                    
+
                     {/* Deliveries */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                       <div className="flex justify-between items-center mb-3">
@@ -7016,7 +7254,7 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Parking */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                       <label className="text-sm font-bold text-slate-700 flex items-center mb-3"><MapPin size={16} className="mr-2" /> 泊車安排 (Parking)</label>
@@ -7040,7 +7278,7 @@ export default function App() {
                         <textarea rows={3} value={formData.parkingInfo?.plates || ''} onChange={e => setFormData(prev => ({ ...prev, parkingInfo: { ...prev.parkingInfo, plates: e.target.value } }))} placeholder="請輸入車牌..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none" />
                       </div>
                     </div>
-                    
+
                     <FormTextArea label="其他備註 (Other Notes)" name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} />
                   </div>
                 </div>
@@ -7233,6 +7471,14 @@ export default function App() {
                       className="px-3 py-2 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-lg font-medium flex items-center border border-blue-200 text-sm whitespace-nowrap ml-2 shrink-0"
                     >
                       <FileText size={16} className="mr-2" /> Invoice
+                    </button>
+                    {/* Add this button right after the Invoice button */}
+                    <button
+                      type="button"
+                      onClick={handlePrintReceipt}
+                      className="px-3 py-2 bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-lg font-medium flex items-center border border-teal-200 text-sm whitespace-nowrap ml-2 shrink-0"
+                    >
+                      <Receipt size={16} className="mr-2" /> Receipt
                     </button>
                     <button
                       type="button"

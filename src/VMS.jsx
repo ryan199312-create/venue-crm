@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
 // 1. Icons
 import {
   AlertCircle,
@@ -35,6 +38,7 @@ import {
   Loader2,
   LogOut,
   Mail,
+  Download,
   MapPin,
   Maximize, // Added for LED Screen
   MessageCircle,
@@ -67,11 +71,13 @@ import {
   Wind, // Added for Flower Aisle
   X,
   Zap, // Added for Entrance Light
-  Receipt
+  Receipt,
+  ChevronUp,
 } from 'lucide-react';
 
-// 2. Shared Connection (from your new file)
-import { db, auth, storage } from './firebase';
+// Add these to your Firebase imports at the top of VMS.jsx:
+import { db, auth, storage, functions } from './firebase'; // <-- Ensure 'functions' is here
+import { httpsCallable } from 'firebase/functions'; // <-- Add this line
 
 // 3. Auth Helpers (Added signInAnonymously back)
 import {
@@ -108,6 +114,7 @@ import {
 import { useAI } from './hooks/useAI';
 import AiAssistant from './components/AiAssistant';
 import DataAssistant from './components/DataAssistant';
+
 // ==========================================
 // SECTION 1: CONFIGURATION & CONSTANTS
 // ==========================================
@@ -4042,6 +4049,8 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [showSendMenu, setShowSendMenu] = useState(false);
   const [isDataAiOpen, setIsDataAiOpen] = useState(false);
   const [isTranslatingDrinks, setIsTranslatingDrinks] = useState(false);
   const { generate, loading } = useAI();
@@ -5249,6 +5258,123 @@ export default function App() {
     });
   };
 
+  // ==========================================
+  // 📤 COMMUNICATION HANDLERS
+  // ==========================================
+
+  // 1. Send via Email (Uses native mail client with AI Draft)
+  // ==========================================
+  // 📤 COMMUNICATION HANDLERS (WITH PDF)
+  // ==========================================
+
+  const handleSendEmail = async (docType = 'INVOICE') => {
+    if (!formData.clientEmail) return addToast("客戶未提供 Email", "error");
+
+    // 1. Generate & Upload PDF
+    const pdfUrl = await generateAndUploadPDF(docType);
+    if (!pdfUrl) return;
+
+    // 2. Prepare Email Body
+    const subject = formData.emailSubject || `[璟瓏軒] ${formData.eventName} - ${docType}`;
+    const baseBody = formData.emailBody || `你好 ${formData.clientName},\n\n感謝您選擇璟瓏軒。請查看以下連結以獲取您的最新文件。`;
+
+    // Append the Document Link to the body
+    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\nKing Lung Heen`;
+
+    // 3. Open Email Client
+    const mailtoLink = `mailto:${formData.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
+    window.open(mailtoLink, '_blank');
+
+    addToast("已開啟電郵草稿 (Email client opened)", "success");
+    setShowSendMenu(false);
+  };
+// ==========================================
+  // 📄 PDF GENERATOR (BASE64)
+  // ==========================================
+  const generatePDFBase64 = async (docType) => {
+    addToast(`正在產生 ${docType} PDF...`, "info");
+    
+    setTempPrintData(formData);
+    setPrintMode(docType);
+
+    await new Promise(resolve => setTimeout(resolve, 800)); 
+
+    try {
+      const element = document.getElementById('document-capture-area');
+      if (!element) throw new Error("找不到文件範圍");
+
+      element.style.display = 'block';
+      element.style.position = 'absolute';
+      element.style.top = '-9999px';
+
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
+
+      element.style.display = '';
+      element.style.position = '';
+      element.style.top = '';
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      
+      const fileName = `${formData.orderId}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
+      
+      // ✅ 1. 自動下載一份到使用者的電腦
+      pdf.save(fileName);
+
+      // ✅ 2. 抽取 Base64 字串 (不含前綴) 準備傳給後端
+      const dataUri = pdf.output('datauristring');
+      const base64Data = dataUri.split(',')[1]; 
+
+      return { pdfBase64: base64Data, fileName };
+
+    } catch (error) {
+      console.error("PDF Error:", error);
+      addToast("PDF 產生失敗", "error");
+      return null;
+    }
+  };
+
+  // ==========================================
+  // 📤 SLEEKFLOW HANDLER
+  // ==========================================
+  const handleSendSleekFlow = async (isTemplate = false, docType = 'INVOICE') => {
+    let phone = formData.clientPhone?.replace(/[^0-9]/g, ''); 
+    if (phone && phone.length === 8) phone = '852' + phone;
+
+    if (!phone) return addToast("客戶未提供有效電話", "error");
+
+    try {
+      addToast("正在處理文件...", "info");
+
+      // 取得 Base64 資料
+      const pdfData = await generatePDFBase64(docType);
+      if (!pdfData) return;
+
+      const messageContent = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
+
+      addToast("正在透過後端直接發送檔案...", "info");
+
+      // 呼叫更新後的 Cloud Function
+      const sendSleekFlow = httpsCallable(functions, 'sendSleekFlow');
+      await sendSleekFlow({ 
+        to: phone, 
+        messageContent: messageContent,
+        pdfBase64: pdfData.pdfBase64,  // 傳遞二進位字串
+        fileName: pdfData.fileName,    // 傳遞真實檔名
+        isTemplate: isTemplate
+      });
+
+      addToast("WhatsApp 檔案發送成功！", "success");
+      setShowSendMenu(false);
+    } catch (error) {
+      console.error("SleekFlow 發送錯誤:", error);
+      addToast(`發送失敗: ${error.message}`, "error");
+    }
+  };
   // --- Printing Handlers ---
   const handlePrintEO = () => {
     setTempPrintData(formData);
@@ -5267,7 +5393,53 @@ export default function App() {
     setPrintMode('BRIEFING');
     setTimeout(() => window.print(), 100);
   };
+  // ==========================================
+  // 📥 PDF DOWNLOAD HANDLER
+  // ==========================================
+  const handleDownloadPDF = async (docType) => {
+    addToast(`正在準備下載 ${docType}... (Preparing PDF)`, "info");
+    
+    // 1. Force the hidden print area to render the requested document
+    setTempPrintData(formData);
+    setPrintMode(docType);
 
+    // 2. Wait for React to render the DOM
+    await new Promise(resolve => setTimeout(resolve, 800)); 
+
+    try {
+      const element = document.getElementById('document-capture-area');
+      if (!element) throw new Error("找不到文件範圍");
+
+      // Temporarily make it visible for the canvas
+      element.style.display = 'block';
+      element.style.position = 'absolute';
+      element.style.top = '-9999px';
+
+      // 3. Take a high-res screenshot
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
+
+      // Hide it again
+      element.style.display = '';
+      element.style.position = '';
+      element.style.top = '';
+
+      // 4. Convert to PDF and Download
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      
+      const fileName = `${formData.orderId}_${docType}.pdf`;
+      pdf.save(fileName); // 🌟 Triggers the browser download!
+      
+      addToast(`${docType} PDF 下載完成！`, "success");
+    } catch (error) {
+      console.error("PDF Error:", error);
+      addToast("PDF 下載失敗", "error");
+    }
+  };
   // --- Views ---
 
   const EventsListView = () => {
@@ -6068,7 +6240,8 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Right Col: Drinks Package */}
+
+                      {/* Right Col: Drinks Packge */}
                       <div id="drinks-section">
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排 (Drinks)</label>
 
@@ -7404,117 +7577,212 @@ export default function App() {
               </div>
             )}
             {/* Footer inside the Modal */}
-            <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-10 gap-4">
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-50">
 
-              {/* LEFT SIDE: AI & Print Tools */}
-              <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1">
+              {/* LEFT SIDE: AI, Print, & Send Dropdowns */}
+              <div className="flex items-center space-x-3 relative">
 
-                {/* 1. NEW AI BUTTON */}
+                {/* 1. AI BUTTON */}
                 <button
                   type="button"
                   onClick={() => setIsAiOpen(true)}
-                  className="group relative px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-full font-bold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm shrink-0"
+                  className="group relative px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm"
                 >
-                  <Sparkles size={16} className="text-yellow-200 group-hover:rotate-12 transition-transform" />
+                  <Sparkles size={16} className="text-yellow-200" />
                   <span>AI 智能助手</span>
-                  {/* Optional: Shine effect */}
-                  <div className="absolute inset-0 rounded-full ring-1 ring-white/20 group-hover:ring-white/40"></div>
-                </button> {/* ✅ THIS CLOSING TAG WAS MISSING */}
+                  <div className="absolute inset-0 rounded-lg ring-1 ring-white/20 group-hover:ring-white/40 pointer-events-none"></div>
+                </button>
 
-                {/* 2. Divider (Only show if we have print buttons next to it) */}
-                {editingEvent && <div className="h-6 w-px bg-slate-300 mx-2 shrink-0"></div>}
-
-                {/* 3. Existing Print Buttons */}
+                {/* 2. PRINT DROPDOWN MENU */}
                 {editingEvent && (
-                  <>
+                  <div className="relative">
+                    {showPrintMenu && <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)}></div>}
                     <button
                       type="button"
-                      onClick={handlePrintEO}
-                      className="px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium flex items-center border border-slate-200 text-sm whitespace-nowrap shrink-0"
+                      onClick={() => { setShowPrintMenu(!showPrintMenu); setShowSendMenu(false); }}
+                      className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showPrintMenu ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
                     >
-                      <Printer size={16} className="mr-2" /> EO
+                      <Printer size={16} />
+                      <span>列印文件 (Print)</span>
+                      <ChevronUp size={14} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} />
                     </button>
+
+{/* The Pop-up Menu */}
+                    {showPrintMenu && (
+                      <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 shadow-2xl rounded-xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+                        
+                        {/* Header: Internal */}
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">
+                          內部工作單 (Internal)
+                        </div>
+
+                        {/* EO */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { handlePrintEO(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <FileText size={14} className="mr-2" /> EO 行政 / 會計單
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('EO'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Briefing */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group mb-1">
+                          <button type="button" onClick={() => { handlePrintBriefing(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <Users size={14} className="mr-2" /> Briefing 樓面工作單
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('BRIEFING'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Header: Client Facing */}
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-t border-slate-100 mb-1 mt-1 bg-slate-50">
+                          客戶文件 (Client Facing)
+                        </div>
+                        
+                        {/* Menu */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { if (formData.menus && formData.menus.length > 1) setIsMenuSelectOpen(true); else handleMenuPrintSelection('all'); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <Utensils size={14} className="mr-2" /> Menu (菜譜確認)
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('MENU_CONFIRM'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Quotation */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { handlePrintQuotation(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <FileText size={14} className="mr-2" /> Quotation (報價單)
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('QUOTATION'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Contract EN */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { setTempPrintData(formData); setPrintMode('CONTRACT'); setTimeout(() => window.print(), 100); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <FileText size={14} className="mr-2" /> Contract (英文合約)
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('CONTRACT'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Contract CN */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { setTempPrintData(formData); setPrintMode('CONTRACT_CN'); setTimeout(() => window.print(), 100); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <FileText size={14} className="mr-2" /> Contract (中文合約)
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('CONTRACT_CN'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Invoice */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { setTempPrintData(formData); setPrintMode('INVOICE'); setTimeout(() => window.print(), 100); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <CreditCard size={14} className="mr-2" /> Invoice (發票)
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('INVOICE'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                        {/* Receipt */}
+                        <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group">
+                          <button type="button" onClick={() => { handlePrintReceipt(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors">
+                            <Receipt size={14} className="mr-2" /> Receipt (收據)
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDownloadPDF('RECEIPT'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF">
+                            <Download size={14} />
+                          </button>
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. NEW: SEND DROPDOWN MENU */}
+                {editingEvent && (
+                  <div className="relative">
+                    {showSendMenu && <div className="fixed inset-0 z-40" onClick={() => setShowSendMenu(false)}></div>}
                     <button
                       type="button"
-                      onClick={handlePrintBriefing}
-                      className="px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium flex items-center border border-indigo-200 text-sm whitespace-nowrap shrink-0"
+                      onClick={() => { setShowSendMenu(!showSendMenu); setShowPrintMenu(false); }}
+                      className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showSendMenu ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'}`}
                     >
-                      <Users size={16} className="mr-2" /> Brief
+                      <Send size={16} />
+                      <span>傳送給客戶 (Send)</span>
+                      <ChevronUp size={14} className={`transition-transform duration-200 ${showSendMenu ? 'rotate-180' : ''}`} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (formData.menus && formData.menus.length > 1) {
-                          setIsMenuSelectOpen(true);
-                        } else {
-                          handleMenuPrintSelection('all');
-                        }
-                      }}
-                      className="px-3 py-2 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg font-medium flex items-center border border-violet-200 text-sm whitespace-nowrap ml-2 shrink-0"
-                    >
-                      <Utensils size={16} className="mr-2" /> 菜譜
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePrintQuotation}
-                      className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium flex items-center border border-emerald-200 text-sm whitespace-nowrap shrink-0"
-                    >
-                      <FileText size={16} className="mr-2" /> Quotation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempPrintData(formData);
-                        setPrintMode('INVOICE');
-                        setTimeout(() => window.print(), 100);
-                      }}
-                      className="px-3 py-2 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-lg font-medium flex items-center border border-blue-200 text-sm whitespace-nowrap ml-2 shrink-0"
-                    >
-                      <FileText size={16} className="mr-2" /> Invoice
-                    </button>
-                    {/* Add this button right after the Invoice button */}
-                    <button
-                      type="button"
-                      onClick={handlePrintReceipt}
-                      className="px-3 py-2 bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-lg font-medium flex items-center border border-teal-200 text-sm whitespace-nowrap ml-2 shrink-0"
-                    >
-                      <Receipt size={16} className="mr-2" /> Receipt
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempPrintData(formData);
-                        setPrintMode('CONTRACT');
-                        setTimeout(() => window.print(), 100);
-                      }}
-                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap shrink-0"
-                    >
-                      <FileText size={16} className="mr-2" /> Contract
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPrintMode('CONTRACT_CN');
-                        setTimeout(() => window.print(), 100);
-                      }}
-                      className="px-3 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg font-medium flex items-center border border-amber-200 text-sm whitespace-nowrap ml-2 shrink-0"
-                    >
-                      <FileText size={16} className="mr-2" /> 中文合約
-                    </button>
-                  </>
+
+                    {/* The Pop-up Menu */}
+                    {/* The Send Pop-up Menu */}
+                    {showSendMenu && (
+                      <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 shadow-2xl rounded-xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">
+                          WhatsApp (SleekFlow API)
+                        </div>
+
+                        <button type="button" onClick={() => handleSendSleekFlow(false, 'INVOICE')} className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors flex items-start group">
+                          <MessageCircle size={16} className="mr-3 text-emerald-600 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="block text-sm font-bold text-slate-700 group-hover:text-emerald-700">發送 Invoice (標準訊息)</span>
+                            <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">附帶 AI 草稿與發票連結。<br />⚠️ 僅限客戶 24 小時內曾回覆</span>
+                          </div>
+                        </button>
+
+                        <button type="button" onClick={() => handleSendSleekFlow(true, 'CONTRACT')} className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-start group border-t border-slate-100 mb-1">
+                          <MessageCircle size={16} className="mr-3 text-slate-400 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="block text-sm font-bold text-slate-700">發送 Contract (HSM 模板)</span>
+                            <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">發送預先批核的通知模板。<br />✅ 適合超過 24 小時未聯絡的客戶</span>
+                          </div>
+                        </button>
+
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-t border-slate-100 mb-1 mt-1 bg-slate-50">
+                          電郵 (Email)
+                        </div>
+
+                        <button type="button" onClick={() => handleSendEmail('QUOTATION')} className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start group">
+                          <Mail size={16} className="mr-3 text-blue-500 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="block text-sm font-bold text-slate-700 group-hover:text-blue-700">發送 Quotation (電郵)</span>
+                            <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">開啟電郵系統並自動附上報價單下載連結</span>
+                          </div>
+                        </button>
+
+                        <button type="button" onClick={() => handleSendEmail('INVOICE')} className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start group border-t border-slate-100">
+                          <Mail size={16} className="mr-3 text-blue-500 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="block text-sm font-bold text-slate-700 group-hover:text-blue-700">發送 Invoice (電郵)</span>
+                            <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">開啟電郵系統並自動附上發票下載連結</span>
+                          </div>
+                        </button>
+
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
               {/* RIGHT SIDE: Cancel & Save */}
-              <div className="flex items-center space-x-3 pl-2 flex-shrink-0">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium">取消</button>
-                <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-lg whitespace-nowrap">儲存訂單</button>
+              <div className="flex items-center space-x-3 shrink-0">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition-colors">取消</button>
+                <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-lg transition-colors">儲存訂單</button>
               </div>
             </div>
           </form>
         </Modal>
       </div>
 
+      {/* ======================================================== */}
+      {/* 1. AI Assistant Popup */}
       {isAiOpen && (
         <AiAssistant
           formData={formData}
@@ -7522,14 +7790,22 @@ export default function App() {
           onClose={() => {
             setIsAiOpen(false);
             setAiPrompt('');
-            setTemplateMessage(null); // 清空模板
+            setTemplateMessage(null);
           }}
           initialPrompt={aiPrompt}
-          initialMessage={templateMessage} // 傳入模板
+          initialMessage={templateMessage}
         />
       )}
-      {/* ✅ PASTE THE CODE HERE ✅ */}
-      {/* Version Preview Modal */}
+
+      {/* 2. Data Assistant Popup */}
+      {isDataAiOpen && (
+        <DataAssistant
+          events={events}
+          onClose={() => setIsDataAiOpen(false)}
+        />
+      )}
+
+      {/* 3. Version Preview Modal */}
       <VersionPreviewModal
         isOpen={!!previewVersion}
         onClose={() => setPreviewVersion(null)}
@@ -7537,7 +7813,7 @@ export default function App() {
         onRestore={restoreMenuSnapshot}
       />
 
-      {/* Menu Selector Modal */}
+      {/* 4. Menu Selector Modal */}
       <MenuPrintSelector
         isOpen={isMenuSelectOpen}
         onClose={() => setIsMenuSelectOpen(false)}
@@ -7545,8 +7821,19 @@ export default function App() {
         onSelect={handleMenuPrintSelection}
       />
 
-      <div className="print-only">
-        {/* Use tempPrintData if available (for specific prints), otherwise default to formData */}
+      {/* 5. PDF Capture Area & Print Engine */}
+      <div
+        className="print-only"
+        id="document-capture-area"
+        style={{
+          // We force this off-screen so the PDF generator can always read it,
+          // without it breaking your normal screen layout!
+          position: 'absolute',
+          top: '-9999px',
+          left: '-9999px',
+          width: '210mm'
+        }}
+      >
         <PrintableEO data={tempPrintData || formData} printMode={printMode} />
       </div>
 

@@ -4909,7 +4909,8 @@ export default function App() {
       };
 
       // 3. Return the state with the calculated grandTotal
-      return updateFinanceState(newData);
+      // ✅ FIX: Changed 'newData' to 'updatedState'
+      return updateFinanceState(updatedState); 
     });
   };
 

@@ -111,6 +111,16 @@ const content = {
         { title: "VIP 接待酒會", img: "https://images.unsplash.com/photo-1561489413-985b06da5bee?q=80&w=2070" }
       ]
     },
+
+    Cases: {
+      title: "成功案例",
+      types: [
+        { title: "香港賽馬會", img: "https://images.unsplash.com/photo-1519671482538-518b5c2c681c?q=80&w=2068" },
+        { title: "A機構", img: "https://images.unsplash.com/photo-1544531696-dd1486aee99b?q=80&w=2070" },
+        { title: "B機構", img: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=2012" },
+        { title: "C機構", img: "https://images.unsplash.com/photo-1561489413-985b06da5bee?q=80&w=2070" }
+      ]
+    },  
     techSpecs: {
       tag: "專業設備",
       title: "為商務而設",
@@ -286,8 +296,26 @@ const Corporate = () => {
           </div>
         </div>
       </section>
+      
+      {/* 7. Successful case */}
+      <section className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-6">
+          <h2 className="text-4xl font-serif text-center mb-12 italic text-[#1a1a1a]">{t.Cases.title}</h2>
+          <div className="grid grid-cols-3 md:grid-cols-6 md:grid-rows-6 gap-6 ">
+            {t.Cases.types.map((type, i) => (
+              <div key={i} className="relative sq rounded-2xl overflow-hidden cursor-pointer group">
+                <img src={type.img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={type.title} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-6">
+                  <h3 className="text-white font-serif text-s">{type.title}</h3>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {/* 7. MENU PACKAGES */}
+
+      {/* 8. MENU PACKAGES */}
       <section className="py-24 bg-[#FDFBF7] relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 relative z-10">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-[#C5A059]/20 pb-8">

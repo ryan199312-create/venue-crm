@@ -2053,53 +2053,53 @@ const PrintableEO = ({ data, printMode }) => {
           </div>
 
           <div className="columns-2 gap-10 legal-text text-slate-700">
-            <div className="legal-header">1. Payment Terms</div>
+            <div className="legal-header">1. {isEn ? 'Payment Terms' : '付款條款'}</div>
             <p className="mb-3">
               {isEn
-                ? "Payment Methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be paid by the specified due dates. The final balance must be settled immediately upon conclusion. No personal cheques are accepted on the event day."
-                : "付款方式包括現金、信用卡或銀行轉賬 (中銀 012-875-2-082180-1)。訂金須於指定日期前支付，尾數須於宴會結束後即時結清。恕不接受宴會當日以個人支票支付尾數。"}
+                ? "Payment Methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be paid by the specified due dates. The final balance must be settled immediately before the event. No personal cheques are accepted on the event day."
+                : "付款方式包括現金、信用卡或銀行轉帳（BOC 012-875-2-082180-1）。付款必須在指定的到期日之前進行。最終餘額必須在活動前立即結清。活動當天不接受個人支票。"}
             </p>
 
-            <div className="legal-header">2. Postponement & Cancellation</div>
+            <div className="legal-header">2. {isEn ? 'Postponement & Cancellation' : '延期和取消'}</div>
             <p className="mb-3">
               {isEn
-                ? "Events may be postponed once with >3 months notice. Cancellation forfeit depends on notice: Confirmed period (1st & 2nd payment); 1 month prior (90% min spend); 1 week prior (100% min spend)."
-                : "活動可於3個月前通知下延期一次。取消罰則：確認期內（扣除第一及二期訂金）；活動前1個月（扣除最低消費90%）；活動前1週（扣除最低消費100%）。"}
+                ? "Events may be postponed once with >3 or >6 months' notice (subject to a rescheduling fee of HK$10,000). Cancellation forfeit depends on notice: Confirmed period (1st & 2nd payment); 1 month prior (90% min spend); 1 week prior (100% min spend)."
+                : "活動可在提前3個月或6個月以上通知的情況下延期一次 (收取改期費 HK$10,000)。取消罰金根據通知的時間而定：確認期（扣除第一次和第二次付款）；提前1個月（最低消費90%）；提前1周（最低消費100%）。"}
             </p>
 
-            <div className="legal-header">3. Weather Policy</div>
+            <div className="legal-header">3. {isEn ? 'Weather Policy' : '天氣政策'}</div>
             <p className="mb-3">
               {isEn
-                ? "In Signal 8 or Black Rain, the event may be rescheduled within 3 months. In Signal 3 or Red/Yellow Rain, the event proceeds as scheduled; cancellation is treated as standard."
-                : "八號風球或黑雨警告下，活動可於3個月內延期。三號風球或紅/黃雨警告下，活動如常舉行；如取消將視作一般取消處理。"}
+                ? "In Signal 8 or Black Rain, the event may be rescheduled within 3 months and the rescheduling fee will be waived. In Signal 3 or Red/Yellow Rain, the event proceeds as scheduled; cancellation is treated as standard."
+                : "在8號風球或黑雨的情況下，活動可在3個月內重新安排並豁免改期費。在3號風球或紅/黃雨的情況下，活動按計劃進行；取消將視為標準處理。"}
             </p>
 
-            <div className="legal-header">4. House Rules</div>
+            <div className="legal-header">4. {isEn ? 'House Rules' : '場地規則'}</div>
             <p className="mb-3">
               {isEn
                 ? "No outside food/drink without consent. Decorations must only use 'Blu-tack'. Smoking is prohibited. The Venue reserves the right to stop unsafe activities."
-                : "未經許可不得自攜飲食。佈置僅限使用寶貼(Blu-tack)。全場禁煙。場地保留終止不安全活動之權利。"}
+                : "未經同意不得攜帶外部食物/飲品。裝飾必須僅使用「Blu-tack」。禁止吸煙。場地保留停止不安全活動的權利。"}
             </p>
 
-            <div className="legal-header">5. Liability</div>
+            <div className="legal-header">5. {isEn ? 'Liability' : '責任'}</div>
             <p className="mb-3">
               {isEn
                 ? "The Client is liable for damages caused by guests or contractors and agrees to indemnify the venue against losses arising from the event."
-                : "客戶須對賓客或承辦商造成之損壞負責，並同意賠償因活動引起之場地損失。"}
+                : "客戶對客人或承包商造成的損害負責，並同意對活動造成的損失對場地進行賠償。"}
             </p>
 
-            <div className="legal-header">6. Force Majeure</div>
+            <div className="legal-header">6. {isEn ? 'Force Majeure' : '不可抗力'}</div>
             <p className="mb-3">
               {isEn
-                ? "If the event is cancelled due to government restrictions or acts of God, a full refund or free rescheduling will be offered."
-                : "如因政府禁令或不可抗力導致活動取消，場地將提供全數退款或免費延期。"}
+                ? "If the event is cancelled due to government restrictions or force majeure events, a full refund or free rescheduling will be offered."
+                : "如果場地因政府限制或不可抗力事件導致活動取消，將提供全額退款或免費重新安排。"}
             </p>
 
-            <div className="legal-header">7. General</div>
+            <div className="legal-header">7. {isEn ? 'General' : '一般條款'}</div>
             <p className="mb-3">
               {isEn
-                ? "Governed by HK laws. Terms are confidential. Credit card payments incur a 3% surcharge."
-                : "受香港法律管轄。條款內容保密。信用卡付款需加收3%附加費。"}
+                ? "Governed by HK laws. Terms are confidential. Credit card and remittance payments incur a 3% surcharge."
+                : "受香港法律管轄。條款為保密信息。信用卡及匯款付款將產生3%的手續費。"}
             </p>
           </div>
         </div>

@@ -2056,36 +2056,36 @@ const PrintableEO = ({ data, printMode }) => {
             <div className="legal-header">1. {isEn ? 'Payment Terms' : '付款條款'}</div>
             <p className="mb-3">
               {isEn
-                ? "Payment Methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be paid by the specified due dates. The final balance must be settled immediately before the event. No personal cheques are accepted on the event day."
-                : "付款方式包括現金、信用卡或銀行轉帳（BOC 012-875-2-082180-1）。付款必須在指定的到期日之前進行。最終餘額必須在活動前立即結清。活動當天不接受個人支票。"}
+                ? "Payment methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be made on or before the specified due dates. The final balance must be settled immediately before the event. Personal cheques are not accepted on the event day."
+                : "付款方式包括現金、信用卡或銀行轉帳（BOC 012-875-2-082180-1）。付款必須在指定的到期日或之前進行。最終餘額必須在活動前立即結清。活動當天不接受個人支票。"}
             </p>
 
             <div className="legal-header">2. {isEn ? 'Postponement & Cancellation' : '延期和取消'}</div>
             <p className="mb-3">
               {isEn
-                ? "Events may be postponed once with >3 or >6 months' notice (subject to a rescheduling fee of HK$10,000). Cancellation forfeit depends on notice: Confirmed period (1st & 2nd payment); 1 month prior (90% min spend); 1 week prior (100% min spend)."
+                ? "The event may be postponed once with over 3 or 6 months' notice (subject to a rescheduling fee of HK$10,000). Cancellation penalties depend on the notice period: Confirmed period (forfeiture of 1st and 2nd payments); 1 month prior (90% of minimum spend); 1 week prior (100% of minimum spend)."
                 : "活動可在提前3個月或6個月以上通知的情況下延期一次 (收取改期費 HK$10,000)。取消罰金根據通知的時間而定：確認期（扣除第一次和第二次付款）；提前1個月（最低消費90%）；提前1周（最低消費100%）。"}
             </p>
 
             <div className="legal-header">3. {isEn ? 'Weather Policy' : '天氣政策'}</div>
             <p className="mb-3">
               {isEn
-                ? "In Signal 8 or Black Rain, the event may be rescheduled within 3 months and the rescheduling fee will be waived. In Signal 3 or Red/Yellow Rain, the event proceeds as scheduled; cancellation is treated as standard."
-                : "在8號風球或黑雨的情況下，活動可在3個月內重新安排並豁免改期費。在3號風球或紅/黃雨的情況下，活動按計劃進行；取消將視為標準處理。"}
+                ? "In the event of Typhoon Signal No. 8 or above, the event may be rescheduled within 3 months with the rescheduling fee waived. In the event of Typhoon Signal No. 3 or Red/Black Rainstorm Warning, the event will proceed as scheduled; cancellations will be treated under the standard cancellation policy."
+                : "在8號風球或以上的情況，活動可在3個月內重新安排並豁免改期費。在3號風球或紅/黑雨的情況下，活動按計劃進行；取消將視為標準處理。"}
             </p>
 
             <div className="legal-header">4. {isEn ? 'House Rules' : '場地規則'}</div>
             <p className="mb-3">
               {isEn
-                ? "No outside food/drink without consent. Decorations must only use 'Blu-tack'. Smoking is prohibited. The Venue reserves the right to stop unsafe activities."
-                : "未經同意不得攜帶外部食物/飲品。裝飾必須僅使用「Blu-tack」。禁止吸煙。場地保留停止不安全活動的權利。"}
+                ? "No outside food or drinks may be consumed within King Lung Heen premises. Only 'Blu-tack' may be used for decorations; no other materials or methods are permitted. Smoking is strictly prohibited in all indoor areas. The Venue reserves the right to halt any unsafe activities."
+                : "任何人士不得攜帶外部食物/飲品於璟瓏軒場地內進食。裝飾黏貼只可使用「Blu-tack」，不可使用其他物料或方法。所有室內範圍禁止吸煙。場地保留停止不安全活動的權利。"}
             </p>
 
             <div className="legal-header">5. {isEn ? 'Liability' : '責任'}</div>
             <p className="mb-3">
               {isEn
-                ? "The Client is liable for damages caused by guests or contractors and agrees to indemnify the venue against losses arising from the event."
-                : "客戶對客人或承包商造成的損害負責，並同意對活動造成的損失對場地進行賠償。"}
+                ? "The Client is liable for any damages caused by guests or contractors, and agrees to indemnify the venue for any losses arising from the event."
+                : "客戶對賓客或承包商造成的損害負責，並同意對活動造成的損失對場地進行賠償。"}
             </p>
 
             <div className="legal-header">6. {isEn ? 'Force Majeure' : '不可抗力'}</div>
@@ -2098,7 +2098,7 @@ const PrintableEO = ({ data, printMode }) => {
             <div className="legal-header">7. {isEn ? 'General' : '一般條款'}</div>
             <p className="mb-3">
               {isEn
-                ? "Governed by HK laws. Terms are confidential. Credit card and remittance payments incur a 3% surcharge."
+                ? "Governed by Hong Kong laws. Terms are confidential. Credit card and remittance payments will incur a 3% surcharge."
                 : "受香港法律管轄。條款為保密信息。信用卡及匯款付款將產生3%的手續費。"}
             </p>
           </div>
@@ -2379,15 +2379,15 @@ const PrintableEO = ({ data, printMode }) => {
 
     if (data.deposit1Received && safeFloat(data.deposit1) > 0) {
       totalPaid += safeFloat(data.deposit1);
-      paidItems.push({ label: '第一期訂金 (1st Deposit)', amount: safeFloat(data.deposit1), date: data.deposit1Date });
+      paidItems.push({ label: '第一期訂金 (1st Payment)', amount: safeFloat(data.deposit1), date: data.deposit1Date });
     }
     if (data.deposit2Received && safeFloat(data.deposit2) > 0) {
       totalPaid += safeFloat(data.deposit2);
-      paidItems.push({ label: '第二期訂金 (2nd Deposit)', amount: safeFloat(data.deposit2), date: data.deposit2Date });
+      paidItems.push({ label: '第二期訂金 (2nd Payment)', amount: safeFloat(data.deposit2), date: data.deposit2Date });
     }
     if (data.deposit3Received && safeFloat(data.deposit3) > 0) {
       totalPaid += safeFloat(data.deposit3);
-      paidItems.push({ label: '第三期訂金 (3rd Deposit)', amount: safeFloat(data.deposit3), date: data.deposit3Date });
+      paidItems.push({ label: '第三期訂金 (3rd Payment)', amount: safeFloat(data.deposit3), date: data.deposit3Date });
     }
     if (data.balanceReceived) {
       // If balance is marked received, calculate exactly how much that remainder was

@@ -2044,65 +2044,65 @@ const PrintableEO = ({ data, printMode }) => {
 
         <div className="page-break"></div>
 
-        {/* --- PAGE 2: TERMS & CONDITIONS --- */}
-        <div className="mt-8 px-4">
-          <div className="text-center mb-6">
-            <h3 className="inline-block font-black uppercase text-sm tracking-[0.2em] border-b-2 pb-1" style={{ color: BRAND_COLOR, borderColor: BRAND_COLOR }}>
-              {isEn ? 'Terms and Conditions' : '條款及細則'}
-            </h3>
-          </div>
-
-          <div className="columns-2 gap-10 legal-text text-slate-700">
-            <div className="legal-header">1. {isEn ? 'Payment Terms' : '付款條款'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "Payment methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be made on or before the specified due dates. The final balance must be settled immediately before the event. Personal cheques are not accepted on the event day."
-                : "付款方式包括現金、信用卡或銀行轉帳（BOC 012-875-2-082180-1）。付款必須在指定的到期日或之前進行。最終餘額必須在活動前立即結清。活動當天不接受個人支票。"}
-            </p>
-
-            <div className="legal-header">2. {isEn ? 'Postponement & Cancellation' : '延期和取消'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "The event may be postponed once with over 3 or 6 months' notice (subject to a rescheduling fee of HK$10,000). Cancellation penalties depend on the notice period: Confirmed period (forfeiture of 1st and 2nd payments); 1 month prior (90% of minimum spend); 1 week prior (100% of minimum spend)."
-                : "活動可在提前3個月或6個月以上通知的情況下延期一次 (收取改期費 HK$10,000)。取消罰金根據通知的時間而定：確認期（扣除第一次和第二次付款）；提前1個月（最低消費90%）；提前1周（最低消費100%）。"}
-            </p>
-
-            <div className="legal-header">3. {isEn ? 'Weather Policy' : '天氣政策'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "In the event of Typhoon Signal No. 8 or above, the event may be rescheduled within 3 months with the rescheduling fee waived. In the event of Typhoon Signal No. 3 or Red/Black Rainstorm Warning, the event will proceed as scheduled; cancellations will be treated under the standard cancellation policy."
-                : "在8號風球或以上的情況，活動可在3個月內重新安排並豁免改期費。在3號風球或紅/黑雨的情況下，活動按計劃進行；取消將視為標準處理。"}
-            </p>
-
-            <div className="legal-header">4. {isEn ? 'House Rules' : '場地規則'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "No outside food or drinks may be consumed within King Lung Heen premises. Only 'Blu-tack' may be used for decorations; no other materials or methods are permitted. Smoking is strictly prohibited in all indoor areas. The Venue reserves the right to halt any unsafe activities."
-                : "任何人士不得攜帶外部食物/飲品於璟瓏軒場地內進食。裝飾黏貼只可使用「Blu-tack」，不可使用其他物料或方法。所有室內範圍禁止吸煙。場地保留停止不安全活動的權利。"}
-            </p>
-
-            <div className="legal-header">5. {isEn ? 'Liability' : '責任'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "The Client is liable for any damages caused by guests or contractors, and agrees to indemnify the venue for any losses arising from the event."
-                : "客戶對賓客或承包商造成的損害負責，並同意對活動造成的損失對場地進行賠償。"}
-            </p>
-
-            <div className="legal-header">6. {isEn ? 'Force Majeure' : '不可抗力'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "If the event is cancelled due to government restrictions or force majeure events, a full refund or free rescheduling will be offered."
-                : "如果場地因政府限制或不可抗力事件導致活動取消，將提供全額退款或免費重新安排。"}
-            </p>
-
-            <div className="legal-header">7. {isEn ? 'General' : '一般條款'}</div>
-            <p className="mb-3">
-              {isEn
-                ? "Governed by Hong Kong laws. Terms are confidential. Credit card and remittance payments will incur a 3% surcharge."
-                : "受香港法律管轄。條款為保密信息。信用卡及匯款付款將產生3%的手續費。"}
-            </p>
-          </div>
+      {/* --- PAGE 2: TERMS & CONDITIONS --- */}
+      <div className="mt-8 px-4">
+        <div className="text-center mb-6">
+          <h3 className="inline-block font-black uppercase text-sm tracking-[0.2em] border-b-2 pb-1" style={{ color: BRAND_COLOR, borderColor: BRAND_COLOR }}>
+            {isEn ? 'Terms and Conditions' : '條款及細則'}
+          </h3>
         </div>
+
+        <div className="columns-2 gap-10 legal-text text-slate-700">
+          <div className="legal-header">1. {isEn ? 'Payment Terms' : '付款條款'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "Payment methods include Cash, Credit Card, or Bank Transfer (BOC 012-875-2-082180-1). Payments must be made before the specified due dates. The final balance must be settled before the event."
+              : "付款方式包括現金、信用卡或銀行轉帳（BOC 012-875-2-082180-1）。付款必須在指定的到期日之前進行。最終餘額必須在活動前結清。"}
+          </p>
+
+          <div className="legal-header">2. {isEn ? 'Postponement & Cancellation' : '延期和取消'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "The event may be postponed once with over 3 or 6 months' notice (subject to a rescheduling fee of HKD 10,000 - 20,000). Cancellation penalties: Confirmed period (forfeiture of 1st and 2nd payments); 1 month prior (90% of minimum spend); 1 week prior (100% of minimum spend)."
+              : "活動可在提前3或6個月個月以上通知的情況下延期一次，需支付改期費 HKD 10,000 - 20,000。取消罰金根據通知的時間而定：確認期（第一次和第二次付款）；提前1個月（最低消費90%）；提前1周（最低消費100%）。"}
+          </p>
+
+          <div className="legal-header">3. {isEn ? 'Weather Policy' : '天氣政策'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "In the event of Typhoon Signal No. 8 or Black Rainstorm Warning, the event may be rescheduled within 3 months. Under Typhoon Signal No. 3 or Red/Yellow Rainstorm Warning, the event will proceed as scheduled; cancellations follow standard policy."
+              : "在8號風球或黑雨的情況下，活動可在3個月內重新安排。在3號風球或紅/黃雨的情況下，活動按計劃進行；取消將視為標準處理。"}
+          </p>
+
+          <div className="legal-header">4. {isEn ? 'House Rules' : '場地規則'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "No outside food/drinks without consent. Use only 'Blu-tack' for decorations. No smoking. The venue may stop unsafe activities. Floor plans, construction details, workflows, and material lists must be submitted 30 days prior. Installations over 3m require RSE and valid insurance. Venue deposit: HKD 10,000 - 50,000."
+              : "未經同意不得攜帶外部食物/飲品。裝飾必須僅使用“Blu-tack”。禁止吸煙。場地保留停止不安全活動的權利。場地佈置需活動前30天提交平面圖、施工細節，施工流程及物料清單等。若高於3米裝置，需提交RSE及有效保險單。使用場地按金HKD 10,000至50,000。"}
+          </p>
+
+          <div className="legal-header">5. {isEn ? 'Liability' : '責任'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "The Client is liable for damages caused by guests or contractors and agrees to indemnify the venue for any losses arising from the event."
+              : "客戶對客人或承包商造成的損害負責，並同意對活動造成的損失對場地進行賠償。"}
+          </p>
+
+          <div className="legal-header">6. {isEn ? 'Force Majeure' : '不可抗力'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "If the event is cancelled due to government restrictions or force majeure, a full refund or free rescheduling will be offered."
+              : "如果場地因政府限制或不可抗力事件導致活動取消，將提供全額退款或免費重新安排。"}
+          </p>
+
+          <div className="legal-header">7. {isEn ? 'General' : '一般條款'}</div>
+          <p className="mb-3">
+            {isEn
+              ? "Governed by HK laws. Terms are confidential. Remittance or credit card payments incur a 3% surcharge. Uncovered details may be drafted separately subject to mutual agreement and authorized signatures."
+              : "本合約受香港法律管轄，相關條款為保密信息。進行匯款或信用卡付款將產生3%的手續費。未涵蓋的細節部分可另行撰寫，並需經雙方同意及授權簽署。"}
+          </p>
+        </div>
+      </div>
 
         {/* --- SIGNATURE SECTION --- */}
         <div className="mt-12 px-8 pt-8 border-t-2 border-slate-200 break-inside-avoid bg-slate-50/50 rounded-t-2xl">

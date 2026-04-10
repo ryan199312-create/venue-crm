@@ -1676,7 +1676,7 @@ const PrintableEO = ({ data, printMode }) => {
           <div className="text-[9px] text-slate-400 leading-tight">
             <p className="mb-1 font-bold text-slate-500">Terms & Conditions:</p>
             1. This quotation is valid for 14 days.<br />
-            2. Cheques should be made payable to "best wish investment limited".<br />
+            2. Cheques should be made payable to "Best Wish Investment Limited T/A King Lung Heen".<br />
             3. A 3% surcharge will be applied to all credit card payments.<br />
             4. This document is computer generated. No signature is required.
           </div>
@@ -1998,9 +1998,9 @@ const PrintableEO = ({ data, printMode }) => {
                   <thead><tr className="text-[8px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200"><th className="pb-2">{isEn ? 'Installment' : '期數'}</th><th className="pb-2">{isEn ? 'Due Date' : '付款日期'}</th><th className="pb-2 text-right">{isEn ? 'Amount' : '金額'}</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {[
-                      { l: isEn ? 'Initial Payment' : '第一期訂金', a: billing.dep1, d: data.deposit1Date },
-                      { l: isEn ? 'Second Payment' : '第二期訂金', a: billing.dep2, d: data.deposit2Date },
-                      { l: isEn ? 'Third Payment' : '第三期訂金', a: billing.dep3, d: data.deposit3Date },
+                      { l: isEn ? 'Initial Payment' : '第一期付款', a: billing.dep1, d: data.deposit1Date },
+                      { l: isEn ? 'Second Payment' : '第二期付款', a: billing.dep2, d: data.deposit2Date },
+                      { l: isEn ? 'Third Payment' : '第三期付款', a: billing.dep3, d: data.deposit3Date },
                     ].map((item, i) => item.a > 0 && (
                       <tr key={i} className="text-xs">
                         <td className="py-2.5 font-bold text-slate-700">{item.l}</td>
@@ -2379,15 +2379,15 @@ const PrintableEO = ({ data, printMode }) => {
 
     if (data.deposit1Received && safeFloat(data.deposit1) > 0) {
       totalPaid += safeFloat(data.deposit1);
-      paidItems.push({ label: '第一期訂金 (1st Payment)', amount: safeFloat(data.deposit1), date: data.deposit1Date });
+      paidItems.push({ label: '第一期付款 (1st Payment)', amount: safeFloat(data.deposit1), date: data.deposit1Date });
     }
     if (data.deposit2Received && safeFloat(data.deposit2) > 0) {
       totalPaid += safeFloat(data.deposit2);
-      paidItems.push({ label: '第二期訂金 (2nd Payment)', amount: safeFloat(data.deposit2), date: data.deposit2Date });
+      paidItems.push({ label: '第二期付款 (2nd Payment)', amount: safeFloat(data.deposit2), date: data.deposit2Date });
     }
     if (data.deposit3Received && safeFloat(data.deposit3) > 0) {
       totalPaid += safeFloat(data.deposit3);
-      paidItems.push({ label: '第三期訂金 (3rd Payment)', amount: safeFloat(data.deposit3), date: data.deposit3Date });
+      paidItems.push({ label: '第三期付款 (3rd Payment)', amount: safeFloat(data.deposit3), date: data.deposit3Date });
     }
     if (data.balanceReceived) {
       // If balance is marked received, calculate exactly how much that remainder was
@@ -3073,9 +3073,9 @@ const PrintableEO = ({ data, printMode }) => {
                           <tr className="border-t border-slate-800"><td colSpan="3" className="text-right font-bold pt-1 text-sm">總金額 (TOTAL)</td><td className="text-right font-bold font-mono pt-1 text-sm text-black">${formatMoney(billing.grandTotal)}</td></tr>
 
                           {[
-                            { l: '訂金 1', a: billing.dep1, d: data.deposit1Date, received: data.deposit1Received },
-                            { l: '訂金 2', a: billing.dep2, d: data.deposit2Date, received: data.deposit2Received },
-                            { l: '訂金 3', a: billing.dep3, d: data.deposit3Date, received: data.deposit3Received }
+                            { l: '付款 1', a: billing.dep1, d: data.deposit1Date, received: data.deposit1Received },
+                            { l: '付款 2', a: billing.dep2, d: data.deposit2Date, received: data.deposit2Received },
+                            { l: '付款 3', a: billing.dep3, d: data.deposit3Date, received: data.deposit3Received }
                           ].map((item, i) => (item.a > 0 ? (
                             <tr key={i}>
                               <td colSpan="3" className="text-right text-slate-500 text-[10px] py-1">
@@ -3333,7 +3333,7 @@ const SettingsView = ({ settings, onSave, addToast }) => {
     addToast("菜單已儲存", "success");
   };
   const handleDeleteMenu = (id) => { const updatedSettings = { ...localSettings, defaultMenus: localSettings.defaultMenus.filter(m => m.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
-  const handleSavePaymentRule = () => { /* (Keep existing logic) */ if (!editingPaymentRule.name) return addToast("請輸入規則名稱", "error"); const totalPercent = editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3; if (totalPercent > 100) return addToast("錯誤：訂金總比例不能超過 100%", "error"); const newRules = [...(localSettings.paymentRules || [])]; if (editingPaymentRule.id) { const idx = newRules.findIndex(r => r.id === editingPaymentRule.id); if (idx !== -1) newRules[idx] = editingPaymentRule; } else { newRules.push({ ...editingPaymentRule, id: Date.now() }); } newRules.sort((a, b) => b.minMonthsInAdvance - a.minMonthsInAdvance); const updatedSettings = { ...localSettings, paymentRules: newRules }; setLocalSettings(updatedSettings); onSave(updatedSettings); setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 }); addToast("付款規則已儲存", "success"); };
+  const handleSavePaymentRule = () => { /* (Keep existing logic) */ if (!editingPaymentRule.name) return addToast("請輸入規則名稱", "error"); const totalPercent = editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3; if (totalPercent > 100) return addToast("錯誤：付款總比例不能超過 100%", "error"); const newRules = [...(localSettings.paymentRules || [])]; if (editingPaymentRule.id) { const idx = newRules.findIndex(r => r.id === editingPaymentRule.id); if (idx !== -1) newRules[idx] = editingPaymentRule; } else { newRules.push({ ...editingPaymentRule, id: Date.now() }); } newRules.sort((a, b) => b.minMonthsInAdvance - a.minMonthsInAdvance); const updatedSettings = { ...localSettings, paymentRules: newRules }; setLocalSettings(updatedSettings); onSave(updatedSettings); setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 }); addToast("付款規則已儲存", "success"); };
   const handleDeletePaymentRule = (id) => { const updatedSettings = { ...localSettings, paymentRules: localSettings.paymentRules.filter(r => r.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
 
   // Helper to safely get nested price
@@ -3551,7 +3551,7 @@ const SettingsView = ({ settings, onSave, addToast }) => {
                     {/* Deposit 1 */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-xs font-bold text-slate-600">訂金 1 (%)</label>
+                        <label className="text-xs font-bold text-slate-600">付款 1 (%)</label>
                         <div className="relative">
                           <input type="number" value={editingPaymentRule.deposit1} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit1: parseFloat(e.target.value) || 0 }))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none" />
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
@@ -3569,7 +3569,7 @@ const SettingsView = ({ settings, onSave, addToast }) => {
                     {/* Deposit 2 */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-xs font-bold text-slate-600">訂金 2 (%)</label>
+                        <label className="text-xs font-bold text-slate-600">付款 2 (%)</label>
                         <div className="relative">
                           <input type="number" value={editingPaymentRule.deposit2} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit2: parseFloat(e.target.value) || 0 }))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none" />
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
@@ -3588,7 +3588,7 @@ const SettingsView = ({ settings, onSave, addToast }) => {
                     {/* Deposit 3 */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-xs font-bold text-slate-600">訂金 3 (%)</label>
+                        <label className="text-xs font-bold text-slate-600">付款 3 (%)</label>
                         <div className="relative">
                           <input type="number" value={editingPaymentRule.deposit3} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit3: parseFloat(e.target.value) || 0 }))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none" />
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
@@ -3717,9 +3717,9 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
         }
       };
 
-      check(e.deposit1, e.deposit1Received, e.deposit1Date, '訂金 1');
-      check(e.deposit2, e.deposit2Received, e.deposit2Date, '訂金 2');
-      check(e.deposit3, e.deposit3Received, e.deposit3Date, '訂金 3');
+      check(e.deposit1, e.deposit1Received, e.deposit1Date, '付款 1');
+      check(e.deposit2, e.deposit2Received, e.deposit2Date, '付款 2');
+      check(e.deposit3, e.deposit3Received, e.deposit3Date, '付款 3');
 
       // Balance check
       let balanceDate = e.date;
@@ -3755,9 +3755,9 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
         }
       };
 
-      check(e.deposit1, e.deposit1Received, e.deposit1Date, '訂金 1');
-      check(e.deposit2, e.deposit2Received, e.deposit2Date, '訂金 2');
-      check(e.deposit3, e.deposit3Received, e.deposit3Date, '訂金 3');
+      check(e.deposit1, e.deposit1Received, e.deposit1Date, '付款 1');
+      check(e.deposit2, e.deposit2Received, e.deposit2Date, '付款 2');
+      check(e.deposit3, e.deposit3Received, e.deposit3Date, '付款 3');
 
       // Balance check
       let balanceDate = e.date;
@@ -4294,6 +4294,8 @@ export default function App() {
 
   const [formData, setFormData] = useState(initialFormState);
   const [formTab, setFormTab] = useState('basic');
+
+  const billingSummary = useMemo(() => generateBillingSummary(formData), [formData]);
 
   // --- JUMP TO ALLOCATION LOGIC ---
   const [highlightTarget, setHighlightTarget] = useState(null);
@@ -5262,6 +5264,31 @@ export default function App() {
   // ==========================================
   // 📤 COMMUNICATION HANDLERS
   // ==========================================
+  const generateAndUploadPDF = async (docType) => {
+    try {
+      // Note: generatePDFBase64 now correctly does NOT auto-download.
+      const pdfData = await generatePDFBase64(docType);
+      if (!pdfData) return null;
+
+      addToast("正在上傳文件...", "info");
+
+      // Convert base64 to blob
+      const pdfBlob = await (await fetch(`data:application/pdf;base64,${pdfData.pdfBase64}`)).blob();
+
+      // Upload to Firebase Storage
+      const storageRef = ref(storage, `documents/${pdfData.fileName}`);
+      await uploadBytes(storageRef, pdfBlob);
+      const downloadUrl = await getDownloadURL(storageRef);
+      
+      addToast("文件上傳成功！", "success");
+      return downloadUrl;
+
+    } catch (error) {
+      console.error("PDF Upload Error:", error);
+      addToast(`文件上傳失敗: ${error.message}`, "error");
+      return null;
+    }
+  };
 
   // 1. Send via Email (Uses native mail client with AI Draft)
   // ==========================================
@@ -5323,10 +5350,8 @@ export default function App() {
       
       const fileName = `${formData.orderId}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
       
-      // ✅ 1. 自動下載一份到使用者的電腦
-      pdf.save(fileName);
-
-      // ✅ 2. 抽取 Base64 字串 (不含前綴) 準備傳給後端
+      // No auto-download here. This function just generates the data.
+      // The handleDownloadPDF function will handle the saving.
       const dataUri = pdf.output('datauristring');
       const base64Data = dataUri.split(',')[1]; 
 
@@ -6760,114 +6785,44 @@ export default function App() {
                     </div>
 
                     {/* Calculator */}
-                    {(() => {
-                      let scBase = 0;
-                      let subTotal = 0;
-
-                      // 1. Menus
-                      (formData.menus || []).forEach(m => {
-                        const amt = safeFloat(m.price) * safeFloat(m.qty);
-                        subTotal += amt;
-                        if (m.applySC !== false) scBase += amt;
-                      });
-
-                      // 2. Plating
-                      const platingTotal = (formData.servingStyle === '位上') ? safeFloat(formData.platingFee) * safeFloat(formData.tableCount) : 0;
-                      if (platingTotal > 0) {
-                        subTotal += platingTotal;
-                        if (formData.platingFeeApplySC !== false) scBase += platingTotal;
-                      }
-
-                      // 3. Drinks
-                      const drinksTotal = safeFloat(formData.drinksPrice) * safeFloat(formData.drinksQty);
-                      subTotal += drinksTotal;
-                      if (formData.drinksApplySC !== false) scBase += drinksTotal;
-
-                      // 4. Custom Items
-                      (formData.customItems || []).forEach(i => {
-                        const amt = safeFloat(i.price) * safeFloat(i.qty);
-                        subTotal += amt;
-                        if (i.applySC) scBase += amt;
-                      });
-
-                      // 5. Bus Arrangement
-                      const busTotal = formData.busInfo?.enabled ? safeFloat(formData.busCharge) : 0;
-                      if (formData.busInfo?.enabled) {
-                        subTotal += busTotal;
-                        if (formData.busApplySC) scBase += busTotal;
-                      }
-
-                      // 🌟 6. CATEGORY PACKAGES (Setup, AV, Decor) 🌟
-                      const setupTotal = safeFloat(formData.setupPackagePrice);
-                      if (setupTotal > 0) {
-                        subTotal += setupTotal;
-                        if (formData.setupApplySC !== false) scBase += setupTotal;
-                      }
-
-                      const avTotal = safeFloat(formData.avPackagePrice);
-                      if (avTotal > 0) {
-                        subTotal += avTotal;
-                        if (formData.avApplySC !== false) scBase += avTotal;
-                      }
-
-                      const decorTotal = safeFloat(formData.decorPackagePrice);
-                      if (decorTotal > 0) {
-                        subTotal += decorTotal;
-                        if (formData.decorApplySC !== false) scBase += decorTotal;
-                      }
-
-                      // ✅ STRICT 10% CALCULATION
-                      let scAmount = 0;
-                      if (formData.enableServiceCharge !== false) {
-                        scAmount = scBase * 0.1;
-                      }
-
-                      const discountAmt = safeFloat(formData.discount);
-                      const baseTotal = subTotal + scAmount - discountAmt;
-                      const ccSurcharge = formData.paymentMethod === '信用卡' ? baseTotal * 0.03 : 0;
-                      const grandTotal = Math.round(baseTotal + ccSurcharge);
-
-                      return (
-                        <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                          <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                            <label className="flex items-center cursor-pointer text-sm text-slate-600 select-none hover:text-blue-600 transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={formData.enableServiceCharge !== false}
-                                onChange={e => setFormData(prev => ({ ...prev, enableServiceCharge: e.target.checked, totalAmount: generateBillingSummary({ ...prev, enableServiceCharge: e.target.checked }) }))}
-                                className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
-                              />
-                              <span className="font-bold">服務費 (10%)</span>
-                            </label>
-                            <div className="text-right">
-                              <span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>
-                                + ${formatMoney(scAmount)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                            <span className="text-sm font-bold text-slate-600">折扣 (Discount)</span>
-                            <div className="relative w-28">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span>
-                              <input type="text" value={formData.discount || ''} onChange={handlePriceChange} name="discount" className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono font-bold pl-6 pb-1 bg-transparent" placeholder="0" />
-                            </div>
-                          </div>
-
-                          {ccSurcharge > 0 && (
-                            <div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-5 px-5 pt-3">
-                              <span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span>
-                              <span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(ccSurcharge)}</span>
-                            </div>
-                          )}
-
-                          <div className="flex justify-between items-center pt-2">
-                            <span className="text-base font-bold text-slate-800">總金額 (Total)</span>
-                            <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(grandTotal)}</span>
-                          </div>
+                    <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                        <label className="flex items-center cursor-pointer text-sm text-slate-600 select-none hover:text-blue-600 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={formData.enableServiceCharge !== false}
+                            onChange={e => setFormData(prev => ({ ...prev, enableServiceCharge: e.target.checked, totalAmount: generateBillingSummary({ ...prev, enableServiceCharge: e.target.checked }) }))}
+                            className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                          />
+                          <span className="font-bold">服務費 (10%)</span>
+                        </label>
+                        <div className="text-right">
+                          <span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>
+                            + ${formatMoney(billingSummary.serviceChargeVal)}
+                          </span>
                         </div>
-                      );
-                    })()}
+                      </div>
+
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                        <span className="text-sm font-bold text-slate-600">折扣 (Discount)</span>
+                        <div className="relative w-28">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span>
+                          <input type="text" value={formData.discount || ''} onChange={handlePriceChange} name="discount" className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono font-bold pl-6 pb-1 bg-transparent" placeholder="0" />
+                        </div>
+                      </div>
+
+                      {billingSummary.ccSurcharge > 0 && (
+                        <div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-5 px-5 pt-3">
+                          <span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span>
+                          <span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(billingSummary.ccSurcharge)}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center pt-2">
+                        <span className="text-base font-bold text-slate-800">總金額 (Total)</span>
+                        <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(billingSummary.grandTotal)}</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* 8. PAYMENT SCHEDULE */}
@@ -6899,9 +6854,9 @@ export default function App() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-4">
-                      <DepositField label="訂金一" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof} />
-                      <DepositField label="訂金二" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof} />
-                      <DepositField label="訂金三" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof} />
+                      <DepositField label="付款一" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof} />
+                      <DepositField label="付款二" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof} />
+                      <DepositField label="付款三" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={handleUploadProof} addToast={addToast} onRemoveProof={handleRemoveProof} />
 
                       <div className="bg-white p-5 rounded-lg border-2 border-slate-200 shadow-sm mt-2 relative overflow-hidden">
                         <div className={`absolute top-0 left-0 bottom-0 w-2 ${formData.balanceReceived ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>

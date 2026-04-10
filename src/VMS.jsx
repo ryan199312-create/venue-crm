@@ -419,7 +419,7 @@ const Toast = ({ message, type, onClose }) => {
   const bg = type === 'error' ? 'bg-red-500' : 'bg-slate-800';
 
   return (
-    <div className={`fixed bottom-4 right-4 ${bg} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 z-[100] animate-in slide-in-from-right-10 fade-in`}>
+    <div className={`fixed bottom-4 right-4 ${bg} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 z-[100] animate-in slide-in-from-right-10 fade-in print:hidden no-print`}>
       <span>{message}</span>
       <button onClick={onClose} className="hover:opacity-75"><X size={14} /></button>
     </div>
@@ -2027,7 +2027,7 @@ const PrintableEO = ({ data, printMode }) => {
                 <div className="space-y-2 text-[9px] text-slate-600 leading-tight">
                   <div>
                     <p className="font-bold text-slate-400 uppercase text-[7px] mb-0.5">{isEn ? 'Bank' : '銀行'}</p>
-                    <p className="font-medium text-slate-800">Bank of China (HK) <span className="text-slate-400 ml-1">|</span> 璟瓏軒</p>
+                    <p className="font-medium text-slate-800">Bank of China (HK) <span className="text-slate-400 ml-1">|</span> Best Wish Investment Limited T/A King Lung Heen </p>
                   </div>
                   <div>
                     <p className="font-bold text-slate-400 uppercase text-[7px] mb-0.5">{isEn ? 'Account Number' : '戶口號碼'}</p>
@@ -2352,12 +2352,12 @@ const PrintableEO = ({ data, printMode }) => {
             <div>
               <p className="font-bold text-slate-800">Bank Transfer (銀行轉賬)</p>
               <p className="text-slate-600">Bank: Bank of China (HK)</p>
-              <p className="text-slate-600">Name: <span className="font-bold">King Lung Heen</span></p>
+              <p className="text-slate-600">Name: <span className="font-bold">Best Wish Investment Limited T/A King Lung Heen</span></p>
               <p className="text-slate-600">Account: <span className="font-mono font-bold">012-875-2-082180-1</span></p>
             </div>
             <div>
               <p className="font-bold text-slate-800">Cheque (支票)</p>
-              <p className="text-slate-600">Payable to: <span className="font-bold">"best wish investment limited"</span></p>
+              <p className="text-slate-600">Payable to: <span className="font-bold">"Best Wish Investment Limited T/A King Lung Heen"</span></p>
               <p className="text-slate-400 mt-1">* Please write invoice number on the back of the cheque.</p>
             </div>
           </div>
@@ -5223,6 +5223,9 @@ export default function App() {
       } else {
         const newDoc = await addDoc(privateRef, { ...formData, createdAt: serverTimestamp() });
         docId = newDoc.id;
+          
+          // Mark as editing so subsequent saves in the same modal session update instead of creating duplicates
+          setEditingEvent({ id: docId, ...formData });
       }
 
       // --- SYNC TO PUBLIC CALENDAR FOR SLEEKFLOW ---
@@ -5235,7 +5238,6 @@ export default function App() {
       });
 
       addToast("Saved & Calendar Synced", "success");
-      setIsModalOpen(false);
     } catch (err) {
       console.error(err);
       addToast("Save failed", "error");
@@ -5716,7 +5718,7 @@ export default function App() {
         onCancel={() => setConfirmConfig({ isOpen: false, title: '', message: '', onConfirm: null })}
       />
 
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col space-y-2">
+      <div className="fixed bottom-4 right-4 z-[100] flex flex-col space-y-2 print:hidden no-print">
         {toasts.map(t => (
           <Toast key={t.id} message={t.message} type={t.type} onClose={() => removeToast(t.id)} />
         ))}

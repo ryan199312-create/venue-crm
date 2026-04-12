@@ -2,15 +2,15 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 // Helpers
-import ScrollToTop from './ScrollToTop'; // <--- IMPORT THIS
+import ScrollToTop from './components/ScrollToTop.jsx'; 
 
 // Pages
-import WebsiteLayout from './WebsiteLayout';
-import Home from './Home';
-import Weddings from './Weddings';
-import Corporate from './Corporate';
-import Dining from './Dining';
-import VMS from './VMS';
+import WebsiteLayout from './website/WebsiteLayout.jsx';
+import Home from './website/Home.jsx';
+import Weddings from './website/Weddings.jsx';
+import Corporate from './website/Corporate.jsx';
+import Dining from './website/Dining.jsx';
+import AdminApp from './admin/AdminApp.jsx';
 
 export default function App() {
   return (
@@ -27,7 +27,7 @@ export default function App() {
         </Route>
 
         {/* ADMIN ROUTE */}
-        <Route path="/admin" element={<VMS />} />
+        <Route path="/admin" element={<AdminApp />} />
 
         {/* CATCH ALL */}
         <Route path="*" element={<Navigate to="/" replace />} />

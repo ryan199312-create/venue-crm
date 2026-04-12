@@ -4,6 +4,8 @@ const { setGlobalOptions } = require("firebase-functions/v2"); // Import this
 const admin = require("firebase-admin");
 const axios = require("axios");
 const FormData = require("form-data");
+const puppeteer = require("puppeteer-core");
+const chromium = require("@sparticuz/chromium");
 
 admin.initializeApp();
 
@@ -119,4 +121,38 @@ exports.sendSleekFlow = onCall(
 // 4. PING TEST
 exports.ping = onCall({}, (request) => {
     return { message: "Pong from Hong Kong! (asia-east2)" };
+});
+
+// 5. SECURE PDF GENERATOR
+exports.generatePdfBackend = onCall(
+  { memory: "1GiB", timeoutSeconds: 120 },
+  async (request) => {
+    const { html, fileName } = request.data;
+
+    if (!html) {
+      throw new HttpsError("invalid-argument", "HTML string is required.");
+    }
+
+    let browser = null;
+    try {
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+      });
+
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "networkidle2", timeout: 60000 });
+
+      const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+      await browser.close();
+
+      return { pdfBase64: pdfBuffer.toString("base64"), fileName: fileName || "document.pdf" };
+    } catch (error) {
+      if (browser) await browser.close();
+      console.error("PDF Generation failed:", error);
+      throw new HttpsError("internal", "Failed to generate PDF: " + error.message);
+    }
 });

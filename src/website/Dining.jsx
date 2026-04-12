@@ -4,7 +4,7 @@ import { Utensils, Coffee, Wine, Star, Download, ChevronLeft, ChevronRight, Cloc
 import { useOutletContext } from 'react-router-dom';
 
 // --- FIREBASE IMPORTS ---
-import { db } from './firebase'; 
+import { db } from '../firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
 
 // --- STATIC CONTENT ---

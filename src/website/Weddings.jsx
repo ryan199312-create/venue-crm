@@ -4,7 +4,7 @@ import { MapPin, Users, Maximize, Star, Download, ChefHat, Heart, ChevronLeft, C
 import { useOutletContext } from 'react-router-dom';
 
 // --- FIREBASE IMPORTS ---
-import { db } from './firebase'; 
+import { db } from '../firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
 
 // --- STATIC CONTENT ---

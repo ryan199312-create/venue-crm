@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, MessageCircle, ChevronDown, Star } from 'lucide-react';
-import { db } from './firebase'; 
+import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 // --- 1. SEPARATED NAVBAR & DROPDOWN ---

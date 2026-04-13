@@ -282,6 +282,7 @@ export default function AdminApp() {
   // --- Printing Handlers (Native Browser Print) ---
   const handlePrintEO = () => { setPrintData(formData); setPrintMode('EO'); setTimeout(() => window.print(), 100); };
   const handlePrintReceipt = () => { setPrintData(formData); setPrintMode('RECEIPT'); setTimeout(() => window.print(), 100); };
+  const handlePrintInvoice = () => { setPrintData(formData); setPrintMode('INVOICE'); setTimeout(() => window.print(), 100); };
   const handlePrintBriefing = () => { setPrintData(formData); setPrintMode('BRIEFING'); setTimeout(() => window.print(), 100); };
   const handlePrintQuotation = () => { setPrintData(formData); setPrintMode('QUOTATION'); setTimeout(() => window.print(), 100); };
   const handlePrintContractEN = () => { setPrintData(formData); setPrintMode('CONTRACT'); setTimeout(() => window.print(), 100); };
@@ -833,6 +834,7 @@ export default function AdminApp() {
           onPrintEO={handlePrintEO}
           onPrintBriefing={handlePrintBriefing}
           onPrintQuotation={handlePrintQuotation}
+          onPrintInvoice={handlePrintInvoice}
           onPrintReceipt={handlePrintReceipt}
           onPrintContractEN={handlePrintContractEN}
           onPrintContractCN={handlePrintContractCN}

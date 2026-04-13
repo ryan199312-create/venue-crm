@@ -637,7 +637,8 @@ export default function AdminApp() {
     const baseBody = formData.emailBody || `你好 ${formData.clientName},\n\n感謝您選擇璟瓏軒。請查看以下連結以獲取您的最新文件。`;
 
     // Append the Document Link to the body
-    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\nKing Lung Heen`;
+    const portalUrl = `${window.location.origin}/portal/${editingEvent?.id}`;
+    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\n🔗 專屬活動頁面 (Client Portal):\n${portalUrl}\n\nKing Lung Heen`;
 
     // 3. Open Email Client
     const mailtoLink = `mailto:${formData.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
@@ -707,7 +708,10 @@ export default function AdminApp() {
       const pdfData = await generatePDFBase64(docType);
       if (!pdfData) return;
 
-      const messageContent = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
+      const portalUrl = `${window.location.origin}/portal/${editingEvent?.id}`;
+      const portalText = `\n\n🔗 專屬活動頁面 (Client Portal):\n${portalUrl}`;
+      const baseMessage = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
+      const messageContent = baseMessage + portalText;
 
       addToast("正在透過後端直接發送檔案...", "info");
 

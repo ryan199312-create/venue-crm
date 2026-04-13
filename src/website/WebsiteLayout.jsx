@@ -108,6 +108,9 @@ const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
             {/* RIGHT ACTIONS */}
             <div className="flex items-center gap-2 pr-1">
               {/* Desktop Buttons (Hidden Mobile) */}
+              <Link to="/portal" className="hidden md:flex text-xs font-bold text-stone-500 hover:text-[#C5A059] transition-colors px-2">
+                {lang === 'en' ? 'Portal' : '客戶登入'}
+              </Link>
               <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} className="hidden md:flex w-9 h-9 items-center justify-center rounded-full bg-stone-100 text-stone-600 text-xs font-bold hover:bg-[#C5A059] hover:text-white transition-colors">
                 {lang === 'en' ? '繁' : 'EN'}
               </button>
@@ -157,6 +160,13 @@ const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
               
               {/* 2. MOBILE ACTIONS (Language & Book) */}
               <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-stone-100/50">
+                <Link 
+                  to="/portal"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="col-span-2 px-4 py-3 rounded-xl bg-stone-100 text-stone-600 text-center text-xs font-bold shadow-sm hover:bg-stone-200 transition-colors uppercase tracking-wider"
+                >
+                  {lang === 'en' ? 'Client Portal' : '客戶登入'}
+                </Link>
                 <button 
                   onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} 
                   className="px-4 py-3 rounded-xl bg-stone-50 text-stone-600 text-xs font-bold hover:bg-stone-100 transition-colors uppercase tracking-wider"
@@ -199,7 +209,10 @@ const Footer = () => (
     </div>
     <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-stone-800 flex justify-between text-xs text-stone-600">
       <p>&copy; 2026 King Lung Heen.</p>
-      <a href="/admin" className="hover:text-stone-400">STAFF LOGIN</a>
+      <div className="flex gap-4">
+        <Link to="/portal" className="hover:text-stone-400">CLIENT LOGIN</Link>
+        <Link to="/admin" className="hover:text-stone-400">STAFF LOGIN</Link>
+      </div>
     </div>
   </footer>
 );

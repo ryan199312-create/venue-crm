@@ -1666,6 +1666,26 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
           </div>
         </div>
 
+        {/* --- SIGNATURE SECTION --- */}
+        <div className="mt-12 px-8 pt-8 border-t-2 border-slate-200 break-inside-avoid bg-slate-50 rounded-t-2xl relative z-10">
+          <p className="text-[10px] font-bold mb-4 tracking-widest text-slate-500 uppercase">Acknowledgement & Agreement (確認條款及簽署)</p>
+          <div className="grid grid-cols-2 gap-20">
+            <div>
+              <div className="border-b border-slate-400 h-16 mb-3"></div>
+              <p className="font-bold text-xs text-slate-800 tracking-wide">For and on behalf of (璟瓏軒 代表)<br />
+                <span className="text-sm font-black text-slate-900 uppercase">KING LUNG HEEN</span>
+              </p>
+              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Authorized Signature & Chop (授權簽署及蓋章)</p>
+            </div>
+            <div>
+              <div className="border-b border-slate-400 h-16 mb-3"></div>
+              <p className="font-bold text-xs text-slate-800 tracking-wide">Confirmed & Accepted by (客戶確認)<br />
+                <span className="text-sm font-black text-slate-900 uppercase">{data.clientName}</span>
+              </p>
+              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Client Signature / Company Chop (客戶簽署 / 公司蓋章)</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1811,10 +1831,23 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
         </div>
 
         {/* Footer Signature */}
-        <div className="mt-12 pt-8 border-t border-slate-200 flex justify-between items-end relative z-10 break-inside-avoid">
-          <div>
-            <p className="text-[10px] text-slate-400 italic">This is a computer-generated receipt. No signature is required.</p>
-            <p className="text-[10px] text-slate-400 italic mt-1">此收據由電腦自動生成，毋須簽名。</p>
+        <div className="mt-12 px-8 pt-8 border-t-2 border-slate-200 break-inside-avoid bg-slate-50 rounded-t-2xl relative z-10">
+          <p className="text-[10px] font-bold mb-4 tracking-widest text-slate-500 uppercase">Acknowledgement & Agreement (確認條款及簽署)</p>
+          <div className="grid grid-cols-2 gap-20">
+            <div>
+              <div className="border-b border-slate-400 h-16 mb-3"></div>
+              <p className="font-bold text-xs text-slate-800 tracking-wide">For and on behalf of (璟瓏軒 代表)<br />
+                <span className="text-sm font-black text-slate-900 uppercase">KING LUNG HEEN</span>
+              </p>
+              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Authorized Signature & Chop (授權簽署及蓋章)</p>
+            </div>
+            <div>
+              <div className="border-b border-slate-400 h-16 mb-3"></div>
+              <p className="font-bold text-xs text-slate-800 tracking-wide">Confirmed & Accepted by (客戶確認)<br />
+                <span className="text-sm font-black text-slate-900 uppercase">{data.clientName}</span>
+              </p>
+              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Client Signature / Company Chop (客戶簽署 / 公司蓋章)</p>
+            </div>
           </div>
         </div>
       </div>

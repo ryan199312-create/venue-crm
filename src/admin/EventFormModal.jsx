@@ -623,6 +623,36 @@ export default function EventFormModal({
                   <DepositField label="付款一" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} />
                   <DepositField label="付款二" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} />
                   <DepositField label="付款三" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} />
+                  
+                  {/* --- CLIENT UPLOADED PROOFS SECTION --- */}
+                  {formData.clientUploadedProofs && formData.clientUploadedProofs.length > 0 && (
+                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 mt-4 mb-2 animate-in slide-in-from-top-2">
+                      <h4 className="font-bold text-blue-800 mb-3 flex items-center text-sm">
+                        <Receipt size={16} className="mr-2" /> 客戶自行上傳的付款紀錄 (Client Uploaded Proofs)
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {formData.clientUploadedProofs.map((proof, pIdx) => (
+                          <div key={pIdx} className="bg-white p-3 rounded-lg border border-blue-200 shadow-sm flex flex-col">
+                            <div className="flex justify-between items-start mb-2">
+                              <a href={proof.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline break-all line-clamp-2" title={proof.fileName}>
+                                {proof.fileName}
+                              </a>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mb-3 flex items-center">
+                              <Clock size={10} className="mr-1" /> {new Date(proof.uploadedAt).toLocaleString('zh-HK')}
+                            </div>
+                            <div className="mt-auto pt-2 border-t border-slate-100 grid grid-cols-2 gap-1.5">
+                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, deposit1Proof: proof.url })); addToast("已設為付款一收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為付款一</button>
+                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, deposit2Proof: proof.url })); addToast("已設為付款二收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為付款二</button>
+                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, deposit3Proof: proof.url })); addToast("已設為付款三收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為付款三</button>
+                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, balanceProof: proof.url })); addToast("已設為尾數收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為尾數</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="bg-white p-5 rounded-lg border-2 border-slate-200 shadow-sm mt-2 relative overflow-hidden">
                     <div className={`absolute top-0 left-0 bottom-0 w-2 ${formData.balanceReceived ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
                     <div className="flex flex-col md:flex-row gap-6 pl-4">

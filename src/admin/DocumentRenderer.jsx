@@ -1015,6 +1015,8 @@ const ReceiptView = ({ data, printMode }) => {
   );
 };
 
+
+
 const MenuConfirmView = ({ data, printMode, onClientSign }) => {
   const BRAND_COLOR = '#A57C00';
   const verNum = (data.menuVersions && data.menuVersions.length || 0) + 1;

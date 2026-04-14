@@ -36,7 +36,6 @@ export default function EventFormModal({
   const [translatingMenuId, setTranslatingMenuId] = useState(null);
   const [isTranslatingDrinks, setIsTranslatingDrinks] = useState(false);
   const [drinkPackageType, setDrinkPackageType] = useState('');
-  const [verifyingProofIdx, setVerifyingProofIdx] = useState(null);
 
   const billingSummary = useMemo(() => generateBillingSummary(formData), [formData]);
 
@@ -350,61 +349,6 @@ export default function EventFormModal({
     );
   };
 
-  useEffect(() => {
-    if (!isOpen || !formData.clientUploadedProofs) return;
-
-    const unverifiedIdx = formData.clientUploadedProofs.findIndex(p => !p.ocrResult);
-
-    if (unverifiedIdx !== -1 && verifyingProofIdx === null) {
-      handleVerifyProofWithAI(unverifiedIdx, formData.clientUploadedProofs[unverifiedIdx]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, formData.clientUploadedProofs, verifyingProofIdx]);
-
-  const handleVerifyProofWithAI = async (proofIdx, proof) => {
-    let expectedAmt = 0;
-    if (proof.fileName.startsWith('1st')) expectedAmt = formData.deposit1;
-    else if (proof.fileName.startsWith('2nd')) expectedAmt = formData.deposit2;
-    else if (proof.fileName.startsWith('3rd')) expectedAmt = formData.deposit3;
-    else if (proof.fileName.startsWith('Final')) expectedAmt = billingSummary.balanceDue;
-
-    if (!expectedAmt) {
-       setFormData(prev => {
-          const updatedProofs = [...prev.clientUploadedProofs];
-          updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: 'UNKNOWN_AMT' };
-          return { ...prev, clientUploadedProofs: updatedProofs };
-       });
-       return;
-    }
-
-    setVerifyingProofIdx(proofIdx);
-    try {
-       const prompt = `Please extract the transfer/payment amount from the provided receipt image URL: ${proof.url}\nCheck if the paid amount exactly matches the expected amount: ${expectedAmt} HKD.\nIf it matches exactly, reply ONLY with "MATCH". If it does not, reply ONLY with "MISMATCH".`;
-       
-       const res = await generate(prompt, "You are a financial OCR assistant. You read payment receipts and verify amounts.");
-       
-       const isMatch = res && res.includes('MATCH') && !res.includes('MISMATCH');
-       
-       setFormData(prev => {
-          const updatedProofs = [...prev.clientUploadedProofs];
-          updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: isMatch ? 'MATCH' : 'MISMATCH' };
-          return { ...prev, clientUploadedProofs: updatedProofs };
-       });
-       
-       if (isMatch) addToast("AI 驗證成功 (Amount Matches)", "success");
-       else addToast("AI 驗證發現金額不符", "error");
-    } catch(e) {
-       setFormData(prev => {
-          const updatedProofs = [...prev.clientUploadedProofs];
-          updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: 'ERROR' };
-          return { ...prev, clientUploadedProofs: updatedProofs };
-       });
-       addToast("AI 讀取失敗", "error");
-    } finally {
-       setVerifyingProofIdx(null);
-    }
-  };
-
   // --- Admin Signing Handler ---
   const handleAdminSign = async (docType, base64) => {
     try {
@@ -426,6 +370,17 @@ export default function EventFormModal({
       addToast("簽署失敗 (Signature Failed)", "error");
       throw e;
     }
+  };
+
+  // Extract actual document name from Firebase Storage URL
+  const getFileNameFromUrl = (url) => {
+    try {
+      const decoded = decodeURIComponent(url.split('/').pop().split('?')[0]);
+      const parts = decoded.split('_');
+      if (parts.length > 2) return parts.slice(2).join('_');
+      if (parts.length > 1) return parts.slice(1).join('_');
+      return decoded;
+    } catch(e) { return "Receipt.jpg"; }
   };
 
   return (
@@ -779,8 +734,8 @@ export default function EventFormModal({
                             <div className="flex flex-wrap gap-2 mt-1">
                               {proofs.map((url, idx) => (
                                 <div key={idx} className="flex items-center space-x-1 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
-                                  <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline truncate max-w-[120px]" title="查看收據">
-                                    <ImageIcon size={14} className="mr-1 shrink-0" /> 收據 {proofs.length > 1 ? idx + 1 : ''}
+                                  <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline truncate max-w-[150px]" title={getFileNameFromUrl(url)}>
+                                    <ImageIcon size={14} className="mr-1 shrink-0" /> <span className="truncate">{getFileNameFromUrl(url)}</span>
                                   </a>
                                   <button type="button" onClick={() => onRemoveProof('balanceProof', url)} className="text-slate-400 hover:text-red-500 p-0.5"><X size={12} /></button>
                                 </div>

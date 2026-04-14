@@ -131,12 +131,11 @@ const PrintableEO = ({ data, printMode, appSettings, onClientSign, onAdminSign }
               <div className="inline-block bg-slate-500 text-white px-3 py-1 text-sm font-bold rounded mb-1 uppercase">APPENDIX</div>
             </div>
           </div>
-          <div className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl overflow-hidden mt-4 relative" style={{ height: '750px', breakInside: 'avoid' }}>
-            <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${scale})`, width: `${100 / scale}%`, height: `${100 / scale}%`, backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat' }}>
-              {bgImage && <img src={bgImage} className="opacity-0 pointer-events-none select-none block" alt="" />}
+          <div className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl overflow-hidden mt-4 relative" style={{ height: '750px', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+            <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${scale})`, width: `${100 / scale}%`, height: `${100 / scale}%`, backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
               
               {visibleZones.length > 0 && (
-                 <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+                 <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                    {visibleZones.map(z => {
                       const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
                       const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;

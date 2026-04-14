@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, Layout, LogOut, Sparkles, AlertTriangle, AlertCircle, PenTool, X } from 'lucide-react';
+import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, Layout, LogOut, Sparkles, AlertTriangle, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { functions, db } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
 import { renderToString } from 'react-dom/server';
 import { TOOL_GROUPS } from '../components/FloorplanEditor';
 import DocumentManager from '../components/DocumentManager';
@@ -22,21 +21,11 @@ export default function ClientPortal() {
   const [allergies, setAllergies] = useState('');
   const [isSubmittingDietary, setIsSubmittingDietary] = useState(false);
   const [appSettings, setAppSettings] = useState(null);
-
-  // Fetch appSettings for Floorplan background image and zones (stored in public collection)
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const snap = await getDoc(doc(db, "artifacts", "my-venue-crm", "public", "data", "settings", "config"));
-        if (snap.exists()) {
-          setAppSettings(snap.data());
-        }
-      } catch (error) {
-        console.error("Error fetching public settings:", error);
-      }
-    };
-    fetchSettings();
-  }, []);
+  
+  const [isEditingRundown, setIsEditingRundown] = useState(false);
+  const [editedRundown, setEditedRundown] = useState([]);
+  const [isSavingRundown, setIsSavingRundown] = useState(false);
+  const [showDishSelector, setShowDishSelector] = useState(false);
 
   // --- AUTO LOGIN CHECK ---
   useEffect(() => {
@@ -67,7 +56,12 @@ export default function ClientPortal() {
       const response = await verifyAccess(payload);
       
       const fetchedEvents = response.data.events;
+      const fetchedSettings = response.data.appSettings;
+
       setAllEvents(fetchedEvents);
+      if (fetchedSettings) {
+        setAppSettings(fetchedSettings);
+      }
 
       // Save to localStorage
       localStorage.setItem('vms_client_phone', phoneToUse);
@@ -85,7 +79,7 @@ export default function ClientPortal() {
         localStorage.removeItem('vms_client_phone');
         localStorage.removeItem('vms_client_event_id');
       } else {
-        alert("驗證失敗：找不到符合的活動或電話號碼不正確。 (Verification failed)");
+        alert(`驗證失敗 (Verification failed): ${error.message || '找不到符合的活動或電話號碼不正確'}`);
       }
     } finally {
       setIsLoading(false);
@@ -97,11 +91,12 @@ export default function ClientPortal() {
     setEventId(ev.id);
     setDietaryReq(ev.specialMenuReq || '');
     setAllergies(ev.allergies || '');
+    setEditedRundown(ev.rundown || []);
     localStorage.setItem('vms_client_event_id', ev.id);
     setViewState('PORTAL');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('vms_client_phone');
     localStorage.removeItem('vms_client_event_id');
     setPhoneInput('');
@@ -131,12 +126,13 @@ export default function ClientPortal() {
     reader.onload = async () => {
       try {
         const base64Str = reader.result.split(',')[1];
+        const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
         
         const uploadApi = httpsCallable(functions, 'uploadClientPaymentProof');
         const safePrefix = milestoneLabel.split(' ')[0]; // e.g. "1st", "2nd"
         const response = await uploadApi({ 
           eventId, 
-          phone: phoneInput, 
+          phone: currentPhone, 
           fileName: `${safePrefix}_${file.name}`,
           fileBase64: base64Str 
         });
@@ -154,7 +150,8 @@ export default function ClientPortal() {
 
         alert("上傳成功 (Upload Successful)! 我們將盡快為您核對付款。");
       } catch (error) {
-        alert("上傳失敗 (Upload Failed). 檔案可能過大或網路不穩，請稍後再試。");
+        console.error("Upload Error:", error);
+        alert(`上傳失敗 (Upload Failed): ${error.message}`);
       } finally {
         setIsUploadingProof(false);
         target.value = null; // Clear input safely after processing
@@ -172,10 +169,11 @@ export default function ClientPortal() {
     e.preventDefault();
     setIsSubmittingDietary(true);
     try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
       const updateDietaryApi = httpsCallable(functions, 'updateClientDietaryReq');
       await updateDietaryApi({
         eventId,
-        phone: phoneInput,
+        phone: currentPhone,
         specialMenuReq: dietaryReq,
         allergies: allergies
       });
@@ -183,17 +181,38 @@ export default function ClientPortal() {
       setEventData(prev => ({ ...prev, specialMenuReq: dietaryReq, allergies: allergies }));
     } catch (error) {
       console.error("Failed to update dietary reqs:", error);
-      alert("更新失敗 (Update failed). 請稍後再試。");
+      alert(`更新失敗 (Update failed): ${error.message}`);
     } finally {
       setIsSubmittingDietary(false);
+    }
+  };
+
+  // --- RUNDOWN SUBMIT HANDLER ---
+  const handleSaveRundown = async () => {
+    setIsSavingRundown(true);
+    try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
+      const api = httpsCallable(functions, 'updateClientRundown');
+      // JSON.parse/stringify cleans the array of any React-specific proxy metadata so Firebase doesn't crash (INTERNAL ERROR)
+      const cleanRundown = JSON.parse(JSON.stringify(editedRundown));
+      await api({ eventId, phone: currentPhone, rundown: cleanRundown });
+      setEventData(prev => ({ ...prev, rundown: editedRundown }));
+      setIsEditingRundown(false);
+      alert("流程更新成功 (Rundown updated successfully)!");
+    } catch (error) {
+      console.error("Rundown Save Error:", error);
+      alert(`更新失敗 (Update failed): ${error.message}`);
+    } finally {
+      setIsSavingRundown(false);
     }
   };
 
   // --- SIGNATURE SUBMIT HANDLER ---
   const handleSignatureSubmit = async (docType, base64String) => {
     try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
       const signApi = httpsCallable(functions, 'signClientContract');
-      await signApi({ eventId, phone: phoneInput, signatureBase64: base64String, docType });
+      await signApi({ eventId, phone: currentPhone, signatureBase64: base64String, docType });
       
       setEventData(prev => ({ 
         ...prev, 
@@ -212,6 +231,17 @@ export default function ClientPortal() {
       alert("簽署失敗 (Signature failed). 請稍後再試。");
       throw error;
     }
+  };
+
+  // Extract actual document name from Firebase Storage URL
+  const getFileNameFromUrl = (url) => {
+    try {
+      const decoded = decodeURIComponent(url.split('/').pop().split('?')[0]);
+      const parts = decoded.split('_');
+      if (parts.length > 2) return parts.slice(2).join('_');
+      if (parts.length > 1) return parts.slice(1).join('_');
+      return decoded;
+    } catch(e) { return "Receipt.jpg"; }
   };
 
   // --- LOGIN VIEW ---
@@ -333,7 +363,12 @@ export default function ClientPortal() {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Venue</p>
-                  <p className="font-bold text-slate-800 text-sm">{eventData.venueLocation}</p>
+                  <p className="font-bold text-[#A57C00] text-base mb-0.5">璟瓏軒 King Lung Heen</p>
+                  <p className="font-bold text-slate-800 text-sm mb-1.5">{eventData.venueLocation}</p>
+                  <div className="mt-1.5 space-y-0.5">
+                    <p className="text-xs text-slate-600 font-medium">尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
+                    <p className="text-[10px] text-slate-400">4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -349,6 +384,8 @@ export default function ClientPortal() {
                 </div>
               </div>
             </div>
+            
+            <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={eventData.selectedLocations || [eventData.venueLocation]} />
           </div>
         )}
 
@@ -363,12 +400,20 @@ export default function ClientPortal() {
           const dep2 = Number(eventData.deposit2) || 0;
           const dep3 = Number(eventData.deposit3) || 0;
           const expectedFinalBalance = Math.max(0, total - dep1 - dep2 - dep3);
+          
+          let balanceDueDateDisplay = eventData.date || 'Before Event';
+          if (eventData.balanceDueDateType === 'manual' && eventData.balanceDueDateOverride) {
+            balanceDueDateDisplay = eventData.balanceDueDateOverride;
+          } else if (eventData.balanceDueDateType === '10daysPrior' && eventData.date) {
+            const d = new Date(eventData.date); d.setDate(d.getDate() - 10);
+            if (!isNaN(d.getTime())) balanceDueDateDisplay = d.toISOString().split('T')[0];
+          }
 
           const milestones = [
             { key: 'deposit1', label: '1st Payment', amount: dep1, date: eventData.deposit1Date, received: eventData.deposit1Received },
             { key: 'deposit2', label: '2nd Payment', amount: dep2, date: eventData.deposit2Date, received: eventData.deposit2Received },
             { key: 'deposit3', label: '3rd Payment', amount: dep3, date: eventData.deposit3Date, received: eventData.deposit3Received },
-            { key: 'balance', label: 'Final Balance', amount: expectedFinalBalance, date: 'Before Event', received: eventData.balanceReceived }
+            { key: 'balance', label: 'Final Balance', amount: expectedFinalBalance, date: balanceDueDateDisplay, received: eventData.balanceReceived }
           ].filter(m => m.amount > 0);
           
           return (
@@ -426,23 +471,13 @@ export default function ClientPortal() {
 
                       return (
                           <div className="mt-2 pt-2 border-t border-slate-200">
-                            
-                            {/* UPLOAD BOX (Only visible if not received) */}
-                            {!m.received && (
-                              <div className={`relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${isUploadingProof ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
-                                {isUploadingProof ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
-                                <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{isUploadingProof ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
-                                <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={isUploadingProof} title="Upload Proof" />
-                              </div>
-                            )}
                         
                             {/* VERIFIED/OFFICIAL PROOFS */}
                             {officialProofs.map((url, idx) => (
                               <div key={`off-${idx}`} className="mt-2 text-[10px] font-bold flex flex-col gap-1.5 bg-emerald-50 py-2 px-3 rounded-lg border border-emerald-200 shadow-sm">
                                 <div className="flex items-center justify-between w-full">
-                                  <span className="flex items-center text-emerald-700"><CheckCircle size={12} className="mr-1" /> 已確認收據 (Official Proof) {officialProofs.length > 1 ? idx + 1 : ''}</span>
-                                  <a href={url} download target="_blank" rel="noreferrer" className="text-emerald-700 hover:text-emerald-900 bg-white px-2 py-0.5 rounded border border-emerald-200 flex items-center shadow-sm transition-colors">
-                                    <Download size={10} className="mr-1"/> 檢視 (View)
+                                  <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-emerald-700 max-w-full hover:underline truncate" title={getFileNameFromUrl(url)}>
+                                    <CheckCircle size={12} className="mr-1 shrink-0" /> <span className="truncate">{getFileNameFromUrl(url)}</span>
                                   </a>
                                 </div>
                               </div>
@@ -452,24 +487,24 @@ export default function ClientPortal() {
                             {pendingProofs.map((p, idx) => (
                               <div key={`pend-${idx}`} className="mt-2 text-[10px] font-bold flex flex-col gap-1.5 bg-slate-50 py-2 px-3 rounded-lg border border-slate-200 shadow-sm">
                                 <div className="flex items-center justify-between w-full">
-                                  <span className="flex items-center text-slate-600"><Clock size={12} className="mr-1" /> 處理中 (Pending Review)</span>
-                                  <a href={p.url} download target="_blank" rel="noreferrer" className="text-slate-500 hover:text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 flex items-center shadow-sm transition-colors">
-                                    <Download size={10} className="mr-1"/> 檢視 (View)
+                                  <a href={p.url} target="_blank" rel="noreferrer" className="flex items-center text-slate-600 max-w-full hover:underline truncate" title={p.fileName}>
+                                    <Clock size={12} className="mr-1 shrink-0" /> <span className="truncate">{p.fileName}</span>
                                   </a>
                                 </div>
                                 <div className="pt-1 border-t border-slate-200/60 mt-0.5">
-                                  {p.ocrResult === 'MATCH' ? (
-                                    <span className="flex items-start text-emerald-600"><Sparkles size={12} className="mr-1 shrink-0 mt-0.5" /> AI 識別金額相符，待專員最終確認 (Verified by AI)</span>
-                                  ) : p.ocrResult === 'MISMATCH' ? (
-                                    <span className="flex items-start text-amber-600"><AlertTriangle size={12} className="mr-1 shrink-0 mt-0.5" /> AI 識別金額不符，專員將人手跟進 (Pending Manual Review)</span>
-                                  ) : (p.ocrResult === 'UNKNOWN_AMT' || p.ocrResult === 'ERROR') ? (
-                                    <span className="flex items-start text-slate-500"><AlertCircle size={12} className="mr-1 shrink-0 mt-0.5" /> 已記錄，等待專員人手確認 (Pending Manual Review)</span>
-                                  ) : (
-                                    <span className="flex items-start text-blue-600"><Loader2 size={12} className="mr-1 shrink-0 mt-0.5 animate-spin" /> AI 正在核對金額... (AI Verifying...)</span>
-                                  )}
+                                  <span className="flex items-start text-slate-500"><Clock size={12} className="mr-1 shrink-0 mt-0.5" /> 已記錄，等待專員核對 (Pending Manual Review)</span>
                                 </div>
                               </div>
                             ))}
+
+                            {/* UPLOAD BOX (Only visible if not received) */}
+                            {!m.received && (
+                              <div className={`mt-2 relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${isUploadingProof ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
+                                {isUploadingProof ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
+                                <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{isUploadingProof ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
+                                <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={isUploadingProof} title="Upload Proof" />
+                              </div>
+                            )}
                           </div>
                       );
                     })()}
@@ -529,27 +564,95 @@ export default function ClientPortal() {
         {/* TAB 4: RUNDOWN */}
         {activeTab === 'logistics' && (
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
-            <h4 className="font-bold text-slate-800 mb-6 flex items-center"><Clock size={18} className="mr-2 text-[#A57C00]" /> Event Rundown</h4>
-            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.1rem] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-              {eventData.rundown.map((item, index) => (
-                <div key={item.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-[#A57C00] text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                  </div>
-                  <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 bg-slate-50 shadow-sm">
-                    <time className="font-mono text-xs font-bold text-[#A57C00] mb-1 block">{item.time}</time>
-                    <div className="text-sm font-bold text-slate-700">{item.activity}</div>
-                  </div>
-                </div>
-              ))}
+            <div className="flex justify-between items-center mb-6">
+              <h4 className="font-bold text-slate-800 flex items-center"><Clock size={18} className="mr-2 text-[#A57C00]" /> Event Rundown</h4>
+              {!isEditingRundown && (
+                <button onClick={() => setIsEditingRundown(true)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
+                  <PenTool size={12} className="mr-1"/> 編輯 (Edit)
+                </button>
+              )}
             </div>
-          </div>
-        )}
+            
+            {isEditingRundown ? (
+              <div className="space-y-3">
+                {editedRundown.map((item, idx) => (
+                   <div key={item.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex flex-col gap-1">
+                         <button onClick={() => { if (idx === 0) return; const newR = [...editedRundown]; [newR[idx-1], newR[idx]] = [newR[idx], newR[idx-1]]; setEditedRundown(newR); }} disabled={idx===0} className="text-slate-400 hover:text-[#A57C00] disabled:opacity-30"><ChevronUp size={14}/></button>
+                         <button onClick={() => { if (idx === editedRundown.length - 1) return; const newR = [...editedRundown]; [newR[idx+1], newR[idx]] = [newR[idx], newR[idx+1]]; setEditedRundown(newR); }} disabled={idx===editedRundown.length-1} className="text-slate-400 hover:text-[#A57C00] disabled:opacity-30"><ChevronDown size={14}/></button>
+                      </div>
+                      <input value={item.time} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, time: e.target.value} : it))} className="w-16 p-2 border border-slate-200 rounded bg-white text-xs text-center font-mono focus:border-[#A57C00] outline-none" placeholder="18:00" />
+                      <input value={item.activity} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, activity: e.target.value} : it))} className="flex-1 p-2 border border-slate-200 rounded bg-white text-xs focus:border-[#A57C00] outline-none" placeholder="活動內容 (Activity)" />
+                      <button onClick={() => setEditedRundown(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 p-1"><X size={16}/></button>
+                   </div>
+                ))}
+                
+                {showDishSelector && (
+                  <div className="mt-4 p-3 bg-white border border-[#A57C00]/30 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
+                       <span className="text-xs font-bold text-slate-700">點擊加入個別菜單項目 (Tap dish to insert)</span>
+                       <button onClick={() => setShowDishSelector(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pt-1 pb-2">
+                      {(() => {
+                        const addedDishSet = new Set(editedRundown.map(item => item.activity.startsWith('上菜: ') ? item.activity.substring(4) : null).filter(Boolean));
+                        
+                        const availableDishButtons = eventData.menus?.flatMap((m, mIdx) => {
+                           const dishes = m.content ? m.content.split('\n').map(d => d.trim()).filter(d => d.length > 0) : [];
+                           return dishes
+                             .filter(dish => !addedDishSet.has(dish))
+                             .map((dish, dIdx) => (
+                                <button key={`${m.id}-${dIdx}`} onClick={() => setEditedRundown(prev => [...prev, { id: Date.now().toString() + Math.random(), time: '', activity: `上菜: ${dish}` }])} className="text-[10px] bg-slate-50 border border-[#A57C00]/20 text-slate-700 px-3 py-2 rounded-lg hover:bg-[#A57C00] hover:text-white transition-colors text-left font-medium">
+                                  + {dish}
+                                </button>
+                             ));
+                        });
 
-        {/* TAB 5: FLOORPLAN */}
-        {activeTab === 'floorplan' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-            <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={eventData.selectedLocations || [eventData.venueLocation]} />
+                        if (!availableDishButtons || availableDishButtons.length === 0) {
+                          const hasAnyMenuContent = eventData.menus?.some(m => m.content && m.content.trim().length > 0);
+                          return (
+                            <span className="text-xs text-slate-400 italic w-full text-center py-2">
+                              {!hasAnyMenuContent ? "尚未設定菜單內容 (No menu content available)" : "所有菜式已加入 (All dishes added)"}
+                            </span>
+                          );
+                        }
+                        return availableDishButtons;
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 mt-4">
+                   <button onClick={() => setEditedRundown(prev => [...prev, { id: Date.now().toString() + Math.random(), time: '', activity: '' }])} className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-200 transition-colors flex items-center justify-center">
+                     <Plus size={14} className="mr-1"/> 新增項目
+                   </button>
+                   <button onClick={() => setShowDishSelector(!showDishSelector)} className="flex-1 py-2.5 bg-[#A57C00]/10 text-[#A57C00] rounded-lg text-xs font-bold border border-[#A57C00]/20 hover:bg-[#A57C00]/20 transition-colors flex items-center justify-center">
+                     <Utensils size={14} className="mr-1"/> 載入個別菜式
+                   </button>
+                </div>
+                <div className="flex gap-2 mt-6 pt-4 border-t border-slate-100">
+                   <button onClick={() => setIsEditingRundown(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors">取消 (Cancel)</button>
+                   <button onClick={handleSaveRundown} disabled={isSavingRundown} className="flex-1 py-3 bg-[#A57C00] text-white rounded-xl text-xs font-bold hover:bg-[#8a6800] transition-colors shadow-md flex justify-center items-center">
+                      {isSavingRundown ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2"/>} 儲存流程
+                   </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.1rem] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                {(!eventData.rundown || eventData.rundown.length === 0) && <p className="text-center text-slate-400 italic text-sm">無流程紀錄 (No rundown provided)</p>}
+                {(eventData.rundown || []).map((item, index) => (
+                  <div key={item.id || index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-[#A57C00] text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                      <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                    </div>
+                    <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 bg-slate-50 shadow-sm">
+                      <time className="font-mono text-xs font-bold text-[#A57C00] mb-1 block">{item.time}</time>
+                      <div className="text-sm font-bold text-slate-700">{item.activity}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -576,7 +679,6 @@ export default function ClientPortal() {
         <NavButton icon={CreditCard} label="Billing" active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
         <NavButton icon={Utensils} label="Menu" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
         <NavButton icon={Clock} label="Rundown" active={activeTab === 'logistics'} onClick={() => setActiveTab('logistics')} />
-        <NavButton icon={Layout} label="Floorplan" active={activeTab === 'floorplan'} onClick={() => setActiveTab('floorplan')} />
         <NavButton icon={Download} label="Docs" active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} />
       </div>
     </div>
@@ -596,7 +698,8 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
 // --- FLOORPLAN VIEWER COMPONENT ---
 const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   const containerRef = useRef(null);
-  const [scale, setScale] = useState(1);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [scaleInfo, setScaleInfo] = useState({ scale: 1, height: 400 });
 
   const bgImage = floorplan?.bgImage || '';
   const itemScale = floorplan?.itemScale || 40;
@@ -615,13 +718,40 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   
   const isWholeVenue = selectedLocations.includes('全場');
   const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.some(l => l && typeof l === 'string' && l.includes(z.name)));
+  const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
 
-  // Max boundaries to ensure scrolling works properly
-  const maxRight = elements.length > 0 ? Math.max(1000, ...elements.map(el => (el.x || 0) + ((el.w_m || (el.w ? el.w / 40 : 1)) * itemScale))) : 1000;
-  const maxBottom = elements.length > 0 ? Math.max(700, ...elements.map(el => (el.y || 0) + ((el.h_m || (el.h ? el.h / 40 : 1)) * itemScale))) : 700;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  
+  // If zoomed, focus ONLY on the selected zones
+  const targetZones = (isZoomed && canZoom) ? visibleZones : zones;
 
-  const contentW = maxRight + 100;
-  const contentH = maxBottom + 100;
+  targetZones.forEach(z => {
+      z.points.forEach(p => {
+         minX = Math.min(minX, p.x_m * itemScale);
+         maxX = Math.max(maxX, p.x_m * itemScale);
+         minY = Math.min(minY, p.y_m * itemScale);
+         maxY = Math.max(maxY, p.y_m * itemScale);
+      });
+  });
+  
+  // If NOT zoomed, include all elements to ensure everything fits on screen
+  if (!isZoomed || !canZoom) {
+    elements.forEach(el => {
+        const w = (el.w_m || (el.w ? el.w / 40 : 1)) * itemScale;
+        const h = (el.h_m || (el.h ? el.h / 40 : 1)) * itemScale;
+        minX = Math.min(minX, el.x || 0);
+        maxX = Math.max(maxX, (el.x || 0) + w);
+        minY = Math.min(minY, el.y || 0);
+        maxY = Math.max(maxY, (el.y || 0) + h);
+    });
+  }
+
+  if (minX === Infinity) { minX = 0; minY = 0; maxX = 1000; maxY = 700; }
+  
+  const pad = 20;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+  const contentW = maxX - minX;
+  const contentH = Math.max(maxY - minY, 1);
 
   // Resize observer to scale map dynamically
   useEffect(() => {
@@ -630,8 +760,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
       for (let entry of entries) {
         const { width, height } = entry.contentRect;
         const scaleW = width / contentW;
-        const scaleH = height / contentH;
-        setScale(Math.min(scaleW, scaleH, 1));
+        setScaleInfo({ scale: scaleW, height: contentH * scaleW });
       }
     });
     observer.observe(containerRef.current);
@@ -640,17 +769,26 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
 
   return (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mt-4">
-      <h4 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2 flex items-center">
-        <Layout size={18} className="mr-2 text-[#A57C00]" /> Venue Floorplan (場地平面圖)
-      </h4>
-      
-      <div ref={containerRef} className="w-full h-[60vh] min-h-[400px] bg-slate-50 border-2 border-slate-200 rounded-xl relative shadow-inner overflow-hidden flex items-center justify-center">
+      <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+        <h4 className="font-bold text-slate-800 flex items-center">
+          <Layout size={18} className="mr-2 text-[#A57C00]" /> Venue Floorplan (場地平面圖)
+        </h4>
+        {canZoom && (
+          <button onClick={() => setIsZoomed(!isZoomed)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
+            {isZoomed ? <><ZoomOut size={12} className="mr-1"/> 顯示全圖 (View All)</> : <><ZoomIn size={12} className="mr-1"/> 放大區域 (Zoom In)</>}
+          </button>
+        )}
+      </div>
+
+      <div ref={containerRef} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl relative shadow-inner overflow-hidden" style={{ height: scaleInfo.height > 0 ? scaleInfo.height : 400 }}>
         <div 
-          className="relative origin-center transition-transform" 
+          className="absolute origin-top-left transition-transform" 
           style={{ 
-            transform: `scale(${scale})`,
-            width: `${contentW}px`, 
-            height: `${contentH}px`,
+            transform: `scale(${scaleInfo.scale})`,
+            left: `${-minX * scaleInfo.scale}px`,
+            top: `${-minY * scaleInfo.scale}px`,
+            width: `${maxX}px`, 
+            height: `${maxY}px`,
             backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.4) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
             backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`,
             backgroundPosition: 'top left',

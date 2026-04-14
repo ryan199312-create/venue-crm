@@ -293,6 +293,17 @@ export const DepositField = ({ label, prefix, formData, setFormData, onUpload, a
     return text;
   };
 
+  // Extract actual document name from Firebase Storage URL
+  const getFileNameFromUrl = (url) => {
+    try {
+      const decoded = decodeURIComponent(url.split('/').pop().split('?')[0]);
+      const parts = decoded.split('_');
+      if (parts.length > 2) return parts.slice(2).join('_');
+      if (parts.length > 1) return parts.slice(1).join('_');
+      return decoded;
+    } catch(e) { return "Receipt.jpg"; }
+  };
+
   return (
     <div className={`p-4 rounded-lg border transition-all ${isOverdue ? 'bg-red-50 border-red-200 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -306,8 +317,8 @@ export const DepositField = ({ label, prefix, formData, setFormData, onUpload, a
           
           {proofs.map((url, idx) => (
             <div key={idx} className="flex items-center space-x-1 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm shrink-0">
-              <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-[10px] text-blue-600 hover:underline truncate max-w-[80px]" title="查看收據">
-                <ImageIcon size={12} className="mr-1 shrink-0" /> 收據 {proofs.length > 1 ? idx + 1 : ''}
+              <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-[10px] text-blue-600 hover:underline truncate max-w-[120px]" title={getFileNameFromUrl(url)}>
+                <ImageIcon size={12} className="mr-1 shrink-0" /> <span className="truncate">{getFileNameFromUrl(url)}</span>
               </a>
               <button type="button" onClick={() => handleRemove(url)} className="text-slate-400 hover:text-red-500 p-0.5"><X size={10} /></button>
             </div>
@@ -368,35 +379,6 @@ export const PendingProofCard = ({ proof, targetLabel, targetKey, receivedKey, c
     </div>
     <div className="text-[10px] text-slate-400 mb-3 flex items-center">
       <Clock size={10} className="mr-1" /> {new Date(proof.uploadedAt).toLocaleString('zh-HK')}
-    </div>
-    
-    <div className="mb-3 bg-white p-2 rounded border border-slate-100">
-      {proof.ocrResult === 'MATCH' ? (
-        <div className="text-[10px] font-bold text-emerald-600 flex items-start gap-1">
-           <Sparkles size={12} className="shrink-0 mt-0.5" /> 
-           <span>ai recognise the amount is correct, to be confirmed by king lung heen</span>
-        </div>
-      ) : proof.ocrResult === 'MISMATCH' ? (
-        <div className="text-[10px] font-bold text-red-600 flex items-start gap-1">
-           <AlertTriangle size={12} className="shrink-0 mt-0.5" /> 
-           <span>AI 檢測到金額可能不符，請人工核對</span>
-        </div>
-      ) : proof.ocrResult === 'UNKNOWN_AMT' ? (
-        <div className="text-[10px] font-bold text-amber-600 flex items-start gap-1">
-           <AlertCircle size={12} className="shrink-0 mt-0.5" /> 
-           <span>無法自動確定應付金額，請人工核對</span>
-        </div>
-      ) : proof.ocrResult === 'ERROR' ? (
-        <div className="text-[10px] font-bold text-red-600 flex items-start gap-1">
-           <AlertCircle size={12} className="shrink-0 mt-0.5" /> 
-           <span>AI 讀取失敗，請人工核對</span>
-        </div>
-      ) : (
-        <div className="w-full text-[10px] font-bold bg-blue-50 text-blue-600 py-1.5 rounded flex justify-center items-center">
-          <Loader2 size={12} className="animate-spin mr-1"/>
-          AI 正在自動核對金額...
-        </div>
-      )}
     </div>
 
     <div className="mt-auto pt-2 border-t border-slate-200">

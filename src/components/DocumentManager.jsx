@@ -91,7 +91,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
         </html>
       `;
 
-      const sigTag = (includeSignature && eventData.clientSignature && ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType)) ? '_Signed' : '';
+      const sigTag = (includeSignature && hasClientSig && ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType)) ? '_Signed' : '';
       
       // Sanitize file name to prevent browser download path errors
       const safeName = (eventData.orderId || eventData.eventName || 'Document').replace(/[\/\\]/g, '-');

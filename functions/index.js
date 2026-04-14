@@ -15,40 +15,7 @@ admin.initializeApp();
 setGlobalOptions({ region: "asia-east2" });
 
 // Define Secrets
-const deepseekKey = defineSecret("DEEPSEEK_KEY");
 const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
-
-// 2. SECURE DEEPSEEK FUNCTION
-exports.callDeepSeek = onCall(
-  { secrets: [deepseekKey] }, 
-  async (request) => {
-    
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "User must be logged in.");
-    }
-
-    const { messages, response_format } = request.data;
-    const API_KEY = deepseekKey.value();
-
-    try {
-      const response = await axios.post("https://api.deepseek.com/chat/completions", {
-        model: "deepseek-chat",
-        messages: messages,
-        temperature: 0.7,
-        response_format: response_format
-      }, {
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${API_KEY}` 
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error("DeepSeek Error:", error.response?.data || error.message);
-      throw new HttpsError("internal", "AI Service Failed: " + (error.response?.data?.error?.message || error.message));
-    }
-});
 
 // 3. SECURE SLEEKFLOW FUNCTION
 exports.sendSleekFlow = onCall(
@@ -242,10 +209,10 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
     return { success: true, url: publicUrl };
   } catch (error) {
     console.error("Upload Proof Error:", error);
-    if (error instanceof HttpsError) {
-      throw error; // Allow our validation errors to pass through to the frontend
-    }
-    throw new HttpsError('internal', 'Internal Server Error');
+    if (error instanceof HttpsError) throw error;
+    const validCodes = ['ok', 'cancelled', 'unknown', 'invalid-argument', 'deadline-exceeded', 'not-found', 'already-exists', 'permission-denied', 'resource-exhausted', 'failed-precondition', 'aborted', 'out-of-range', 'unimplemented', 'internal', 'unavailable', 'data-loss', 'unauthenticated'];
+    const code = validCodes.includes(error?.code) ? error.code : 'aborted';
+    throw new HttpsError(code, error.message || 'Unknown upload error occurred');
   }
 });
 
@@ -281,17 +248,18 @@ exports.cleanupOldPdfs = onSchedule("every day 00:00", async (event) => {
 // ==========================================
 // 10. SIGN CLIENT CONTRACT
 // ==========================================
-exports.signClientContract = onCall(async (request) => {
-  const { eventId, phone, signatureBase64, docType } = request.data;
-
-  if (!eventId || !phone || !signatureBase64) {
-    throw new HttpsError('invalid-argument', 'Missing required fields.');
-  }
-
-  const appId = "my-venue-crm";
-  const db = admin.firestore();
-  
+exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
   try {
+    if (!request || !request.data) throw new HttpsError('invalid-argument', 'Request data is missing.');
+    const { eventId, phone, signatureBase64, docType } = request.data;
+
+    if (!eventId || !phone || !signatureBase64) {
+      throw new HttpsError('invalid-argument', 'Missing required fields.');
+    }
+
+    const appId = "my-venue-crm";
+    const db = admin.firestore();
+
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
     const docSnap = await eventRef.get();
 
@@ -324,12 +292,12 @@ exports.signClientContract = onCall(async (request) => {
   } catch (error) {
     console.error("Sign Contract Error:", error);
     if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', 'Internal Server Error');
+    throw new HttpsError('internal', `Sign Contract Error: ${error.message}`);
   }
 });
 
 // 7. VERIFY CLIENT ACCESS (PORTAL LOGIN)
-exports.verifyClientAccess = onCall(async (request) => {
+exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
   const { eventId, phone } = request.data;
 
   if (!phone) {
@@ -340,7 +308,7 @@ exports.verifyClientAccess = onCall(async (request) => {
   const db = admin.firestore();
   
   try {
-    const cleanInputPhone = phone.replace(/[^0-9]/g, '').slice(-8);
+    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
     let matchedEvents = [];
     const eventsRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events');
 
@@ -350,7 +318,7 @@ exports.verifyClientAccess = onCall(async (request) => {
       const eventDoc = await eventsRef.doc(eventId).get();
       if (eventDoc.exists) {
         const data = eventDoc.data();
-        const cleanDbPhone = (data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
+        const cleanDbPhone = String(data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
         if (cleanDbPhone === cleanInputPhone) {
           matchedEvents.push({ id: eventDoc.id, ...data });
         }
@@ -360,7 +328,7 @@ exports.verifyClientAccess = onCall(async (request) => {
       const snapshot = await eventsRef.get();
       snapshot.forEach(doc => {
         const data = doc.data();
-        const cleanDbPhone = (data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
+        const cleanDbPhone = String(data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
         if (cleanDbPhone === cleanInputPhone) {
           matchedEvents.push({ id: doc.id, ...data });
         }
@@ -368,7 +336,7 @@ exports.verifyClientAccess = onCall(async (request) => {
     }
 
     if (matchedEvents.length === 0) {
-      throw new HttpsError('not-found', 'No events found for this phone number.');
+      throw new HttpsError('not-found', '找不到符合的手機號碼或活動紀錄 (No events found for this phone number).');
     }
 
     // 2. Sanitize all matches
@@ -396,20 +364,62 @@ exports.verifyClientAccess = onCall(async (request) => {
     // 3. Sort newest first
     sanitizedEvents.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    return { events: sanitizedEvents };
+    // Fetch appSettings securely inside the backend
+    let appSettings = null;
+    try {
+      const settingsDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('settings').doc('config').get();
+      if (settingsDoc.exists) {
+        appSettings = settingsDoc.data();
+      }
+    } catch (e) {
+      console.error("Failed to fetch settings", e);
+    }
 
+    // Safely serialize data to prevent "INTERNAL" crashes caused by Firestore Timestamps
+    const safeEvents = JSON.parse(JSON.stringify(sanitizedEvents));
+    const safeSettings = appSettings ? JSON.parse(JSON.stringify(appSettings)) : null;
+
+    return { events: safeEvents, appSettings: safeSettings };
   } catch (error) {
     console.error("Client Portal Auth Error:", error);
-    if (error instanceof HttpsError) {
-      throw error; // Allow our validation errors to pass through to the frontend
+    if (error instanceof HttpsError) throw error;
+    const validCodes = ['ok', 'cancelled', 'unknown', 'invalid-argument', 'deadline-exceeded', 'not-found', 'already-exists', 'permission-denied', 'resource-exhausted', 'failed-precondition', 'aborted', 'out-of-range', 'unimplemented', 'internal', 'unavailable', 'data-loss', 'unauthenticated'];
+    const code = validCodes.includes(error?.code) ? error.code : 'internal';
+    throw new HttpsError(code, error.message || 'Unknown auth error occurred');
+  }
+});
+
+// 9. UPDATE CLIENT RUNDOWN
+exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
+  const { eventId, phone, rundown } = request.data;
+
+  if (!eventId || !phone || !rundown) {
+    throw new HttpsError('invalid-argument', 'Missing fields.');
+  }
+
+  const db = admin.firestore();
+  
+  try {
+    const eventRef = db.collection('artifacts').doc("my-venue-crm").collection('private').doc('data').collection('events').doc(eventId);
+    const docSnap = await eventRef.get();
+    if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+    
+    const eventData = docSnap.data();
+    if ((eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== phone.replace(/[^0-9]/g, '').slice(-8)) {
+      throw new HttpsError('permission-denied', 'Invalid phone number.');
     }
-    throw new HttpsError('internal', 'Internal Server Error');
+
+    await eventRef.update({ rundown });
+    return { success: true };
+  } catch (error) {
+    console.error("Update Rundown Error:", error);
+    throw new HttpsError('internal', error.message || 'Unknown update error occurred');
   }
 });
 
 // 8. UPDATE CLIENT DIETARY REQUIREMENTS
 // Add { secrets: [sleekflowKey] } to allow this function to access your SleekFlow API Key
-exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey] }, async (request) => {
+exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies } = request.data;
 
   if (!eventId || !phone) {
@@ -420,7 +430,7 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey] }, async (requ
   const db = admin.firestore();
   
   // IMPORTANT: Replace this with the actual WhatsApp number of your Sales Rep or Admin Team
-  const adminNotificationPhone = "85212345678"; 
+  const adminNotificationPhone = "85261231231"; 
 
   try {
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
@@ -466,6 +476,8 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey] }, async (requ
   } catch (error) {
     console.error("Update Dietary Req Error:", error);
     if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', 'Internal Server Error');
+    const validCodes = ['ok', 'cancelled', 'unknown', 'invalid-argument', 'deadline-exceeded', 'not-found', 'already-exists', 'permission-denied', 'resource-exhausted', 'failed-precondition', 'aborted', 'out-of-range', 'unimplemented', 'internal', 'unavailable', 'data-loss', 'unauthenticated'];
+    const code = validCodes.includes(error?.code) ? error.code : 'aborted';
+    throw new HttpsError(code, error.message || 'Unknown dietary update error occurred');
   }
 });

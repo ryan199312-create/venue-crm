@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { DollarSign, AlertTriangle, X, History, Printer, Loader2, Upload, Image as ImageIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { DollarSign, AlertTriangle, X, History, Printer, Loader2, Upload, Image as ImageIcon, Download, Clock, Sparkles, AlertCircle, CheckCircle, PenTool } from 'lucide-react';
 import { formatMoney, parseMoney, LOCATION_CHECKBOXES, INDIVIDUAL_ZONES } from '../utils/vmsUtils';
 
 export const STATUS_COLORS = {
@@ -52,6 +53,82 @@ export const MoneyInput = ({ label, name, value, onChange, required, className =
         />
       </div>
     </div>
+  );
+};
+
+// --- DIGITAL SIGNATURE PAD COMPONENT ---
+export const SignaturePad = ({ onSave, onCancel, isSubmitting, title = "線上簽署合約 (Sign Contract)" }) => {
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    ctx.scale(ratio, ratio);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#0f172a';
+  }, []);
+
+  const getPos = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const startDrawing = (e) => {
+    const ctx = canvasRef.current.getContext('2d');
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const ctx = canvasRef.current.getContext('2d');
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    canvasRef.current.getContext('2d').closePath();
+    setIsDrawing(false);
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+          <h3 className="font-bold text-slate-800">{title}</h3>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 bg-white">
+          <p className="text-xs text-slate-500 mb-3">請在下方方框內簽名 (Please sign within the box below):</p>
+          <canvas
+            ref={canvasRef}
+            onPointerDown={startDrawing}
+            onPointerMove={draw}
+            onPointerUp={stopDrawing}
+            onPointerOut={stopDrawing}
+            className="w-full h-48 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl cursor-crosshair touch-none"
+          />
+        </div>
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between gap-3">
+          <button onClick={() => canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)} disabled={isSubmitting} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100">重簽 (Clear)</button>
+          <button onClick={() => onSave(canvasRef.current.toDataURL('image/png'))} disabled={isSubmitting} className="flex-1 px-4 py-2 text-sm font-bold text-white bg-[#A57C00] rounded-lg hover:bg-[#8a6800] flex justify-center items-center transition-colors">
+            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={16}/> : <PenTool className="mr-2" size={16}/>} 套用簽名 (Apply)
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 
@@ -160,11 +237,12 @@ export const LocationSelector = ({ formData, setFormData, className = "" }) => {
   );
 };
 
-export const DepositField = ({ label, prefix, formData, setFormData, onUpload, addToast, onRemoveProof }) => {
+export const DepositField = ({ label, prefix, formData, setFormData, onUpload, addToast, onRemoveProof, clientPrefix }) => {
   const amountKey = `${prefix}`;
   const dateKey = `${prefix}Date`;
   const receivedKey = `${prefix}Received`;
   const proofKey = `${prefix}Proof`;
+  const proofs = Array.isArray(formData[proofKey]) ? formData[proofKey] : (formData[proofKey] ? [formData[proofKey]] : []);
   const fileInputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -176,7 +254,10 @@ export const DepositField = ({ label, prefix, formData, setFormData, onUpload, a
     setIsUploading(true);
     try {
       const url = await onUpload(file);
-      setFormData(prev => ({ ...prev, [proofKey]: url }));
+      setFormData(prev => {
+        const existing = Array.isArray(prev[proofKey]) ? prev[proofKey] : (prev[proofKey] ? [prev[proofKey]] : []);
+        return { ...prev, [proofKey]: [...existing, url] };
+      });
       addToast("收據上傳成功", "success");
     } catch (error) {
       addToast("上傳失敗: " + error.message, "error");
@@ -185,27 +266,67 @@ export const DepositField = ({ label, prefix, formData, setFormData, onUpload, a
     }
   };
 
+  const handleRemove = (urlToRemove) => {
+    if (onRemoveProof) {
+      onRemoveProof(proofKey, urlToRemove);
+    } else {
+      setFormData(prev => {
+        const existing = Array.isArray(prev[proofKey]) ? prev[proofKey] : (prev[proofKey] ? [prev[proofKey]] : []);
+        return { ...prev, [proofKey]: existing.filter(u => u !== urlToRemove) };
+      });
+    }
+  };
+
+  const renderFormattedLabel = (text) => {
+    if (typeof text !== 'string') return text;
+    const idx = text.indexOf('(');
+    if (idx !== -1) {
+      const main = text.substring(0, idx).trim();
+      const bracket = text.substring(idx);
+      return (
+        <>
+          <span>{main}</span>
+          <span className="text-[10px] font-medium text-slate-400 ml-1.5 tracking-wider">{bracket}</span>
+        </>
+      );
+    }
+    return text;
+  };
+
   return (
     <div className={`p-4 rounded-lg border transition-all ${isOverdue ? 'bg-red-50 border-red-200 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
-      <div className="flex justify-between items-center mb-3">
-        <label className="text-sm font-bold text-slate-700 flex items-center">
-          {label}
-          {isOverdue && <span className="ml-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full animate-pulse">OVERDUE</span>}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <label className="text-sm font-bold text-slate-700 flex items-center shrink-0">
+          {renderFormattedLabel(label)}
+          {isOverdue && <span className="ml-2 text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full animate-pulse">OVERDUE</span>}
         </label>
-        <label className="flex items-center space-x-2 text-xs cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={formData[receivedKey] || false}
-            onChange={e => setFormData(prev => ({ ...prev, [receivedKey]: e.target.checked }))}
-            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-          />
-          <span className={formData[receivedKey] ? "text-emerald-600 font-bold" : "text-slate-500"}>
-            {formData[receivedKey] ? "已收款" : "未收款"}
-          </span>
-        </label>
+        
+        <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+          
+          {proofs.map((url, idx) => (
+            <div key={idx} className="flex items-center space-x-1 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm shrink-0">
+              <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-[10px] text-blue-600 hover:underline truncate max-w-[80px]" title="查看收據">
+                <ImageIcon size={12} className="mr-1 shrink-0" /> 收據 {proofs.length > 1 ? idx + 1 : ''}
+              </a>
+              <button type="button" onClick={() => handleRemove(url)} className="text-slate-400 hover:text-red-500 p-0.5"><X size={10} /></button>
+            </div>
+          ))}
+
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-[10px] flex items-center text-slate-500 hover:text-blue-600 bg-white px-2 py-1 rounded border border-slate-200 hover:border-blue-200 transition-all shrink-0 shadow-sm">
+            {isUploading ? <Loader2 size={12} className="animate-spin mr-1" /> : <Upload size={12} className="mr-1" />} 上傳收據
+          </button>
+
+          <div className="w-px h-4 bg-slate-300 hidden sm:block mx-1"></div>
+          
+          <label className="flex items-center space-x-2 text-xs cursor-pointer select-none shrink-0">
+            <input type="checkbox" checked={formData[receivedKey] || false} onChange={e => setFormData(prev => ({ ...prev, [receivedKey]: e.target.checked }))} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            <span className={formData[receivedKey] ? "text-emerald-600 font-bold" : "text-slate-500"}>{formData[receivedKey] ? "已收款" : "未收款"}</span>
+          </label>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="relative">
           <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <input
@@ -227,32 +348,79 @@ export const DepositField = ({ label, prefix, formData, setFormData, onUpload, a
         />
       </div>
 
-      <div className="flex justify-end items-center border-t border-slate-200/50 pt-2">
-        <div className="flex items-center">
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
-          {formData[proofKey] ? (
-            <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
-              <a href={formData[proofKey]} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline">
-                <ImageIcon size={14} className="mr-1" /> 收據
-              </a>
-              <button
-                type="button"
-                onClick={() => onRemoveProof(proofKey)}
-                className="text-slate-400 hover:text-red-500"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-xs flex items-center text-slate-500 hover:text-blue-600 bg-white px-2 py-1 rounded border border-transparent hover:border-slate-200 transition-all">
-              {isUploading ? <Loader2 size={12} className="animate-spin mr-1" /> : <Upload size={12} className="mr-1" />} 上傳收據
-            </button>
-          )}
-        </div>
-      </div>
+      {formData.clientUploadedProofs?.map((proof, globalIdx) => {
+        if (!clientPrefix || !proof.fileName.startsWith(clientPrefix) || proofs.includes(proof.url)) return null;
+        return <PendingProofCard key={globalIdx} proof={proof} targetLabel={label} targetKey={proofKey} receivedKey={receivedKey} currentProofs={proofs} setFormData={setFormData} addToast={addToast} />;
+      })}
+
     </div>
   );
 };
+
+export const PendingProofCard = ({ proof, targetLabel, targetKey, receivedKey, currentProofs, setFormData, addToast }) => (
+  <div className="bg-blue-50/30 p-3 rounded-lg border border-blue-200 shadow-sm flex flex-col mt-3 animate-in slide-in-from-top-2 w-full">
+    <div className="flex justify-between items-start mb-2">
+      <a href={proof.url} download target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline break-all line-clamp-2 flex items-center" title={proof.fileName}>
+        <Download size={12} className="mr-1 flex-shrink-0" /> 
+        <span>{proof.fileName}</span> 
+        <span className="text-[10px] font-medium text-slate-400 ml-1.5 whitespace-nowrap">(客戶上傳)</span>
+      </a>
+    </div>
+    <div className="text-[10px] text-slate-400 mb-3 flex items-center">
+      <Clock size={10} className="mr-1" /> {new Date(proof.uploadedAt).toLocaleString('zh-HK')}
+    </div>
+    
+    <div className="mb-3 bg-white p-2 rounded border border-slate-100">
+      {proof.ocrResult === 'MATCH' ? (
+        <div className="text-[10px] font-bold text-emerald-600 flex items-start gap-1">
+           <Sparkles size={12} className="shrink-0 mt-0.5" /> 
+           <span>ai recognise the amount is correct, to be confirmed by king lung heen</span>
+        </div>
+      ) : proof.ocrResult === 'MISMATCH' ? (
+        <div className="text-[10px] font-bold text-red-600 flex items-start gap-1">
+           <AlertTriangle size={12} className="shrink-0 mt-0.5" /> 
+           <span>AI 檢測到金額可能不符，請人工核對</span>
+        </div>
+      ) : proof.ocrResult === 'UNKNOWN_AMT' ? (
+        <div className="text-[10px] font-bold text-amber-600 flex items-start gap-1">
+           <AlertCircle size={12} className="shrink-0 mt-0.5" /> 
+           <span>無法自動確定應付金額，請人工核對</span>
+        </div>
+      ) : proof.ocrResult === 'ERROR' ? (
+        <div className="text-[10px] font-bold text-red-600 flex items-start gap-1">
+           <AlertCircle size={12} className="shrink-0 mt-0.5" /> 
+           <span>AI 讀取失敗，請人工核對</span>
+        </div>
+      ) : (
+        <div className="w-full text-[10px] font-bold bg-blue-50 text-blue-600 py-1.5 rounded flex justify-center items-center">
+          <Loader2 size={12} className="animate-spin mr-1"/>
+          AI 正在自動核對金額...
+        </div>
+      )}
+    </div>
+
+    <div className="mt-auto pt-2 border-t border-slate-200">
+      <button type="button" onClick={() => {
+        setFormData(prev => {
+          const ex = Array.isArray(prev[targetKey]) ? prev[targetKey] : (prev[targetKey] ? [prev[targetKey]] : []);
+          if(ex.includes(proof.url)) return prev;
+          
+          const updates = {
+            [targetKey]: [...ex, proof.url]
+          };
+          if (receivedKey) {
+            updates[receivedKey] = true;
+          }
+
+          return { ...prev, ...updates };
+        });
+        addToast(`已核准 ${targetLabel} 收款`, "success");
+      }} className="w-full text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded shadow-sm transition-colors flex items-center justify-center">
+        <CheckCircle size={12} className="mr-1" /> 核准確認收款 (approve)
+      </button>
+    </div>
+  </div>
+);
 
 export const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;

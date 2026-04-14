@@ -3,6 +3,7 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { 
   ArrowRight, Star, ChevronDown 
 } from 'lucide-react';
+import { ArrowRight, Star, ChevronDown } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 
 // --- CONTENT DICTIONARY ---

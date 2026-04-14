@@ -157,10 +157,10 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                 // B. Render Standard Event Row
                 const event = row.data;
                 return (
-                  <tr key={row.id} className="hover:bg-slate-50 transition-colors group">
+                  <tr key={row.id} onClick={() => openEditModal(event)} className="bg-white hover:bg-slate-50 active:bg-slate-100 transition-all duration-200 cursor-pointer group hover:shadow-sm hover:z-10 relative active:scale-[0.995]">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-800 text-base">{event.eventName}</span>
+                        <span className="font-bold text-slate-800 text-base group-hover:text-blue-600 transition-colors">{event.eventName}</span>
                         <span className="text-xs text-blue-600 font-mono mt-1">{event.orderId}</span>
                         <div className="text-xs text-slate-500 mt-1 flex items-center">
                           <Clock size={12} className="mr-1" /> {event.date}
@@ -184,7 +184,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                       ${formatMoney(event.totalAmount)}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center space-x-2">
+                      <div className="flex items-center justify-center space-x-2" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => openEditModal(event)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="編輯">
                           <Edit2 size={16} />
                         </button>

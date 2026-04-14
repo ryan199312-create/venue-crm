@@ -11,7 +11,7 @@ import {
 } from '../utils/vmsUtils';
 import { TOOL_GROUPS } from '../components/FloorplanEditor';
 
-const PrintableEO = ({ data, printMode, appSettings }) => {
+const PrintableEO = ({ data, printMode, appSettings, onClientSign, onAdminSign }) => {
   if (!data) return null;
 
   // Identify if the active printMode is client-facing or internal
@@ -104,7 +104,7 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
   };
 
   // --- NEW: Dedicated Floorplan Renderer ---
-  const renderFloorplanAppendix = () => {
+  const renderFloorplanAppendix = (isStandalone = false) => {
     if (!data.floorplan || !data.floorplan.elements || data.floorplan.elements.length === 0) return null;
     const fp = data.floorplan;
     const bgImage = fp.bgImage || appSettings?.defaultFloorplan?.bgImage || '';
@@ -115,12 +115,12 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
     const isWholeVenue = selectedLocs.includes('全場');
     const visibleZones = zones.filter(z => isWholeVenue || selectedLocs.includes(z.name));
 
-    const maxRight = Math.max(1200, ...fp.elements.map(el => el.x + ((el.w_m || (el.w ? el.w / 40 : 1)) * itemScale)));
+    const maxRight = Math.max(1200, ...fp.elements.map(el => (el.x || 0) + ((el.w_m || (el.w ? el.w / 40 : 1)) * itemScale)));
     const scale = Math.min(750 / maxRight, 1);
 
     return (
       <>
-        <div className="page-break"></div>
+        {!isStandalone && <div className="page-break"></div>}
         <div className="print-page">
           <div className="flex justify-between items-end border-b-4 border-slate-900 pb-2 mb-4">
             <div>
@@ -132,7 +132,7 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
             </div>
           </div>
           <div className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl overflow-hidden mt-4 relative" style={{ height: '750px', breakInside: 'avoid' }}>
-            <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${scale})`, width: `${100 / scale}%`, height: `${100 / scale}%`, backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url(${bgImage})` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat' }}>
+            <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${scale})`, width: `${100 / scale}%`, height: `${100 / scale}%`, backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat' }}>
               {bgImage && <img src={bgImage} className="opacity-0 pointer-events-none select-none block" alt="" />}
               
               {visibleZones.length > 0 && (
@@ -163,7 +163,7 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
                   <div
                     key={el.id}
                     className={`absolute flex items-center justify-center ${displayStyle}`}
-                    style={{ left: el.x, top: el.y, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation}deg)` }}
+                    style={{ left: el.x || 0, top: el.y || 0, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation || 0}deg)` }}
                   >
                     {el.type === 'text' ? (
                       <div className="w-full h-full flex items-center justify-center overflow-visible">
@@ -175,7 +175,7 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
                     {el.label && el.type !== 'text' && (
                       <div 
                         className="absolute left-1/2 bottom-0 pointer-events-none"
-                        style={{ transform: `translate(-50%, 120%) rotate(${-el.rotation || 0}deg)` }}
+                        style={{ transform: `translate(-50%, 120%) rotate(${-(el.rotation || 0)}deg)` }}
                       >
                         <span className="bg-white text-slate-800 border border-slate-300 px-1.5 py-0.5 rounded shadow-sm text-xs font-black whitespace-nowrap inline-block">
                           {el.label}
@@ -191,6 +191,20 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
       </>
     );
   };
+
+  if (printMode === 'FLOORPLAN') {
+    return (
+      <div className="font-sans text-slate-900 w-full bg-white p-6 relative">
+        <style>{`
+          @media print { 
+            @page { margin: 5mm; size: A4; } 
+            body { -webkit-print-color-adjust: exact; } 
+          }
+        `}</style>
+        {renderFloorplanAppendix(true)}
+      </div>
+    );
+  }
 
   // ==========================================
   // 🌟 MASTER BILLING CALCULATOR 🌟
@@ -645,6 +659,11 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
     const avStrEn = getAVEnStr();
     const decorStrEn = getDecorEnStr();
 
+    const sigData = data.signatures?.[printMode] || {};
+    const hasAnyNewSignatures = data.signatures && Object.keys(data.signatures).length > 0;
+    const clientSig = sigData.client || (!hasAnyNewSignatures ? data.clientSignature : null);
+    const adminSig = sigData.admin;
+
     // --- DATE LOGIC ---
     let balanceDueDateDisplay = '';
     if (data.balanceDueDateType === 'manual' && data.balanceDueDateOverride) {
@@ -940,10 +959,27 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
             4. This document is computer generated. No signature is required.
           </div>
           <div className="w-1/3 text-right">
-            <div className="border-b border-slate-800 mb-2"></div>
-            <p className="font-bold text-xs text-left">Confirmed & Accepted by</p>
-            <p className="text-[10px] text-slate-500 mt-0.5 text-left">{data.clientName}</p>
-            <p className="text-[8px] text-slate-300 mt-4 no-print">Page 1 of 1</p>
+            <div className="border-b border-slate-800 mb-2 h-16 relative flex items-end justify-end bg-slate-50/50">
+              {!clientSig ? (
+                onClientSign ? (
+                  <button type="button" onClick={onClientSign} className="absolute inset-0 flex items-center justify-center w-full h-full bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer border-2 border-dashed border-amber-400 z-10">
+                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest text-center">點擊此處簽署<br/>Click to Sign</span>
+                  </button>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sign Here</span>
+                  </div>
+                )
+              ) : (
+                <img src={clientSig} alt="Client Signature" className="absolute bottom-0 right-0 max-h-16 max-w-full object-contain" />
+              )}
+            </div>
+          <p className="font-bold text-xs text-right">Confirmed & Accepted by</p>
+          <p className="text-[10px] text-slate-500 mt-0.5 text-right">{data.clientName}</p>
+          {(sigData.clientDate || data.clientSignatureDate) && (
+             <p className="text-[8px] text-slate-400 mt-0.5 text-right">Signed on: {new Date(sigData.clientDate || data.clientSignatureDate).toLocaleDateString()}</p>
+          )}
+          <p className="text-[8px] text-slate-300 mt-4 no-print text-right">Page 1 of 1</p>
           </div>
         </div>
       </div>
@@ -997,6 +1033,11 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
     const setupStr = getEquipmentStr(isEn);
     const avStr = getAVStr(isEn);
     const decorStr = getDecorStr(isEn);
+
+    const sigData = data.signatures?.[printMode] || {};
+    const hasAnyNewSignatures = data.signatures && Object.keys(data.signatures).length > 0;
+    const clientSig = sigData.client || (!hasAnyNewSignatures ? data.clientSignature : null);
+    const adminSig = sigData.admin;
 
     // Date logic for Balance Due
     let balanceDueDateDisplay = data.date;
@@ -1403,18 +1444,49 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
           <p className="text-[10px] font-bold mb-4 tracking-widest text-slate-500 uppercase">{isEn ? 'Acknowledgement & Agreement' : '確認條款及簽署'}</p>
           <div className="grid grid-cols-2 gap-20">
             <div>
-              <div className="border-b border-slate-400 h-16 mb-3"></div>
+              <div className="border-b border-slate-400 h-16 mb-3 relative flex items-end justify-center bg-slate-100/50">
+                {!adminSig ? (
+                  onAdminSign ? (
+                    <button type="button" onClick={onAdminSign} className="absolute inset-0 flex items-center justify-center w-full h-full bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer border-2 border-dashed border-blue-400 z-10">
+                      <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest text-center">點擊此處簽署<br/>Admin Sign</span>
+                    </button>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Admin Sign</span>
+                    </div>
+                  )
+                ) : (
+                  <img src={adminSig} alt="Admin Signature" className="absolute bottom-0 max-h-16 max-w-full object-contain" />
+                )}
+              </div>
               <p className="font-bold text-xs text-slate-800 tracking-wide">{isEn ? 'For and on behalf of' : '璟瓏軒 代表'}<br />
                 <span className="text-sm font-black text-slate-900 uppercase">KING LUNG HEEN</span>
               </p>
               <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">{isEn ? 'Authorized Signature & Chop' : '授權簽署及蓋章'}</p>
             </div>
             <div>
-              <div className="border-b border-slate-400 h-16 mb-3"></div>
+              <div className="border-b border-slate-400 h-16 mb-3 relative flex items-end justify-center bg-slate-100/50">
+                {!clientSig ? (
+                  onClientSign ? (
+                    <button type="button" onClick={onClientSign} className="absolute inset-0 flex items-center justify-center w-full h-full bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer border-2 border-dashed border-amber-400 z-10">
+                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest text-center">點擊此處簽署<br/>Click to Sign</span>
+                    </button>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sign Here</span>
+                    </div>
+                  )
+                ) : (
+                  <img src={clientSig} alt="Client Signature" className="absolute bottom-0 max-h-16 max-w-full object-contain" />
+                )}
+              </div>
               <p className="font-bold text-xs text-slate-800 tracking-wide">{isEn ? 'Confirmed & Accepted by' : '客戶確認'}<br />
                 <span className="text-sm font-black text-slate-900 uppercase">{data.clientName}</span>
               </p>
               <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">{isEn ? 'Client Signature / Company Chop' : '客戶簽署 / 公司蓋章'}</p>
+              {(sigData.clientDate || data.clientSignatureDate) && (
+                 <p className="text-[8px] text-slate-400 mt-0.5">Signed on: {new Date(sigData.clientDate || data.clientSignatureDate).toLocaleDateString()}</p>
+              )}
             </div>
           </div>
         </div>
@@ -1666,26 +1738,6 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
           </div>
         </div>
 
-        {/* --- SIGNATURE SECTION --- */}
-        <div className="mt-12 px-8 pt-8 border-t-2 border-slate-200 break-inside-avoid bg-slate-50 rounded-t-2xl relative z-10">
-          <p className="text-[10px] font-bold mb-4 tracking-widest text-slate-500 uppercase">Acknowledgement & Agreement (確認條款及簽署)</p>
-          <div className="grid grid-cols-2 gap-20">
-            <div>
-              <div className="border-b border-slate-400 h-16 mb-3"></div>
-              <p className="font-bold text-xs text-slate-800 tracking-wide">For and on behalf of (璟瓏軒 代表)<br />
-                <span className="text-sm font-black text-slate-900 uppercase">KING LUNG HEEN</span>
-              </p>
-              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Authorized Signature & Chop (授權簽署及蓋章)</p>
-            </div>
-            <div>
-              <div className="border-b border-slate-400 h-16 mb-3"></div>
-              <p className="font-bold text-xs text-slate-800 tracking-wide">Confirmed & Accepted by (客戶確認)<br />
-                <span className="text-sm font-black text-slate-900 uppercase">{data.clientName}</span>
-              </p>
-              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Client Signature / Company Chop (客戶簽署 / 公司蓋章)</p>
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
@@ -1831,23 +1883,10 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
         </div>
 
         {/* Footer Signature */}
-        <div className="mt-12 px-8 pt-8 border-t-2 border-slate-200 break-inside-avoid bg-slate-50 rounded-t-2xl relative z-10">
-          <p className="text-[10px] font-bold mb-4 tracking-widest text-slate-500 uppercase">Acknowledgement & Agreement (確認條款及簽署)</p>
-          <div className="grid grid-cols-2 gap-20">
-            <div>
-              <div className="border-b border-slate-400 h-16 mb-3"></div>
-              <p className="font-bold text-xs text-slate-800 tracking-wide">For and on behalf of (璟瓏軒 代表)<br />
-                <span className="text-sm font-black text-slate-900 uppercase">KING LUNG HEEN</span>
-              </p>
-              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Authorized Signature & Chop (授權簽署及蓋章)</p>
-            </div>
-            <div>
-              <div className="border-b border-slate-400 h-16 mb-3"></div>
-              <p className="font-bold text-xs text-slate-800 tracking-wide">Confirmed & Accepted by (客戶確認)<br />
-                <span className="text-sm font-black text-slate-900 uppercase">{data.clientName}</span>
-              </p>
-              <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Client Signature / Company Chop (客戶簽署 / 公司蓋章)</p>
-            </div>
+        <div className="mt-12 pt-8 border-t border-slate-200 flex justify-between items-end relative z-10 break-inside-avoid">
+          <div>
+            <p className="text-[10px] text-slate-400 italic">This is a computer-generated receipt. No signature is required.</p>
+            <p className="text-[10px] text-slate-400 italic mt-1">此收據由電腦自動生成，毋須簽名。</p>
           </div>
         </div>
       </div>
@@ -1867,6 +1906,11 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
 
     const fontSizePx = data.printSettings && data.printSettings.menu && data.printSettings.menu.fontSizeOverride || 18;
     const defaultExpiry = new Date(new Date().setDate(new Date().getDate() + 14)).toLocaleDateString('zh-HK');
+
+    const sigData = data.signatures?.[printMode] || {};
+    const hasAnyNewSignatures = data.signatures && Object.keys(data.signatures).length > 0;
+    const clientSig = sigData.client || (!hasAnyNewSignatures ? data.clientSignature : null);
+    const adminSig = sigData.admin;
 
     const formatMenuDate = (dateStr) => {
       if (!dateStr) return '-';
@@ -2005,13 +2049,24 @@ const PrintableEO = ({ data, printMode, appSettings }) => {
                 <p className="text-[9px] text-slate-400 mt-1 italic">I confirm the above menu and arrangements.</p>
               </div>
 
-              <div className="flex justify-between items-end gap-6 mt-8">
+              <div className="flex justify-center items-end gap-8 mt-8 px-4">
                 <div className="flex-1 text-center">
-                  <div className="border-b-2 border-slate-900 mb-1 h-8"></div>
-                  <p className="text-[9px] font-black text-slate-900 uppercase">簽署 Signature</p>
+                  <div className="border-b-2 border-slate-900 mb-1 h-12 relative flex items-end justify-center bg-slate-100/50">
+                    {!clientSig && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sign Here</span>
+                      </div>
+                    )}
+                    {clientSig && <img src={clientSig} alt="Client Signature" className="absolute bottom-0 max-h-12 max-w-full object-contain" />}
+                  </div>
+                  <p className="text-[9px] font-black text-slate-900 uppercase">客戶 Client</p>
                 </div>
-                <div className="w-28 text-center">
-                  <div className="border-b-2 border-slate-900 mb-1 h-8"></div>
+                <div className="w-32 text-center">
+                  <div className="border-b-2 border-slate-900 mb-1 h-12 relative flex items-end justify-center">
+                    {(sigData.clientDate || data.clientSignatureDate) && (
+                      <span className="text-[10px] font-mono font-bold mb-1">{new Date(sigData.clientDate || data.clientSignatureDate).toLocaleDateString()}</span>
+                    )}
+                  </div>
                   <p className="text-[9px] font-black text-slate-900 uppercase">日期 Date</p>
                 </div>
               </div>

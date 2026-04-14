@@ -43,25 +43,13 @@ import EventsListView from './EventsListView';
 import SettingsView from './SettingsView';
 import LoginView from './LoginView';
 import EventFormModal from './EventFormModal';
-import PrintableEO from './PrintableEO';
+import DocumentRenderer from '../admin/DocumentRenderer'
 
 // ==========================================
 // SECTION 1: CONFIGURATION & CONSTANTS
 // ==========================================
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : "my-venue-crm";
-
-// 穩健的 Base64 轉 Blob 函數 (避開 fetch 的長度限制與 atob 的格式要求)
-const base64ToBlob = (base64Str, mimeType = 'application/pdf') => {
-  const cleanBase64 = base64Str.replace(/[^A-Za-z0-9+/=]/g, ''); // 過濾所有無效字元與換行
-  const byteString = atob(cleanBase64);
-  const ab = new ArrayBuffer(byteString.length);
-  const ia = new Uint8Array(ab);
-  for (let i = 0; i < byteString.length; i++) {
-    ia[i] = byteString.charCodeAt(i);
-  }
-  return new Blob([ab], { type: mimeType });
-};
 
 export default function AdminApp() {
   const [user, setUser] = useState(null);
@@ -70,8 +58,6 @@ export default function AdminApp() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [isAiOpen, setIsAiOpen] = useState(false);
-  const [showPrintMenu, setShowPrintMenu] = useState(false);
-  const [showSendMenu, setShowSendMenu] = useState(false);
   const [isDataAiOpen, setIsDataAiOpen] = useState(false);
 
   // UI State for Toast & Modals
@@ -84,7 +70,6 @@ export default function AdminApp() {
   const [editingEvent, setEditingEvent] = useState(null);
 
 
-  // Printing State
   // Settings State
   const [appSettings, setAppSettings] = useState({
     minSpendRules: [],
@@ -93,7 +78,6 @@ export default function AdminApp() {
   });
 
   const [isMenuSelectOpen, setIsMenuSelectOpen] = useState(false); // Control the modal
-  const [previewVersion, setPreviewVersion] = useState(null); // Track which version is being previewed
 
   // User Management State
   const [userProfile, setUserProfile] = useState(null);
@@ -169,19 +153,19 @@ export default function AdminApp() {
     totalAmount: '',
     deposit1: '',
     deposit1Received: false,
-    deposit1Proof: '',
+    deposit1Proof: [],
     deposit1Date: '',
     deposit2: '',
     deposit2Received: false,
-    deposit2Proof: '',
+    deposit2Proof: [],
     deposit2Date: '',
     deposit3: '',
     deposit3Received: false,
-    deposit3Proof: '',
+    deposit3Proof: [],
     deposit3Date: '',
     balance: '',
     balanceReceived: false,
-    balanceProof: '',
+    balanceProof: [],
     balanceDate: '',
     paymentMethod: '現金',
     discount: '',
@@ -458,6 +442,12 @@ export default function AdminApp() {
 
     setFormData({
       ...initialFormState,
+      floorplan: {
+        bgImage: appSettings?.defaultFloorplan?.bgImage || '',
+        itemScale: appSettings?.defaultFloorplan?.itemScale || 40,
+        zones: appSettings?.defaultFloorplan?.zones || [],
+        elements: []
+      },
       menus: [{ id: Date.now(), title: '主菜單 (Main Menu)', content: '' }],
       orderId: `EO-${dateStr}-${randomSuffix}`,
       salesRep: userProfile?.displayName || user?.email || '',
@@ -473,6 +463,12 @@ export default function AdminApp() {
     const safeData = {
       ...initialFormState,
       ...event,
+      floorplan: {
+        bgImage: event.floorplan?.bgImage || appSettings?.defaultFloorplan?.bgImage || '',
+        itemScale: event.floorplan?.itemScale || appSettings?.defaultFloorplan?.itemScale || 40,
+        zones: (event.floorplan?.zones && event.floorplan.zones.length > 0) ? event.floorplan.zones : (appSettings?.defaultFloorplan?.zones || []),
+        elements: event.floorplan?.elements || []
+      },
       selectedLocations: event.selectedLocations || (event.venueLocation ? [event.venueLocation] : []),
       menus: (event.menus && event.menus.length > 0)
         ? event.menus
@@ -523,13 +519,16 @@ export default function AdminApp() {
     }
   };
 
-  const handleRemoveProof = (key) => {
+  const handleRemoveProof = (key, urlToRemove) => {
     setConfirmConfig({
       isOpen: true,
       title: "移除收據",
       message: "確定要移除此收據嗎？此操作無法還原。",
       onConfirm: () => {
-        setFormData(prev => ({ ...prev, [key]: '' }));
+        setFormData(prev => {
+          const existing = Array.isArray(prev[key]) ? prev[key] : (prev[key] ? [prev[key]] : []);
+          return { ...prev, [key]: existing.filter(u => u !== urlToRemove) };
+        });
         setConfirmConfig({ isOpen: false, title: '', message: '', onConfirm: null });
       }
     });
@@ -591,39 +590,39 @@ export default function AdminApp() {
   };
 
   // ==========================================
+  // ✍️ SIGNATURE SAVING
+  // ==========================================
+  const handleSaveSignature = async (docType, base64, role) => {
+    if (!editingEvent) return;
+    try {
+      const updateData = {
+        [`signatures.${docType}.${role}`]: base64,
+        [`signatures.${docType}.${role}Date`]: new Date().toISOString()
+      };
+      await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'events', editingEvent.id), updateData);
+    } catch (err) {
+      console.error("Signature Save Error:", err);
+      addToast("自動儲存簽名失敗", "error");
+    }
+  };
+
+  // ==========================================
   // 📤 COMMUNICATION HANDLERS
   // ==========================================
   const generateAndUploadPDF = async (docType) => {
     try {
-      addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
-      // Note: generatePDFBase64 now correctly does NOT auto-download.
-      const pdfData = await generatePDFBase64(docType);
-      if (!pdfData) return null;
-
-      addToast("正在上傳文件...", "info");
-
-      // Convert base64 to blob
-      const pdfBlob = base64ToBlob(pdfData.pdfBase64);
-
-      // Upload to Firebase Storage
-      const storageRef = ref(storage, `documents/${pdfData.fileName}`);
-      await uploadBytes(storageRef, pdfBlob);
-      const downloadUrl = await getDownloadURL(storageRef);
+      addToast(`正在雲端產生並儲存 ${docType} PDF...`, "info");
+      const pdfData = await generatePDFCloud(docType);
+      if (!pdfData || !pdfData.url) return null;
       
-      addToast("文件上傳成功！", "success");
-      return downloadUrl;
+      addToast("文件產生並上傳成功！", "success");
+      return pdfData.url;
 
     } catch (error) {
-      console.error("PDF Upload Error:", error);
       addToast(`文件上傳失敗: ${error.message}`, "error");
       return null;
     }
   };
-
-  // 1. Send via Email (Uses native mail client with AI Draft)
-  // ==========================================
-  // 📤 COMMUNICATION HANDLERS (WITH PDF)
-  // ==========================================
 
   const handleSendEmail = async (docType = 'INVOICE') => {
     if (!formData.clientEmail) return addToast("客戶未提供 Email", "error");
@@ -637,23 +636,22 @@ export default function AdminApp() {
     const baseBody = formData.emailBody || `你好 ${formData.clientName},\n\n感謝您選擇璟瓏軒。請查看以下連結以獲取您的最新文件。`;
 
     // Append the Document Link to the body
-    const portalUrl = `${window.location.origin}/portal/${editingEvent?.id}`;
-    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\n🔗 專屬活動頁面 (Client Portal):\n${portalUrl}\n\nKing Lung Heen`;
+    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\nKing Lung Heen`;
 
     // 3. Open Email Client
     const mailtoLink = `mailto:${formData.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
     window.open(mailtoLink, '_blank');
 
     addToast("已開啟電郵草稿 (Email client opened)", "success");
-    setShowSendMenu(false);
   };
-// ==========================================
-  // 📄 PDF GENERATOR (BASE64)
+  
   // ==========================================
-  const generatePDFBase64 = async (docType, customData = null) => {
+  // 📄 PDF GENERATOR (CLOUD URL)
+  // ==========================================
+  const generatePDFCloud = async (docType, customData = null) => {
     const dataToRender = customData || formData;
     try {
-      const htmlContent = renderToString(<PrintableEO data={dataToRender} printMode={docType} />);
+      const htmlContent = renderToString(<DocumentRenderer data={dataToRender} printMode={docType} appSettings={appSettings} />);
 
       // 2. Wrap it with Tailwind CSS CDN for the backend to render beautifully
       const fullHtml = `
@@ -666,7 +664,13 @@ export default function AdminApp() {
             <style>
               body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               @media print {
-                html, body { height: auto !important; min-height: auto !important; overflow: visible !important; }
+                html, body, #root { 
+                  height: auto !important; 
+                  min-height: auto !important; 
+                  overflow: visible !important; 
+                  position: static !important;
+                  display: block !important;
+                }
               }
             </style>
           </head>
@@ -676,13 +680,13 @@ export default function AdminApp() {
         </html>
       `;
 
-      const fileName = `${dataToRender.orderId}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const safeName = (dataToRender.orderId || dataToRender.eventName || 'Document').replace(/[\/\\]/g, '-');
+      const fileName = `${safeName}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
 
-      // 3. Call the new backend Cloud Function to render the PDF
-      const generatePdfApi = httpsCallable(functions, 'generatePdfBackend');
+      const generatePdfApi = httpsCallable(functions, 'generatePdfBackend', { timeout: 120000 });
       const response = await generatePdfApi({ html: fullHtml, fileName, docType });
 
-      return { pdfBase64: response.data.pdfBase64, fileName };
+      return { url: response.data.url, fileName: response.data.fileName };
 
     } catch (error) {
       console.error("PDF Cloud Function Error:", error);
@@ -704,14 +708,11 @@ export default function AdminApp() {
       addToast("正在處理文件...", "info");
       addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
 
-      // 取得 Base64 資料
-      const pdfData = await generatePDFBase64(docType);
+      // 取得 PDF 雲端連結資料
+      const pdfData = await generatePDFCloud(docType);
       if (!pdfData) return;
 
-      const portalUrl = `${window.location.origin}/portal/${editingEvent?.id}`;
-      const portalText = `\n\n🔗 專屬活動頁面 (Client Portal):\n${portalUrl}`;
-      const baseMessage = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
-      const messageContent = baseMessage + portalText;
+      const messageContent = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
 
       addToast("正在透過後端直接發送檔案...", "info");
 
@@ -720,18 +721,18 @@ export default function AdminApp() {
       await sendSleekFlow({ 
         to: phone, 
         messageContent: messageContent,
-        pdfBase64: pdfData.pdfBase64,  // 傳遞二進位字串
-        fileName: pdfData.fileName,    // 傳遞真實檔名
+        pdfUrl: pdfData.url,  // Pass the URL instead of base64
+        fileName: pdfData.fileName,
         isTemplate: isTemplate
       });
 
       addToast("WhatsApp 檔案發送成功！", "success");
-      setShowSendMenu(false);
     } catch (error) {
       console.error("SleekFlow 發送錯誤:", error);
       addToast(`發送失敗: ${error.message}`, "error");
     }
   };
+
   // ==========================================
   // 📥 PDF DOWNLOAD HANDLER
   // ==========================================
@@ -739,32 +740,24 @@ export default function AdminApp() {
     addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
     
     try {
-      // 1. 向後端請求 PDF (如果失敗，這裡會直接跳到 catch)
-      const pdfData = await generatePDFBase64(docType);
-      if (!pdfData || !pdfData.pdfBase64) throw new Error("無效的 PDF 資料");
+      const pdfData = await generatePDFCloud(docType);
+      if (!pdfData || !pdfData.url) throw new Error("伺服器未能返回 PDF 連結");
 
-      // 2. 穩健解碼 Base64 並下載
-      const blob = base64ToBlob(pdfData.pdfBase64);
-      
-      const url = window.URL.createObjectURL(blob);
+      // Trigger the actual file download in the browser
       const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
+      a.href = pdfData.url;
       a.download = pdfData.fileName;
       document.body.appendChild(a);
       a.click();
-      
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }, 2000); // 延遲銷毀，確保瀏覽器下載管理員有時間抓取檔案
+      document.body.removeChild(a);
 
-      addToast(`${docType} PDF 下載完成！`, "success");
+      addToast(`${docType} PDF 產生完成！`, "success");
     } catch (error) {
-      console.error("PDF Download/Decode Error:", error);
+      console.error("PDF Download Error:", error);
       addToast(`PDF 下載失敗: ${error.message}`, "error");
     }
   };
+
   // --- Views ---
 
   // --- Render Logic ---
@@ -830,6 +823,7 @@ export default function AdminApp() {
           setFormData={setFormData}
           appSettings={appSettings}
           onSubmit={handleSubmit}
+          onSaveSignature={handleSaveSignature}
           onUploadProof={handleUploadProof}
           onMultiImageUpload={handleMultiImageUpload}
           onRemoveProof={handleRemoveProof}
@@ -881,7 +875,7 @@ export default function AdminApp() {
       {/* 5. Print Output */}
       {printData && (
         <div className="hidden print:block print-only">
-          <PrintableEO data={printData} printMode={printMode} appSettings={appSettings} />
+          <DocumentRenderer data={printData} printMode={printMode} appSettings={appSettings} />
         </div>
       )}
     </>

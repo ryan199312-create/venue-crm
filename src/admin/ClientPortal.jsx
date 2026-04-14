@@ -1,23 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, Layout } from 'lucide-react';
-import { functions } from '../firebase';
+import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, Layout, LogOut, Sparkles, AlertTriangle, AlertCircle, PenTool, X } from 'lucide-react';
+import { functions, db } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
+import { doc, getDoc } from 'firebase/firestore';
 import { renderToString } from 'react-dom/server';
-import PrintableEO from './PrintableEO';
 import { TOOL_GROUPS } from '../components/FloorplanEditor';
-
-// Helper function to decode base64 to Blob
-const base64ToBlob = (base64Str, mimeType = 'application/pdf') => {
-  const cleanBase64 = base64Str.replace(/[^A-Za-z0-9+/=]/g, '');
-  const byteString = atob(cleanBase64);
-  const ab = new ArrayBuffer(byteString.length);
-  const ia = new Uint8Array(ab);
-  for (let i = 0; i < byteString.length; i++) {
-    ia[i] = byteString.charCodeAt(i);
-  }
-  return new Blob([ab], { type: mimeType });
-};
+import DocumentManager from '../components/DocumentManager';
 
 export default function ClientPortal() {
   const { eventId: urlEventId } = useParams();
@@ -28,63 +17,76 @@ export default function ClientPortal() {
   const [allEvents, setAllEvents] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [eventData, setEventData] = useState(null);
-  const [isDownloading, setIsDownloading] = useState(null);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [dietaryReq, setDietaryReq] = useState('');
   const [allergies, setAllergies] = useState('');
   const [isSubmittingDietary, setIsSubmittingDietary] = useState(false);
+  const [appSettings, setAppSettings] = useState(null);
 
-  // MOCK DATA: We will replace this with real Firebase data in Step 2
-  const mockData = {
-    eventName: "陳李聯婚 Wedding Banquet",
-    date: "2024-12-25",
-    startTime: "18:00",
-    endTime: "23:00",
-    venueLocation: "Red Zone + Yellow Zone",
-    guestCount: 240,
-    tableCount: 20,
-    totalAmount: 185000,
-    balanceDue: 45000,
-    deposit1Received: true,
-    deposit2Received: true,
-    status: "confirmed",
-    rundown: [
-      { id: 1, time: '17:00', activity: '場地佈置完成 & 新人到達 (Venue Setup Complete)' },
-      { id: 2, time: '18:00', activity: '恭候入席 & 席前酒會 (Reception Begins)' },
-      { id: 3, time: '20:00', activity: '新人進場 (March In)' },
-      { id: 4, time: '20:15', activity: '起菜 (Banquet Starts)' },
-    ],
-    menus: [
-      { id: 1, title: '百年好合全包宴 (Premium Banquet Menu)', content: '鴻運乳豬全體\n碧綠西蘭花炒帶子\n百花炸釀蟹鉗\n紅燒海皇燕窩羹\n清蒸大東星斑\n脆皮燒乳鴿\n金柱帶子炒飯\n百年好合紅豆沙' }
-    ]
-  };
+  // Fetch appSettings for Floorplan background image and zones (stored in public collection)
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, "artifacts", "my-venue-crm", "public", "data", "settings", "config"));
+        if (snap.exists()) {
+          setAppSettings(snap.data());
+        }
+      } catch (error) {
+        console.error("Error fetching public settings:", error);
+      }
+    };
+    fetchSettings();
+  }, []);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  // --- AUTO LOGIN CHECK ---
+  useEffect(() => {
+    const savedPhone = localStorage.getItem('vms_client_phone');
+    const savedEventId = localStorage.getItem('vms_client_event_id');
+    if (savedPhone && viewState === 'LOGIN') {
+      setPhoneInput(savedPhone);
+      handleLogin(null, savedPhone, urlEventId || savedEventId);
+    }
+  }, []);
+
+  const handleLogin = async (e, overridePhone = null, targetEventId = null) => {
+    if (e) e.preventDefault();
     setIsLoading(true);
+
+    const phoneToUse = overridePhone || phoneInput;
+    const eventToUse = targetEventId || urlEventId;
     
     try {
-      if (phoneInput.replace(/[^0-9]/g, '').length < 8) {
+      if (phoneToUse.replace(/[^0-9]/g, '').length < 8) {
         alert("請輸入有效的電話號碼 (Please enter a valid phone number)");
         setIsLoading(false);
         return;
       }
       
       const verifyAccess = httpsCallable(functions, 'verifyClientAccess');
-      const payload = urlEventId ? { eventId: urlEventId, phone: phoneInput } : { phone: phoneInput };
+      const payload = eventToUse ? { eventId: eventToUse, phone: phoneToUse } : { phone: phoneToUse };
       const response = await verifyAccess(payload);
       
       const fetchedEvents = response.data.events;
       setAllEvents(fetchedEvents);
+
+      // Save to localStorage
+      localStorage.setItem('vms_client_phone', phoneToUse);
       
-      if (fetchedEvents.length === 1 || urlEventId) {
-        handleSelectEvent(fetchedEvents[0]);
+      if (fetchedEvents.length === 1 || eventToUse) {
+        const ev = fetchedEvents.find(e => e.id === eventToUse) || fetchedEvents[0];
+        handleSelectEvent(ev);
       } else {
         setViewState('SELECT');
       }
     } catch (error) {
       console.error("Login failed:", error);
-      alert("驗證失敗：找不到符合的活動或電話號碼不正確。 (Verification failed)");
+      if (overridePhone) {
+        // Clear invalid storage silently on auto-login failure
+        localStorage.removeItem('vms_client_phone');
+        localStorage.removeItem('vms_client_event_id');
+      } else {
+        alert("驗證失敗：找不到符合的活動或電話號碼不正確。 (Verification failed)");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -95,67 +97,28 @@ export default function ClientPortal() {
     setEventId(ev.id);
     setDietaryReq(ev.specialMenuReq || '');
     setAllergies(ev.allergies || '');
+    localStorage.setItem('vms_client_event_id', ev.id);
     setViewState('PORTAL');
   };
 
-  // --- PDF DOWNLOAD HANDLER ---
-  const handleDownloadPDF = async (docType) => {
-    setIsDownloading(docType);
-    try {
-      // 1. Render the EO component to HTML
-      const htmlContent = renderToString(<PrintableEO data={eventData} printMode={docType} />);
-      
-      // 2. Wrap with Tailwind and fonts
-      const fullHtml = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-            <style>
-              body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              @media print { html, body { height: auto !important; min-height: auto !important; overflow: visible !important; } }
-            </style>
-          </head>
-          <body>${htmlContent}</body>
-        </html>
-      `;
-
-      const fileName = `${eventData.eventName}_${docType}.pdf`;
-      const generatePdfApi = httpsCallable(functions, 'generatePdfBackend');
-      const response = await generatePdfApi({ html: fullHtml, fileName, docType });
-
-      // 3. Convert and trigger download
-      const blob = base64ToBlob(response.data.pdfBase64);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-    } catch (error) {
-      console.error("PDF Download Error:", error);
-      alert("下載失敗 (Download failed). 請稍後再試。");
-    } finally {
-      setIsDownloading(null);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('vms_client_phone');
+    localStorage.removeItem('vms_client_event_id');
+    setPhoneInput('');
+    setEventData(null);
+    setAllEvents([]);
+    setViewState('LOGIN');
   };
 
   // --- PAYMENT PROOF UPLOAD HANDLER ---
   const handleFileUpload = (e, milestoneLabel = 'Payment') => {
-    console.log("[DEBUG 1] handleFileUpload triggered for:", milestoneLabel);
     const file = e.target.files[0];
-    console.log("[DEBUG 2] Selected file:", file);
     
     if (!file) return;
     const target = e.target; // Save reference to clear AFTER processing
 
-    console.log(`[DEBUG 3] File size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
     // Prevent files larger than 5MB to avoid crashing the Cloud Function payload limit (10MB Max)
     if (file.size > 5 * 1024 * 1024) {
-      console.warn("[DEBUG] File rejected: Too large");
       alert("檔案過大 (File too large). 請上傳小於 5MB 的檔案。");
       target.value = null;
       return;
@@ -164,16 +127,11 @@ export default function ClientPortal() {
     setIsUploadingProof(true);
     const reader = new FileReader();
     
-    reader.onloadstart = () => console.log("[DEBUG 4] FileReader started reading local file...");
-    
     reader.readAsDataURL(file);
     reader.onload = async () => {
-      console.log("[DEBUG 5] FileReader finished successfully.");
       try {
         const base64Str = reader.result.split(',')[1];
-        console.log(`[DEBUG 6] Base64 string generated (Length: ${base64Str.length} characters)`);
         
-        console.log("[DEBUG 7] Calling Firebase Cloud Function: uploadClientPaymentProof...");
         const uploadApi = httpsCallable(functions, 'uploadClientPaymentProof');
         const safePrefix = milestoneLabel.split(' ')[0]; // e.g. "1st", "2nd"
         const response = await uploadApi({ 
@@ -183,7 +141,6 @@ export default function ClientPortal() {
           fileBase64: base64Str 
         });
         
-        console.log("[DEBUG 8] Cloud Function returned Success:", response.data);
 
         // Add to local state so the UI updates immediately with the green badge
         setEventData(prev => ({
@@ -197,16 +154,13 @@ export default function ClientPortal() {
 
         alert("上傳成功 (Upload Successful)! 我們將盡快為您核對付款。");
       } catch (error) {
-        console.error("[DEBUG ERROR] Upload failed during Firebase call:", error);
         alert("上傳失敗 (Upload Failed). 檔案可能過大或網路不穩，請稍後再試。");
       } finally {
-        console.log("[DEBUG 9] Upload process finished (Cleaning up UI)");
         setIsUploadingProof(false);
         target.value = null; // Clear input safely after processing
       }
     };
     reader.onerror = (err) => {
-      console.error("[DEBUG ERROR] FileReader failed:", err);
       alert("讀取手機檔案失敗 (Failed to read local file).");
       setIsUploadingProof(false);
       target.value = null;
@@ -232,6 +186,31 @@ export default function ClientPortal() {
       alert("更新失敗 (Update failed). 請稍後再試。");
     } finally {
       setIsSubmittingDietary(false);
+    }
+  };
+
+  // --- SIGNATURE SUBMIT HANDLER ---
+  const handleSignatureSubmit = async (docType, base64String) => {
+    try {
+      const signApi = httpsCallable(functions, 'signClientContract');
+      await signApi({ eventId, phone: phoneInput, signatureBase64: base64String, docType });
+      
+      setEventData(prev => ({ 
+        ...prev, 
+        signatures: {
+          ...(prev.signatures || {}),
+          [docType]: {
+            ...(prev.signatures?.[docType] || {}),
+            client: base64String,
+            clientDate: new Date().toISOString()
+          }
+        }
+      }));
+      alert("合約已成功簽署 (Contract signed successfully)!");
+    } catch (error) {
+      console.error("Signature failed:", error);
+      alert("簽署失敗 (Signature failed). 請稍後再試。");
+      throw error;
     }
   };
 
@@ -335,6 +314,10 @@ export default function ClientPortal() {
             <ChevronLeft size={20} />
           </button>
         )}
+        
+        <button onClick={handleLogout} className="absolute top-4 right-4 bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-md text-white hover:bg-white/30 transition-colors z-20 flex items-center gap-1 text-xs font-bold">
+          <LogOut size={12} /> 登出
+        </button>
       </div>
 
       {/* Main Content Area based on Tabs */}
@@ -366,10 +349,6 @@ export default function ClientPortal() {
                 </div>
               </div>
             </div>
-
-            {eventData.floorplan && eventData.floorplan.elements && eventData.floorplan.elements.length > 0 && (
-              <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={[eventData.venueLocation]} />
-            )}
           </div>
         )}
 
@@ -436,20 +415,64 @@ export default function ClientPortal() {
                       </div>
                     </div>
                     
-                    {!m.received && (
-                      <div className="mt-2 pt-2 border-t border-slate-200">
-                        <div className={`relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${isUploadingProof ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
-                          {isUploadingProof ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
-                          <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{isUploadingProof ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
-                          <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={isUploadingProof} title="Upload Proof" />
-                        </div>
-                        {eventData.clientUploadedProofs && eventData.clientUploadedProofs.some(p => p.fileName.startsWith(m.label.split(' ')[0])) && (
-                          <div className="mt-2 text-[10px] text-emerald-600 font-bold flex items-center justify-center bg-emerald-50 py-1.5 rounded-lg border border-emerald-100">
-                            <CheckCircle size={12} className="mr-1" /> 已上傳紀錄 (Proof Uploaded)
+                    {(() => {
+                      const rawProofs = eventData[`${m.key}Proof`];
+                      const officialProofs = (Array.isArray(rawProofs) ? rawProofs : (rawProofs ? [rawProofs] : [])).filter(u => u && typeof u === 'string' && u.trim() !== '');
+                      
+                      const clientProofsForMilestone = (eventData.clientUploadedProofs || []).filter(p => p && p.fileName && p.fileName.startsWith(m.label.split(' ')[0]));
+                      const pendingProofs = clientProofsForMilestone.filter(p => !officialProofs.includes(p.url));
+
+                      if (m.received && officialProofs.length === 0 && pendingProofs.length === 0) return null;
+
+                      return (
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            
+                            {/* UPLOAD BOX (Only visible if not received) */}
+                            {!m.received && (
+                              <div className={`relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${isUploadingProof ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
+                                {isUploadingProof ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
+                                <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{isUploadingProof ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
+                                <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={isUploadingProof} title="Upload Proof" />
+                              </div>
+                            )}
+                        
+                            {/* VERIFIED/OFFICIAL PROOFS */}
+                            {officialProofs.map((url, idx) => (
+                              <div key={`off-${idx}`} className="mt-2 text-[10px] font-bold flex flex-col gap-1.5 bg-emerald-50 py-2 px-3 rounded-lg border border-emerald-200 shadow-sm">
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="flex items-center text-emerald-700"><CheckCircle size={12} className="mr-1" /> 已確認收據 (Official Proof) {officialProofs.length > 1 ? idx + 1 : ''}</span>
+                                  <a href={url} download target="_blank" rel="noreferrer" className="text-emerald-700 hover:text-emerald-900 bg-white px-2 py-0.5 rounded border border-emerald-200 flex items-center shadow-sm transition-colors">
+                                    <Download size={10} className="mr-1"/> 檢視 (View)
+                                  </a>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* PENDING PROOFS */}
+                            {pendingProofs.map((p, idx) => (
+                              <div key={`pend-${idx}`} className="mt-2 text-[10px] font-bold flex flex-col gap-1.5 bg-slate-50 py-2 px-3 rounded-lg border border-slate-200 shadow-sm">
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="flex items-center text-slate-600"><Clock size={12} className="mr-1" /> 處理中 (Pending Review)</span>
+                                  <a href={p.url} download target="_blank" rel="noreferrer" className="text-slate-500 hover:text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 flex items-center shadow-sm transition-colors">
+                                    <Download size={10} className="mr-1"/> 檢視 (View)
+                                  </a>
+                                </div>
+                                <div className="pt-1 border-t border-slate-200/60 mt-0.5">
+                                  {p.ocrResult === 'MATCH' ? (
+                                    <span className="flex items-start text-emerald-600"><Sparkles size={12} className="mr-1 shrink-0 mt-0.5" /> AI 識別金額相符，待專員最終確認 (Verified by AI)</span>
+                                  ) : p.ocrResult === 'MISMATCH' ? (
+                                    <span className="flex items-start text-amber-600"><AlertTriangle size={12} className="mr-1 shrink-0 mt-0.5" /> AI 識別金額不符，專員將人手跟進 (Pending Manual Review)</span>
+                                  ) : (p.ocrResult === 'UNKNOWN_AMT' || p.ocrResult === 'ERROR') ? (
+                                    <span className="flex items-start text-slate-500"><AlertCircle size={12} className="mr-1 shrink-0 mt-0.5" /> 已記錄，等待專員人手確認 (Pending Manual Review)</span>
+                                  ) : (
+                                    <span className="flex items-start text-blue-600"><Loader2 size={12} className="mr-1 shrink-0 mt-0.5 animate-spin" /> AI 正在核對金額... (AI Verifying...)</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        )}
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -523,36 +546,26 @@ export default function ClientPortal() {
           </div>
         )}
 
-        {/* TAB 5: DOCUMENTS */}
+        {/* TAB 5: FLOORPLAN */}
+        {activeTab === 'floorplan' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+            <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={eventData.selectedLocations || [eventData.venueLocation]} />
+          </div>
+        )}
+
+        {/* TAB 6: DOCUMENTS */}
         {activeTab === 'documents' && (
           <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
             <h4 className="font-bold text-slate-800 mb-4 flex items-center px-1"><FileText size={18} className="mr-2 text-[#A57C00]" /> Official Documents</h4>
             
-            {[
-              { id: 'QUOTATION', label: 'Quotation', sub: '報價單' },
-              { id: 'CONTRACT', label: 'Contract', sub: '合約' },
-              { id: 'INVOICE', label: 'Invoice', sub: '發票' },
-              (eventData.deposit1Received || eventData.deposit2Received || eventData.deposit3Received || eventData.balanceReceived) ? { id: 'RECEIPT', label: 'Receipt', sub: '收據' } : null,
-            ].filter(Boolean).map(doc => (
-              <div key={doc.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between group hover:border-[#A57C00]/30 transition-colors">
-                <div className="flex items-center">
-                  <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4 text-[#A57C00]">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">{doc.label}</p>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{doc.sub}</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => handleDownloadPDF(doc.id)}
-                  disabled={isDownloading === doc.id}
-                  className="bg-slate-50 hover:bg-[#A57C00] hover:text-white text-slate-600 p-3 rounded-full transition-colors disabled:opacity-50"
-                >
-                  {isDownloading === doc.id ? <Loader2 size={18} className="animate-spin text-[#A57C00]" /> : <Download size={18} />}
-                </button>
-              </div>
-            ))}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <DocumentManager 
+                eventData={eventData} 
+                appSettings={appSettings} 
+              onSign={handleSignatureSubmit} 
+                isClientPortal={true} 
+              />
+            </div>
           </div>
         )}
       </div>
@@ -563,6 +576,7 @@ export default function ClientPortal() {
         <NavButton icon={CreditCard} label="Billing" active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
         <NavButton icon={Utensils} label="Menu" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
         <NavButton icon={Clock} label="Rundown" active={activeTab === 'logistics'} onClick={() => setActiveTab('logistics')} />
+        <NavButton icon={Layout} label="Floorplan" active={activeTab === 'floorplan'} onClick={() => setActiveTab('floorplan')} />
         <NavButton icon={Download} label="Docs" active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} />
       </div>
     </div>
@@ -581,33 +595,63 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
 
 // --- FLOORPLAN VIEWER COMPONENT ---
 const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
-  if (!floorplan || !floorplan.elements || floorplan.elements.length === 0) return null;
+  const containerRef = useRef(null);
+  const [scale, setScale] = useState(1);
+
+  const bgImage = floorplan?.bgImage || '';
+  const itemScale = floorplan?.itemScale || 40;
+  const zones = floorplan?.zones || [];
+  const elements = floorplan?.elements || [];
   
-  const bgImage = floorplan.bgImage || '';
-  const itemScale = floorplan.itemScale || 40;
-  const zones = floorplan.zones || [];
+  if (!bgImage && elements.length === 0 && zones.length === 0) {
+    return (
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 mt-4 text-center">
+        <Layout size={32} className="mx-auto text-slate-300 mb-3" />
+        <h4 className="font-bold text-slate-700">尚未設定平面圖</h4>
+        <p className="text-xs text-slate-500 mt-1">Floorplan is not yet configured for this event.</p>
+      </div>
+    );
+  }
   
   const isWholeVenue = selectedLocations.includes('全場');
-  const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.includes(z.name) || selectedLocations.some(l => l.includes(z.name)));
+  const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.some(l => l && typeof l === 'string' && l.includes(z.name)));
 
   // Max boundaries to ensure scrolling works properly
-  const maxRight = Math.max(800, ...floorplan.elements.map(el => el.x + ((el.w_m || (el.w ? el.w / 40 : 1)) * itemScale)));
-  const maxBottom = Math.max(600, ...floorplan.elements.map(el => el.y + ((el.h_m || (el.h ? el.h / 40 : 1)) * itemScale)));
+  const maxRight = elements.length > 0 ? Math.max(1000, ...elements.map(el => (el.x || 0) + ((el.w_m || (el.w ? el.w / 40 : 1)) * itemScale))) : 1000;
+  const maxBottom = elements.length > 0 ? Math.max(700, ...elements.map(el => (el.y || 0) + ((el.h_m || (el.h ? el.h / 40 : 1)) * itemScale))) : 700;
+
+  const contentW = maxRight + 100;
+  const contentH = maxBottom + 100;
+
+  // Resize observer to scale map dynamically
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        const { width, height } = entry.contentRect;
+        const scaleW = width / contentW;
+        const scaleH = height / contentH;
+        setScale(Math.min(scaleW, scaleH, 1));
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [contentW, contentH]);
 
   return (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mt-4">
       <h4 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2 flex items-center">
         <Layout size={18} className="mr-2 text-[#A57C00]" /> Venue Floorplan (場地平面圖)
       </h4>
-      <p className="text-[10px] text-slate-500 mb-3">You can scroll / pan around the floorplan to view your setup.</p>
       
-      <div className="w-full h-[400px] overflow-auto bg-slate-50 border-2 border-slate-200 rounded-xl relative touch-pan-x touch-pan-y shadow-inner cursor-grab active:cursor-grabbing">
+      <div ref={containerRef} className="w-full h-[60vh] min-h-[400px] bg-slate-50 border-2 border-slate-200 rounded-xl relative shadow-inner overflow-hidden flex items-center justify-center">
         <div 
-          className="relative origin-top-left" 
+          className="relative origin-center transition-transform" 
           style={{ 
-            width: `${Math.max(1200, maxRight + 200)}px`, 
-            height: `${Math.max(800, maxBottom + 200)}px`,
-            backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.4) 1px, transparent 1px), url(${bgImage})` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
+            transform: `scale(${scale})`,
+            width: `${contentW}px`, 
+            height: `${contentH}px`,
+            backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.4) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
             backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`,
             backgroundPosition: 'top left',
             backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat'
@@ -631,7 +675,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
           )}
 
           {/* Render Elements */}
-          {floorplan.elements.map(el => {
+          {elements.map(el => {
             const w_m = el.w_m || (el.w ? el.w / 40 : 1);
             const h_m = el.h_m || (el.h ? el.h / 40 : 1);
             
@@ -643,7 +687,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
               <div
                 key={el.id}
                 className={`absolute flex items-center justify-center transition-all ${displayStyle}`}
-                style={{ left: el.x, top: el.y, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation}deg)` }}
+                style={{ left: el.x || 0, top: el.y || 0, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation || 0}deg)` }}
               >
                 {el.type === 'text' ? (
                   <div className="w-full h-full flex items-center justify-center overflow-visible">
@@ -655,7 +699,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
                 {el.label && el.type !== 'text' && (
                   <div 
                     className="absolute left-1/2 bottom-0 pointer-events-none"
-                    style={{ transform: `translate(-50%, 120%) rotate(${-el.rotation || 0}deg)` }}
+                    style={{ transform: `translate(-50%, 120%) rotate(${-(el.rotation || 0)}deg)` }}
                   >
                     <span className="bg-white/90 backdrop-blur-sm text-slate-800 border border-slate-300 px-1.5 py-0.5 rounded shadow-sm text-[10px] font-black whitespace-nowrap inline-block">
                       {el.label}

@@ -174,7 +174,7 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
             </h3>
             <div className="space-y-2">
               {overduePayments.map((item, idx) => (
-                <div key={idx} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex justify-between items-center cursor-pointer hover:bg-red-50 transition-colors" onClick={() => openEditModal(events.find(e => e.id === item.id))}>
+                <div key={idx} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex justify-between items-center cursor-pointer hover:bg-red-50 active:bg-red-100 transition-all duration-200 hover:shadow-md hover:z-10 relative active:scale-[0.995]" onClick={() => openEditModal(events.find(e => e.id === item.id))}>
                   <div>
                     <div className="font-bold text-slate-800 text-sm">{item.name}</div>
                     <div className="text-xs text-red-600 font-medium">{item.type} • 應付日期: {item.date}</div>
@@ -198,7 +198,7 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
               <div className="text-center text-slate-400 py-4 text-sm">未來 14 天無到期款項</div>
             ) : (
               upcomingPayments.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors cursor-pointer" onClick={() => openEditModal(events.find(e => e.id === item.id))}>
+                <div key={idx} className="flex justify-between items-center p-3 bg-transparent hover:bg-white active:bg-slate-50 rounded-lg border border-transparent hover:border-slate-200 transition-all duration-200 cursor-pointer hover:shadow-sm hover:z-10 relative active:scale-[0.995]" onClick={() => openEditModal(events.find(e => e.id === item.id))}>
                   <div>
                     <div className="font-bold text-slate-700 text-sm">{item.name}</div>
                     <div className="text-xs text-slate-500">{item.type} • 到期: <span className="text-amber-600 font-bold">{item.date}</span></div>
@@ -258,7 +258,7 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
                 <div className="text-center text-slate-400 py-8 text-sm">暫無近期活動</div>
               ) : (
                 upcomingEvents.map(event => (
-                  <div key={event.id} className="p-4 hover:bg-slate-50 flex items-center space-x-4 cursor-pointer group transition-colors" onClick={() => openEditModal(event)}>
+                  <div key={event.id} className="p-4 bg-white hover:bg-slate-50 active:bg-slate-100 flex items-center space-x-4 cursor-pointer group transition-all duration-200 hover:shadow-sm hover:z-10 relative active:scale-[0.995]" onClick={() => openEditModal(event)}>
                     <div className="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-lg flex flex-col items-center justify-center text-blue-600 border border-blue-100 group-hover:border-blue-300 transition-colors">
                       <span className="text-[10px] font-bold uppercase">{new Date(event.date).toLocaleString('en-US', { month: 'short' })}</span>
                       <span className="text-lg font-bold leading-none">{new Date(event.date).getDate()}</span>
@@ -334,7 +334,7 @@ const DashboardView = ({ events, openEditModal, setIsDataAiOpen }) => {
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {currentMonthEvents.map(event => (
-                      <div key={event.id} className="p-3 hover:bg-white transition-colors cursor-pointer group" onClick={() => openEditModal(event)}>
+                      <div key={event.id} className="p-3 bg-transparent hover:bg-white active:bg-slate-50 transition-all duration-200 cursor-pointer group hover:shadow-sm hover:z-10 relative active:scale-[0.995]" onClick={() => openEditModal(event)}>
                         <div className="flex items-center space-x-3">
                           <div className="flex-shrink-0 w-8 h-8 bg-white rounded border border-slate-200 flex flex-col items-center justify-center text-slate-600 group-hover:border-blue-300 group-hover:text-blue-600 transition-colors">
                             <span className="text-[9px] font-bold uppercase leading-none">{new Date(event.date).toLocaleString('en-US', { weekday: 'short' })}</span>

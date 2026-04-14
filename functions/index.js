@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2"); // Import this
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const FormData = require("form-data");
@@ -58,20 +59,21 @@ exports.sendSleekFlow = onCall(
       throw new HttpsError("unauthenticated", "User must be logged in.");
     }
 
-    // 接收從前端傳來的 base64 檔案資料
-    const { to, messageContent, pdfBase64, fileName, isTemplate } = request.data;
+    const { to, messageContent, pdfUrl, fileName, isTemplate } = request.data;
     const API_KEY = sleekflowKey.value();
 
     try {
-      if (pdfBase64) {
-        // 🌟 有 PDF 的情況：使用 send/file API (Local File)
-        const fileBuffer = Buffer.from(pdfBase64, 'base64');
+      if (pdfUrl) {
+        // 🌟 Fetch the PDF from URL into a buffer
+        const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+        const fileBuffer = Buffer.from(pdfResponse.data);
+        
         const form = new FormData();
         
         form.append("channel", "whatsappcloudapi");
         form.append("to", to);
-        form.append("type", "document"); // 檔案類型為 document
-        form.append("caption", messageContent || ""); // 將 AI 文字放入檔案備註
+        form.append("type", "document"); 
+        form.append("caption", messageContent || ""); 
         
         // 附加檔案，必須指定檔名與類型
         form.append("file", fileBuffer, {
@@ -81,7 +83,7 @@ exports.sendSleekFlow = onCall(
 
         await axios.post("https://api.sleekflow.io/api/message/send/file", form, {
           headers: { 
-            ...form.getHeaders(), // FormData 專屬 Headers
+            ...form.getHeaders(),
             "X-Sleekflow-Api-Key": API_KEY 
           }
         });
@@ -126,7 +128,7 @@ exports.ping = onCall({}, (request) => {
 
 // 5. SECURE PDF GENERATOR
 exports.generatePdfBackend = onCall(
-  { memory: "1GiB", timeoutSeconds: 120 },
+  { memory: "2GiB", timeoutSeconds: 120 },
   async (request) => {
     const { html, fileName } = request.data;
 
@@ -145,12 +147,38 @@ exports.generatePdfBackend = onCall(
       });
 
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle2", timeout: 60000 });
+      
+      // 1. Force high DPI (4x) for crisp vector/raster rendering (fixes "low resolution" look)
+      await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 4 });
 
-      const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+      // 2. Wait for 'networkidle0' so Tailwind CDN and external images finish loading completely
+      await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+      
+      // 3. Add a small buffer to let the browser paint complex floorplan transforms
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // 4. Force Puppeteer to respect CSS page sizes and pagination
+      const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true });
       await browser.close();
 
-      return { pdfBase64: pdfBuffer.toString("base64"), fileName: fileName || "document.pdf" };
+      // Save to Firebase Storage instead of returning Base64 payload
+      const bucket = admin.storage().bucket("event-management-system-9f764.firebasestorage.app");
+      const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : "document.pdf";
+      const uniquePath = `generated_pdfs/${Date.now()}_${safeFileName}`;
+      const file = bucket.file(uniquePath);
+      const token = crypto.randomUUID();
+
+      await file.save(pdfBuffer, {
+        metadata: { 
+          contentType: 'application/pdf',
+          contentDisposition: `attachment; filename="${safeFileName}"`,
+          metadata: { firebaseStorageDownloadTokens: token }
+        }
+      });
+
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniquePath)}?alt=media&token=${token}`;
+
+      return { url: publicUrl, fileName: safeFileName };
     } catch (error) {
       if (browser) await browser.close();
       console.error("PDF Generation failed:", error);
@@ -221,6 +249,85 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
   }
 });
 
+// ==========================================
+// 9. AUTOMATIC CLEANUP OF OLD PDFS
+// ==========================================
+exports.cleanupOldPdfs = onSchedule("every day 00:00", async (event) => {
+  const bucket = admin.storage().bucket("event-management-system-9f764.firebasestorage.app");
+  
+  try {
+    const [files] = await bucket.getFiles({ prefix: 'generated_pdfs/' });
+    const now = Date.now();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    let deletedCount = 0;
+
+    const deletePromises = files.map(async (file) => {
+      const [metadata] = await file.getMetadata();
+      const timeCreated = new Date(metadata.timeCreated).getTime();
+      
+      if (now - timeCreated > THIRTY_DAYS_MS) {
+        await file.delete();
+        deletedCount++;
+      }
+    });
+    
+    await Promise.all(deletePromises);
+    console.log(`Successfully deleted ${deletedCount} old PDF(s) from Storage.`);
+  } catch (error) {
+    console.error("Error cleaning up old PDFs:", error);
+  }
+});
+
+// ==========================================
+// 10. SIGN CLIENT CONTRACT
+// ==========================================
+exports.signClientContract = onCall(async (request) => {
+  const { eventId, phone, signatureBase64, docType } = request.data;
+
+  if (!eventId || !phone || !signatureBase64) {
+    throw new HttpsError('invalid-argument', 'Missing required fields.');
+  }
+
+  const appId = "my-venue-crm";
+  const db = admin.firestore();
+  
+  try {
+    const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
+    const docSnap = await eventRef.get();
+
+    if (!docSnap.exists) {
+      throw new HttpsError('not-found', 'Event not found.');
+    }
+
+    const eventData = docSnap.data();
+    const cleanInputPhone = phone.replace(/[^0-9]/g, '').slice(-8);
+    const cleanDbPhone = (eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
+
+    if (cleanInputPhone !== cleanDbPhone) {
+      throw new HttpsError('permission-denied', 'Invalid phone number.');
+    }
+
+    // Update the database with the signature PNG
+    const updateData = {};
+    if (docType) {
+      updateData[`signatures.${docType}.client`] = signatureBase64;
+      updateData[`signatures.${docType}.clientDate`] = new Date().toISOString();
+    } else {
+      // Fallback for legacy
+      updateData.clientSignature = signatureBase64;
+      updateData.clientSignatureDate = new Date().toISOString();
+    }
+
+    await eventRef.update(updateData);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Sign Contract Error:", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'Internal Server Error');
+  }
+});
+
 // 7. VERIFY CLIENT ACCESS (PORTAL LOGIN)
 exports.verifyClientAccess = onCall(async (request) => {
   const { eventId, phone } = request.data;
@@ -279,33 +386,10 @@ exports.verifyClientAccess = onCall(async (request) => {
       const balanceDue = Math.max(0, total - actualPaid);
 
       return {
+        ...eventData,
         id: eventData.id,
-        eventName: eventData.eventName,
-        date: eventData.date,
-        startTime: eventData.startTime,
-        endTime: eventData.endTime,
-        venueLocation: eventData.venueLocation,
-        guestCount: eventData.guestCount,
-        tableCount: eventData.tableCount,
         totalAmount: total,
-        balanceDue: balanceDue,
-        deposit1: eventData.deposit1 || '',
-        deposit1Date: eventData.deposit1Date || '',
-        deposit1Received: eventData.deposit1Received || false,
-        deposit2: eventData.deposit2 || '',
-        deposit2Date: eventData.deposit2Date || '',
-        deposit2Received: eventData.deposit2Received || false,
-        deposit3: eventData.deposit3 || '',
-        deposit3Date: eventData.deposit3Date || '',
-        deposit3Received: eventData.deposit3Received || false,
-        balanceReceived: eventData.balanceReceived || false,
-        status: eventData.status,
-        rundown: eventData.rundown || [],
-        menus: eventData.menus || [],
-        specialMenuReq: eventData.specialMenuReq || '',
-        allergies: eventData.allergies || '',
-        floorplan: eventData.floorplan || null,
-        clientUploadedProofs: eventData.clientUploadedProofs || []
+        balanceDue: balanceDue
       };
     });
 

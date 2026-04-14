@@ -5,21 +5,22 @@ import {
   Grid, History, Image as ImageIcon, Info, Languages, Layout, Loader2, Mail, MapPin, Maximize,
   MessageCircle, Mic, Mic2, Monitor, Palette, PenTool, PieChart, Plus, Printer,
   RotateCw, Save, Send, Smartphone, Sparkles, Star, Sun, Trash2, Truck, Tv, Type,
-  Users, Utensils, Video, Wind, X, Zap, Receipt, ChevronUp, Download
+  Users, Utensils, Video, Wind, X, Zap, Receipt, ChevronUp, Download, Upload
 } from 'lucide-react';
 
 import { useAI } from '../hooks/useAI';
-import { FormInput, MoneyInput, FormSelect, FormTextArea, FormCheckbox, LocationSelector, DepositField, Modal, VersionPreviewModal } from '../components/ui';
+import { FormInput, MoneyInput, FormSelect, FormTextArea, FormCheckbox, LocationSelector, DepositField, Modal, VersionPreviewModal, PendingProofCard } from '../components/ui';
 import {
   EVENT_TYPES, DEFAULT_DRINK_PACKAGES, DEPARTMENTS, FOOD_DEPTS, DRINK_DEPTS,
-  equipmentMap, avMap, decorationMap, generateBillingSummary, formatMoney, parseMoney,
+  equipmentMap, avMap, decorationMap, generateBillingSummary, formatMoney,
   safeFloat, DECOR_COLORS, SERVING_STYLES
 } from '../utils/vmsUtils';
 import FloorplanEditor from '../components/FloorplanEditor';
+import DocumentManager from '../components/DocumentManager';
 
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings,
-  onSubmit, onUploadProof, onMultiImageUpload, onRemoveProof, addToast,
+  onSubmit, onSaveSignature, onUploadProof, onMultiImageUpload, onRemoveProof, addToast,
   onOpenAi, onPrintEO, onPrintBriefing, onPrintQuotation, onPrintInvoice, onPrintReceipt,
   onPrintContractEN, onPrintContractCN, onOpenMenuPrint, onDownloadPDF,
   onSendSleekFlow, onSendEmail, events
@@ -28,13 +29,14 @@ export default function EventFormModal({
 
   // Internal UI State
   const [formTab, setFormTab] = useState('basic');
-  const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showSendMenu, setShowSendMenu] = useState(false);
+  const [showDocManager, setShowDocManager] = useState(false);
   const [previewVersion, setPreviewVersion] = useState(null);
   const [highlightTarget, setHighlightTarget] = useState(null);
   const [translatingMenuId, setTranslatingMenuId] = useState(null);
   const [isTranslatingDrinks, setIsTranslatingDrinks] = useState(false);
   const [drinkPackageType, setDrinkPackageType] = useState('');
+  const [verifyingProofIdx, setVerifyingProofIdx] = useState(null);
 
   const billingSummary = useMemo(() => generateBillingSummary(formData), [formData]);
 
@@ -42,8 +44,8 @@ export default function EventFormModal({
   useEffect(() => {
     if (isOpen) {
       setFormTab('basic');
-      setShowPrintMenu(false);
       setShowSendMenu(false);
+      setShowDocManager(false);
       if (editingEvent) {
         if (DEFAULT_DRINK_PACKAGES.includes(editingEvent.drinksPackage)) {
           setDrinkPackageType(editingEvent.drinksPackage);
@@ -168,13 +170,7 @@ export default function EventFormModal({
   };
 
   const updateFinanceState = (newData) => {
-    const newTotal = generateBillingSummary(newData).grandTotal;
-    let updates = { totalAmount: newTotal };
-    if (newData.autoSchedulePayment) {
-      const terms = calculatePaymentTerms(newTotal, newData.date);
-      if (terms) updates = { ...updates, ...terms };
-    }
-    return { ...newData, ...updates };
+    return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
   };
 
   // --- Handlers ---
@@ -207,7 +203,7 @@ export default function EventFormModal({
           return item;
         });
       }
-      return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
+      return updateFinanceState(newData);
     });
   };
 
@@ -354,6 +350,84 @@ export default function EventFormModal({
     );
   };
 
+  useEffect(() => {
+    if (!isOpen || !formData.clientUploadedProofs) return;
+
+    const unverifiedIdx = formData.clientUploadedProofs.findIndex(p => !p.ocrResult);
+
+    if (unverifiedIdx !== -1 && verifyingProofIdx === null) {
+      handleVerifyProofWithAI(unverifiedIdx, formData.clientUploadedProofs[unverifiedIdx]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, formData.clientUploadedProofs, verifyingProofIdx]);
+
+  const handleVerifyProofWithAI = async (proofIdx, proof) => {
+    let expectedAmt = 0;
+    if (proof.fileName.startsWith('1st')) expectedAmt = formData.deposit1;
+    else if (proof.fileName.startsWith('2nd')) expectedAmt = formData.deposit2;
+    else if (proof.fileName.startsWith('3rd')) expectedAmt = formData.deposit3;
+    else if (proof.fileName.startsWith('Final')) expectedAmt = billingSummary.balanceDue;
+
+    if (!expectedAmt) {
+       setFormData(prev => {
+          const updatedProofs = [...prev.clientUploadedProofs];
+          updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: 'UNKNOWN_AMT' };
+          return { ...prev, clientUploadedProofs: updatedProofs };
+       });
+       return;
+    }
+
+    setVerifyingProofIdx(proofIdx);
+    try {
+       const prompt = `Please extract the transfer/payment amount from the provided receipt image URL: ${proof.url}\nCheck if the paid amount exactly matches the expected amount: ${expectedAmt} HKD.\nIf it matches exactly, reply ONLY with "MATCH". If it does not, reply ONLY with "MISMATCH".`;
+       
+       const res = await generate(prompt, "You are a financial OCR assistant. You read payment receipts and verify amounts.");
+       
+       const isMatch = res && res.includes('MATCH') && !res.includes('MISMATCH');
+       
+       setFormData(prev => {
+          const updatedProofs = [...prev.clientUploadedProofs];
+          updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: isMatch ? 'MATCH' : 'MISMATCH' };
+          return { ...prev, clientUploadedProofs: updatedProofs };
+       });
+       
+       if (isMatch) addToast("AI 驗證成功 (Amount Matches)", "success");
+       else addToast("AI 驗證發現金額不符", "error");
+    } catch(e) {
+       setFormData(prev => {
+          const updatedProofs = [...prev.clientUploadedProofs];
+          updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: 'ERROR' };
+          return { ...prev, clientUploadedProofs: updatedProofs };
+       });
+       addToast("AI 讀取失敗", "error");
+    } finally {
+       setVerifyingProofIdx(null);
+    }
+  };
+
+  // --- Admin Signing Handler ---
+  const handleAdminSign = async (docType, base64) => {
+    try {
+      const isoDate = new Date().toISOString();
+      const newSigs = {
+        ...formData.signatures,
+        [docType]: {
+          ...(formData.signatures?.[docType] || {}),
+          admin: base64,
+          adminDate: isoDate
+        }
+      };
+      setFormData(prev => ({ ...prev, signatures: newSigs }));
+      if (editingEvent) {
+        await onSaveSignature(docType, base64, 'admin');
+      }
+      addToast("已簽署文件 (Document Signed)", "success");
+    } catch (e) {
+      addToast("簽署失敗 (Signature Failed)", "error");
+      throw e;
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editingEvent ? "編輯訂單" : "新增訂單"}>
       <form
@@ -362,7 +436,7 @@ export default function EventFormModal({
         onKeyDown={(e) => { if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); }}
       >
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 bg-white sticky top-0 z-10 overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-slate-200 bg-white sticky top-0 z-[60] overflow-x-auto no-scrollbar shadow-sm">
           {[
             { id: 'basic', label: '基本資料', icon: FileText },
             { id: 'fnb', label: '餐飲詳情', icon: Utensils },
@@ -383,16 +457,20 @@ export default function EventFormModal({
         </div>
 
         {/* Content */}
-        <div className="p-8 space-y-8 bg-slate-50/50 flex-1">
+        <div className="p-6 md:p-8 space-y-6 bg-slate-50/50 flex-1 overflow-y-auto">
           {formTab === 'basic' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormInput label="訂單編號 (Order ID)" name="orderId" required value={formData.orderId} onChange={handleInputChange} />
                 <FormSelect label="活動狀態 (Status)" name="status" options={[{ value: 'tentative', label: '暫定 (Tentative)' }, { value: 'confirmed', label: '已確認 (Confirmed)' }, { value: 'completed', label: '已完成 (Completed)' }, { value: 'cancelled', label: '已取消 (Cancelled)' }]} value={formData.status} onChange={handleInputChange} />
                 <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
               </div>
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">活動詳情</h4>
+              
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <FileText size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">活動詳情 (Event Details)</h4>
+                </div>
                 <FormInput label="活動名稱 (Event Name)" name="eventName" required value={formData.eventName} onChange={handleInputChange} placeholder="e.g. 陳李聯婚 / Annual Dinner" />
                 <div className="grid grid-cols-4 gap-4">
                   <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
@@ -422,8 +500,12 @@ export default function EventFormModal({
                   </div>
                 </div>
               </div>
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="font-bold text-slate-800">聯絡人資訊</h4>
+              
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <Users size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">聯絡人資訊 (Contact Info)</h4>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormInput label="客戶姓名" name="clientName" required value={formData.clientName} onChange={handleInputChange} />
                   <FormInput label="電話" name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
@@ -438,9 +520,12 @@ export default function EventFormModal({
 
           {formTab === 'fnb' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-4 gap-4">
-                  <div><h4 className="font-bold text-slate-800">餐單設定 (Menus)</h4><p className="text-xs text-slate-500">Corporate Mode: Save versions before major edits.</p></div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-3 mb-4 gap-4">
+                  <div>
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2"><Utensils size={18} className="text-blue-600"/> 餐單設定 (Menus)</h4>
+                    <p className="text-xs text-slate-500 mt-1">Corporate Mode: Save versions before major edits.</p>
+                  </div>
                   <div className="flex space-x-2">
                     <button type="button" onClick={() => saveMenuSnapshot()} className="text-sm bg-violet-50 text-violet-600 px-3 py-1.5 rounded-lg hover:bg-violet-100 font-bold flex items-center transition-colors border border-violet-200"><Save size={16} className="mr-1" /> 儲存版本</button>
                     <button type="button" onClick={addMenu} className="text-sm bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-bold flex items-center transition-colors border border-blue-200"><Plus size={16} className="mr-1" /> 新增菜單</button>
@@ -559,8 +644,14 @@ export default function EventFormModal({
 
           {formTab === 'billing' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="bg-white p-0 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center"><h3 className="text-sm font-bold text-slate-800">收費明細 (Charges Detail)</h3><div className="text-xs text-slate-500 font-mono">系統將自動計算總額及服務費</div></div>
+              <div className="bg-white p-0 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <CreditCard size={16} className="text-blue-600"/> 
+                    收費明細 (Charges Detail)
+                  </h3>
+                  <div className="text-xs text-slate-500 font-mono">系統將自動計算總額及服務費</div>
+                </div>
                 <div className="divide-y divide-slate-100">
                   {(formData.menus || []).map((menu, idx) => {
                     const subtotal = safeFloat(menu.price) * safeFloat(menu.qty);
@@ -607,57 +698,55 @@ export default function EventFormModal({
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm flex items-start shadow-sm"><AlertTriangle size={18} className="mr-2 mt-0.5 flex-shrink-0" /><div><p className="font-bold">未達最低消費</p><p className="mt-1">目標: <span className="font-mono font-bold">${minSpendInfo.amount.toLocaleString()}</span><span className="mx-2">|</span>差額: <span className="font-mono font-bold text-red-600">-${(minSpendInfo.amount - Number(formData.totalAmount)).toLocaleString()}</span></p></div></div>
                   )}
                 </div>
-                <div className="w-full md:w-80 space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div className="w-full md:w-80 space-y-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="flex justify-between items-center pb-3 border-b border-slate-100"><label className="flex items-center cursor-pointer text-sm text-slate-600 select-none hover:text-blue-600 transition-colors"><input type="checkbox" checked={formData.enableServiceCharge !== false} onChange={e => setFormData(prev => updateFinanceState({ ...prev, enableServiceCharge: e.target.checked }))} className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4" /><span className="font-bold">服務費 (10%)</span></label><div className="text-right"><span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>+ ${formatMoney(billingSummary.serviceChargeVal)}</span></div></div>
                   <div className="flex justify-between items-center pb-3 border-b border-slate-100"><span className="text-sm font-bold text-slate-600">折扣 (Discount)</span><div className="relative w-28"><span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span><input type="text" value={formData.discount || ''} onChange={handlePriceChange} name="discount" className="w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none text-red-600 font-mono font-bold pl-6 pb-1 bg-transparent" placeholder="0" /></div></div>
-                  {billingSummary.ccSurcharge > 0 && (<div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-5 px-5 pt-3"><span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span><span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(billingSummary.ccSurcharge)}</span></div>)}
+                  {billingSummary.ccSurcharge > 0 && (<div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-6 px-6 pt-3"><span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span><span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(billingSummary.ccSurcharge)}</span></div>)}
                   <div className="flex justify-between items-center pt-2"><span className="text-base font-bold text-slate-800">總金額 (Total)</span><span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(billingSummary.grandTotal)}</span></div>
                 </div>
               </div>
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-slate-700">付款進度 (Payment Schedule)</h4>
-                  <label className="flex items-center cursor-pointer select-none"><div className="relative"><input type="checkbox" className="sr-only peer" checked={formData.autoSchedulePayment || false} onChange={e => { const isChecked = e.target.checked; setFormData(prev => { const currentTotal = generateBillingSummary(prev).grandTotal; let updates = { autoSchedulePayment: isChecked, totalAmount: currentTotal }; if (isChecked) { const terms = calculatePaymentTerms(currentTotal, prev.date); if (terms) { updates = { ...updates, ...terms }; addToast("已啟用自動付款排程", "success"); } } return { ...prev, ...updates }; }); }} /><div className="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-600"></div></div><span className={`text-xs font-bold ml-2 ${formData.autoSchedulePayment ? 'text-violet-600' : 'text-slate-400'}`}>{formData.autoSchedulePayment ? "自動更新" : "手動"}</span></label>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mt-6">
+                <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-4">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <Clock size={18} className="text-blue-600" />
+                      付款進度 
+                      <span className="text-xs font-medium text-slate-400 ml-1.5 uppercase tracking-widest">(Payment Schedule)</span>
+                    </h4>
+                  <button 
+                    type="button" 
+                    title="點擊將根據後台設定的付款規則，自動計算並覆寫各期應付金額及日期。"
+                    onClick={() => {
+                      const currentTotal = generateBillingSummary(formData).grandTotal;
+                      const terms = calculatePaymentTerms(currentTotal, formData.date);
+                      if (terms) {
+                setFormData(prev => ({ ...prev, ...terms, totalAmount: currentTotal }));
+                        addToast("已自動計算付款排程", "success");
+                      } else {
+                        addToast("找不到符合的付款規則", "error");
+                      }
+                    }} 
+                    className="flex items-center gap-1.5 text-xs font-bold bg-violet-50 text-violet-700 hover:bg-violet-100 px-3 py-1.5 rounded-lg border border-violet-200 transition-colors shadow-sm"
+                  >
+                    <RotateCw size={14} /> 自動計算排程
+                    <Info size={14} className="text-violet-400 ml-0.5" />
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 gap-4">
-                  <DepositField label="付款一" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} />
-                  <DepositField label="付款二" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} />
-                  <DepositField label="付款三" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} />
-                  
-                  {/* --- CLIENT UPLOADED PROOFS SECTION --- */}
-                  {formData.clientUploadedProofs && formData.clientUploadedProofs.length > 0 && (
-                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 mt-4 mb-2 animate-in slide-in-from-top-2">
-                      <h4 className="font-bold text-blue-800 mb-3 flex items-center text-sm">
-                        <Receipt size={16} className="mr-2" /> 客戶自行上傳的付款紀錄 (Client Uploaded Proofs)
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {formData.clientUploadedProofs.map((proof, pIdx) => (
-                          <div key={pIdx} className="bg-white p-3 rounded-lg border border-blue-200 shadow-sm flex flex-col">
-                            <div className="flex justify-between items-start mb-2">
-                              <a href={proof.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline break-all line-clamp-2" title={proof.fileName}>
-                                {proof.fileName}
-                              </a>
-                            </div>
-                            <div className="text-[10px] text-slate-400 mb-3 flex items-center">
-                              <Clock size={10} className="mr-1" /> {new Date(proof.uploadedAt).toLocaleString('zh-HK')}
-                            </div>
-                            <div className="mt-auto pt-2 border-t border-slate-100 grid grid-cols-2 gap-1.5">
-                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, deposit1Proof: proof.url })); addToast("已設為付款一收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為付款一</button>
-                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, deposit2Proof: proof.url })); addToast("已設為付款二收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為付款二</button>
-                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, deposit3Proof: proof.url })); addToast("已設為付款三收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為付款三</button>
-                              <button type="button" onClick={() => { setFormData(prev => ({ ...prev, balanceProof: proof.url })); addToast("已設為尾數收據", "success"); }} className="text-[10px] font-bold bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 py-1.5 rounded border border-slate-200 transition-colors">設為尾數</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <DepositField label="第一期付款 (1st Deposit)" prefix="deposit1" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} clientPrefix="1st" />
+                  <DepositField label="第二期付款 (2nd Deposit)" prefix="deposit2" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} clientPrefix="2nd" />
+                  <DepositField label="第三期付款 (3rd Deposit)" prefix="deposit3" formData={formData} setFormData={setFormData} onUpload={onUploadProof} addToast={addToast} onRemoveProof={onRemoveProof} clientPrefix="3rd" />
 
-                  <div className="bg-white p-5 rounded-lg border-2 border-slate-200 shadow-sm mt-2 relative overflow-hidden">
+                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm mt-4 relative overflow-hidden">
                     <div className={`absolute top-0 left-0 bottom-0 w-2 ${formData.balanceReceived ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
                     <div className="flex flex-col md:flex-row gap-6 pl-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2"><h4 className="text-lg font-bold text-slate-800">{formData.balanceReceived ? '已收總額 (Total Settled)' : '尚欠尾數 (Outstanding Balance)'}</h4><span className={`text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider ${formData.balanceReceived ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{formData.balanceReceived ? 'Fully Paid' : 'Pending'}</span></div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-lg font-bold text-slate-800 flex items-center">
+                            {formData.balanceReceived ? '已收總額' : '尚欠尾數'}
+                            <span className="text-sm font-medium text-slate-400 ml-1.5 uppercase tracking-widest">{formData.balanceReceived ? '(Total Settled)' : '(Outstanding Balance)'}</span>
+                          </h4>
+                          <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider ${formData.balanceReceived ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{formData.balanceReceived ? 'Fully Paid' : 'Pending'}</span>
+                        </div>
                         {(() => {
                           const total = safeFloat(formData.totalAmount);
                           let amountAlreadyPaid = 0;
@@ -675,7 +764,36 @@ export default function EventFormModal({
                           <div><label className="block text-xs font-bold text-slate-400 mb-1">付款方式</label><FormSelect label="" name="paymentMethod" options={['現金', '信用卡', '支票', '轉數快']} value={formData.paymentMethod} onChange={handleInputChange} className="w-full text-sm" /></div>
                           <div><label className="block text-xs font-bold text-slate-400 mb-1">付款日期</label><input type="date" value={formData.balanceDate || ''} onChange={e => setFormData(prev => ({ ...prev, balanceDate: e.target.value }))} className="w-full px-2 py-2 border border-slate-300 rounded-lg text-sm outline-none bg-white focus:ring-2 focus:ring-blue-500" /></div>
                         </div>
-                        <label className={`flex items-center justify-center space-x-2 p-3 rounded-lg border cursor-pointer transition-all ${formData.balanceReceived ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-300 hover:bg-slate-50'}`}><input type="checkbox" checked={formData.balanceReceived || false} onChange={e => setFormData(prev => ({ ...prev, balanceReceived: e.target.checked }))} className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500" /><span className={`font-bold ${formData.balanceReceived ? 'text-emerald-700' : 'text-slate-600'}`}>{formData.balanceReceived ? "確認已收全數尾數" : "標記尾數為已收款"}</span></label>
+                        <div className="flex flex-wrap items-stretch gap-2 mt-1">
+                          <label className={`flex flex-1 items-center justify-center space-x-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${formData.balanceReceived ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-300 hover:bg-slate-50'}`}><input type="checkbox" checked={formData.balanceReceived || false} onChange={e => setFormData(prev => ({ ...prev, balanceReceived: e.target.checked }))} className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" /><span className={`text-xs font-bold ${formData.balanceReceived ? 'text-emerald-700' : 'text-slate-600'}`}>{formData.balanceReceived ? "確認已收全數尾數" : "標記為已收款"}</span></label>
+                          <label className="text-[10px] flex items-center justify-center text-slate-500 hover:text-blue-600 bg-white px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-200 transition-all cursor-pointer shadow-sm shrink-0">
+                            <Upload size={14} className="mr-1.5" /> 上傳尾數收據
+                            <input type="file" className="hidden" accept="image/*" onChange={async (e) => { const file = e.target.files[0]; if (!file) return; try { addToast("上傳中...", "info"); const url = await onUploadProof(file); setFormData(prev => { const ex = Array.isArray(prev.balanceProof) ? prev.balanceProof : (prev.balanceProof ? [prev.balanceProof] : []); return { ...prev, balanceProof: [...ex, url] }; }); addToast("尾數收據上傳成功", "success"); } catch (err) { addToast("上傳失敗", "error"); } }} />
+                          </label>
+                        </div>
+                        
+                        {(() => {
+                          const proofs = Array.isArray(formData.balanceProof) ? formData.balanceProof : (formData.balanceProof ? [formData.balanceProof] : []);
+                          if (proofs.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {proofs.map((url, idx) => (
+                                <div key={idx} className="flex items-center space-x-1 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
+                                  <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline truncate max-w-[120px]" title="查看收據">
+                                    <ImageIcon size={14} className="mr-1 shrink-0" /> 收據 {proofs.length > 1 ? idx + 1 : ''}
+                                  </a>
+                                  <button type="button" onClick={() => onRemoveProof('balanceProof', url)} className="text-slate-400 hover:text-red-500 p-0.5"><X size={12} /></button>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
+                        {formData.clientUploadedProofs?.map((proof, globalIdx) => {
+                          const proofs = Array.isArray(formData.balanceProof) ? formData.balanceProof : (formData.balanceProof ? [formData.balanceProof] : []);
+                          if (!proof.fileName.startsWith('Final') || proofs.includes(proof.url)) return null;
+                          return <PendingProofCard key={globalIdx} proof={proof} targetLabel="尾數" targetKey="balanceProof" receivedKey="balanceReceived" currentProofs={proofs} setFormData={setFormData} addToast={addToast} />;
+                        })}
                       </div>
                     </div>
                   </div>
@@ -686,16 +804,22 @@ export default function EventFormModal({
 
           {formTab === 'venue' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">場地佈置 (Main Setup)</h4>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <Monitor size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">場地佈置 (Main Setup)</h4>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><FormSelect label="檯布顏色 (Table Cloth)" name="tableClothColor" options={DECOR_COLORS} value={formData.tableClothColor} onChange={handleInputChange} /><FormSelect label="椅套顏色 (Chair Cover)" name="chairCoverColor" options={DECOR_COLORS} value={formData.chairCoverColor} onChange={handleInputChange} /></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2 pt-4 border-t border-slate-100">
                   <div><label className="block text-sm font-medium text-slate-700 mb-1.5">主家席顏色 (Head Table Color)</label><div className="flex gap-4 mb-2"><label className="flex items-center space-x-2 text-sm cursor-pointer"><input type="radio" name="headTableColorType" value="same" checked={formData.headTableColorType === 'same'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500" /><span>同客席 (Same as Guest)</span></label><label className="flex items-center space-x-2 text-sm cursor-pointer"><input type="radio" name="headTableColorType" value="custom" checked={formData.headTableColorType === 'custom'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500" /><span>自訂 (Custom)</span></label></div>{formData.headTableColorType === 'custom' && (<input type="text" name="headTableCustomColor" value={formData.headTableCustomColor} onChange={handleInputChange} placeholder="請輸入主家席顏色" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />)}</div>
                   <div className="bg-pink-50 p-4 rounded-lg border border-pink-100"><div className="flex justify-between items-center mb-2"><label className="font-bold text-slate-700 text-sm">新娘房 / 更衣室</label><label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" name="bridalRoom" checked={formData.bridalRoom} onChange={e => setFormData(prev => ({ ...prev, bridalRoom: e.target.checked }))} className="rounded text-pink-500" /><span className="text-xs text-slate-500">使用</span></label></div>{formData.bridalRoom && (<input type="text" name="bridalRoomHours" value={formData.bridalRoomHours} onChange={handleInputChange} placeholder="使用時間 e.g. 17:00 - 23:00" className="w-full px-3 py-2 border border-pink-200 rounded-lg text-sm bg-white" />)}</div>
                 </div>
               </div>
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center"><Layout size={18} className="mr-2 text-slate-500" /> 設備與佈置清單 (Equipment & Packages)</h4>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <Layout size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">設備與佈置清單 (Equipment & Packages)</h4>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                     <h4 className="text-xs font-bold text-blue-800 uppercase tracking-widest border-b border-blue-200 pb-1 mb-2 flex items-center gap-1"><Users size={14} /> 舞台與接待設備</h4>
@@ -742,10 +866,11 @@ export default function EventFormModal({
                 </div>
               </div>
               
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center">
-                  <Layout size={18} className="mr-2 text-slate-500" /> 互動平面圖 (Interactive Floorplan)
-                </h4>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <MapPin size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">互動平面圖 (Interactive Floorplan)</h4>
+                </div>
                 <FloorplanEditor 
                   formData={formData} 
                   setFormData={setFormData} 
@@ -758,11 +883,14 @@ export default function EventFormModal({
                 />
               </div>
 
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-1.5">
-                  佈置參考圖與備註 (Decor References & Notes)
-                  <Info size={16} className="text-blue-400 cursor-help hover:text-blue-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing)&#10;• 客戶合約 (Contract) - 若勾選" />
-                </h4>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <ImageIcon size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                    佈置參考圖與備註 (Decor References & Notes)
+                    <Info size={16} className="text-blue-400 cursor-help hover:text-blue-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing)&#10;• 客戶合約 (Contract) - 若勾選" />
+                  </h4>
+                </div>
                 <textarea rows={2} placeholder="文字描述 (Description)..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none mb-1" value={formData.venueDecor || ''} onChange={(e) => setFormData(prev => ({ ...prev, venueDecor: e.target.value }))} />
                 <DocumentVisibilityToggles field="venueDecor" defaultClient={false} defaultInternal={true} />
                 <div className="flex flex-wrap gap-3 mt-3">
@@ -775,8 +903,14 @@ export default function EventFormModal({
 
           {formTab === 'logistics' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4"><h4 className="font-bold text-slate-800 flex items-center"><Clock size={18} className="mr-2 text-slate-500" /> 活動流程 (Event Rundown)</h4><button type="button" onClick={() => setFormData(prev => ({ ...prev, rundown: [...(prev.rundown || []), { id: Date.now(), time: '18:30', activity: '' }] }))} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 font-bold">+ 新增流程</button></div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Clock size={18} className="text-blue-600" />
+                    <h4 className="font-bold text-slate-800">活動流程 (Event Rundown)</h4>
+                  </div>
+                  <button type="button" onClick={() => setFormData(prev => ({ ...prev, rundown: [...(prev.rundown || []), { id: Date.now(), time: '18:30', activity: '' }] }))} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 font-bold shadow-sm">+ 新增流程</button>
+                </div>
                 <div className="space-y-2">
                   {(!formData.rundown || formData.rundown.length === 0) && (<div className="text-center py-4 bg-slate-50 border border-slate-100 rounded-lg"><p className="text-sm text-slate-400 font-medium">暫無流程 (No Rundown)</p><p className="text-xs text-slate-400 mt-1">點擊上方按鈕新增活動流程</p></div>)}
                   {(formData.rundown || []).map((item, idx) => (
@@ -788,8 +922,14 @@ export default function EventFormModal({
                   ))}
                 </div>
               </div>
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4"><h4 className="font-bold text-slate-800 flex items-center"><Truck size={18} className="mr-2 text-slate-500" /> 旅遊巴安排 (Bus Arrangement)</h4><label className="flex items-center space-x-2 text-xs cursor-pointer select-none"><input type="checkbox" checked={formData.busInfo?.enabled || false} onChange={e => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, enabled: e.target.checked, arrivals: prev.busInfo?.arrivals || [], departures: prev.busInfo?.departures || [] } }))} className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4" /><span className={formData.busInfo?.enabled ? "font-bold text-blue-600" : "text-slate-400"}>啟用 (Enable)</span></label></div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Truck size={18} className="text-blue-600" />
+                    <h4 className="font-bold text-slate-800">旅遊巴安排 (Bus Arrangement)</h4>
+                  </div>
+                  <label className="flex items-center space-x-2 text-xs cursor-pointer select-none"><input type="checkbox" checked={formData.busInfo?.enabled || false} onChange={e => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, enabled: e.target.checked, arrivals: prev.busInfo?.arrivals || [], departures: prev.busInfo?.departures || [] } }))} className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4" /><span className={formData.busInfo?.enabled ? "font-bold text-blue-600" : "text-slate-400"}>啟用 (Enable)</span></label>
+                </div>
                 {formData.busInfo?.enabled && (
                   <div className="space-y-6 animate-in slide-in-from-top-2">
                     <div>
@@ -826,8 +966,11 @@ export default function EventFormModal({
                   </div>
                 )}
               </div>
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2">其他物流 (Other Logistics)</h4>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <MapPin size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">其他物流 (Other Logistics)</h4>
+                </div>
                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                   <div className="flex justify-between items-center mb-3"><label className="text-sm font-bold text-slate-700 flex items-center"><Truck size={16} className="mr-2" /> 送貨/物資安排 (Deliveries)</label><button type="button" onClick={() => setFormData(prev => ({ ...prev, deliveries: [...(prev.deliveries || []), { id: Date.now(), unit: '', date: '', time: '18:30', items: '' }] }))} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:text-blue-600 flex items-center shadow-sm"><Plus size={12} className="mr-1" /> 新增單位</button></div>
                   <div className="space-y-3">
@@ -868,8 +1011,11 @@ export default function EventFormModal({
 
           {formTab === 'printConfig' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm space-y-6">
-                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center"><Printer size={18} className="mr-2" /> 列印自訂 (Print Customization)</h4>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                  <Printer size={18} className="text-blue-600" />
+                  <h4 className="font-bold text-slate-800">列印自訂 (Print Customization)</h4>
+                </div>
                 <div className="bg-violet-50 p-4 rounded-lg border border-violet-100">
                   <h5 className="font-bold text-violet-800 text-sm mb-3">菜譜確認書 (Menu Confirmation)</h5>
                   <div className="space-y-4">
@@ -886,27 +1032,42 @@ export default function EventFormModal({
         </div>
 
         {/* Footer inside Modal */}
-        <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-50">
+        <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-[70] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-xl">
           <div className="flex items-center space-x-3 relative">
             <button type="button" onClick={onOpenAi} className="group relative px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm"><Sparkles size={16} className="text-yellow-200" /><span>AI 智能助手</span></button>
             
-            {/* Print Menu */}
+            {/* Document Manager Launch Button */}
             {editingEvent && (
               <div className="relative">
-                {showPrintMenu && <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)}></div>}
-                <button type="button" onClick={() => { setShowPrintMenu(!showPrintMenu); setShowSendMenu(false); }} className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showPrintMenu ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}><Printer size={16} /><span>列印文件 (Print)</span><ChevronUp size={14} className={`transition-transform duration-200 ${showPrintMenu ? 'rotate-180' : ''}`} /></button>
-                {showPrintMenu && (
-                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 shadow-2xl rounded-xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">內部工作單 (Internal)</div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onPrintEO(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><FileText size={14} className="mr-2" /> EO 行政 / 會計單</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('EO'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group mb-1"><button type="button" onClick={() => { onPrintBriefing(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><Users size={14} className="mr-2" /> Briefing 樓面工作單</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('BRIEFING'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-t border-slate-100 mb-1 mt-1 bg-slate-50">客戶文件 (Client Facing)</div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onOpenMenuPrint(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><Utensils size={14} className="mr-2" /> Menu (菜譜確認)</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('MENU_CONFIRM'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onPrintQuotation(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><FileText size={14} className="mr-2" /> Quotation (報價單)</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('QUOTATION'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onPrintContractEN(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><FileText size={14} className="mr-2" /> Contract (英文合約)</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('CONTRACT'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onPrintContractCN(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><FileText size={14} className="mr-2" /> Contract (中文合約)</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('CONTRACT_CN'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onPrintInvoice(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><CreditCard size={14} className="mr-2" /> Invoice (發票)</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('INVOICE'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
-                    <div className="flex items-stretch justify-between hover:bg-slate-50 transition-colors group"><button type="button" onClick={() => { onPrintReceipt(); setShowPrintMenu(false); }} className="flex-1 text-left px-4 py-2 text-sm text-slate-700 group-hover:text-blue-600 font-medium flex items-center transition-colors"><Receipt size={14} className="mr-2" /> Receipt (收據)</button><button type="button" onClick={(e) => { e.stopPropagation(); onDownloadPDF('RECEIPT'); setShowPrintMenu(false); }} className="px-4 py-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center border-l border-transparent group-hover:border-slate-200" title="下載 PDF"><Download size={14} /></button></div>
+                {showDocManager && <div className="fixed inset-0 z-40" onClick={() => setShowDocManager(false)}></div>}
+                <button type="button" onClick={() => { setShowDocManager(!showDocManager); setShowSendMenu(false); }} className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showDocManager ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>
+                  <FileText size={16} />
+                  <span>管理文件</span>
+                  <ChevronUp size={14} className={`transition-transform duration-200 ${showDocManager ? 'rotate-180' : ''}`} />
+                </button>
+                {showDocManager && (
+                  <div className="absolute bottom-full left-0 mb-2 w-[24rem] bg-white border border-slate-200 shadow-2xl rounded-xl py-0 z-50 animate-in fade-in slide-in-from-bottom-2 overflow-hidden">
+                    <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">文件列表 (Documents)</span>
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto">
+                      <DocumentManager
+                        eventData={formData}
+                        appSettings={appSettings}
+                        isClientPortal={false}
+                        onPrint={(docType) => {
+                          if (docType === 'EO') onPrintEO();
+                          else if (docType === 'BRIEFING') onPrintBriefing();
+                          else if (docType === 'QUOTATION') onPrintQuotation();
+                          else if (docType === 'CONTRACT') onPrintContractEN();
+                          else if (docType === 'CONTRACT_CN') onPrintContractCN();
+                          else if (docType === 'INVOICE') onPrintInvoice();
+                          else if (docType === 'RECEIPT') onPrintReceipt();
+                          else if (docType === 'MENU_CONFIRM') onOpenMenuPrint();
+                        }}
+                        onSign={handleAdminSign}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -916,7 +1077,7 @@ export default function EventFormModal({
             {editingEvent && (
               <div className="relative">
                 {showSendMenu && <div className="fixed inset-0 z-40" onClick={() => setShowSendMenu(false)}></div>}
-                <button type="button" onClick={() => { setShowSendMenu(!showSendMenu); setShowPrintMenu(false); }} className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showSendMenu ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'}`}><Send size={16} /><span>傳送給客戶 (Send)</span><ChevronUp size={14} className={`transition-transform duration-200 ${showSendMenu ? 'rotate-180' : ''}`} /></button>
+                <button type="button" onClick={() => { setShowSendMenu(!showSendMenu); setShowDocManager(false); }} className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showSendMenu ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'}`}><Send size={16} /><span>傳送給客戶 (Send)</span><ChevronUp size={14} className={`transition-transform duration-200 ${showSendMenu ? 'rotate-180' : ''}`} /></button>
                 {showSendMenu && (
                   <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 shadow-2xl rounded-xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
                     <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">WhatsApp (SleekFlow API)</div>

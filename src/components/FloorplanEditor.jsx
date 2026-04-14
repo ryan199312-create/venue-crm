@@ -318,8 +318,8 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
         rotation: 0,
         w_m: tool.w_m,
         h_m: tool.h_m,
-        style: tool.style,
-        content: tool.content
+        style: typeof tool.style === 'string' ? tool.style : '',
+        content: typeof tool.content === 'string' ? tool.content : ''
       };
 
       updateFloorplan({ elements: [...floorplan.elements, newElement] });
@@ -622,8 +622,8 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       style={{
         width: bgImage ? 'max-content' : (isInteractive ? '100%' : '800px'),
         height: bgImage ? 'max-content' : (isInteractive ? '100%' : '600px'),
-        backgroundImage: bgImage 
-          ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url(${bgImage})` 
+          backgroundImage: bgImage
+            ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` 
           : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
         backgroundSize: bgImage 
           ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` 
@@ -701,7 +701,7 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
               }
             } : undefined}
             className={`absolute ${isInteractive ? 'cursor-move hover:ring-2 ring-slate-400' : 'pointer-events-none'} transition-shadow print:ring-0 print:shadow-none ${displayStyle} ${isInteractive && selectedIds.includes(el.id) ? 'ring-4 ring-blue-500 ring-opacity-50 shadow-xl z-10 print:ring-0 print:shadow-none' : ''}`}
-            style={{ left: el.x, top: el.y, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation}deg)` }}
+            style={{ left: el.x || 0, top: el.y || 0, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation || 0}deg)` }}
           >
             {el.type === 'text' ? (
               <div className="w-full h-full flex items-center justify-center overflow-visible">
@@ -713,7 +713,7 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
             {el.label && el.type !== 'text' && (
               <div 
                 className="absolute left-1/2 bottom-0 pointer-events-none"
-                style={{ transform: `translate(-50%, 120%) rotate(${-el.rotation || 0}deg)` }}
+                style={{ transform: `translate(-50%, 120%) rotate(${-(el.rotation || 0)}deg)` }}
               >
                 <span className="bg-white/90 backdrop-blur-sm text-slate-800 border border-slate-300 px-1.5 py-0.5 rounded shadow-sm text-xs font-black whitespace-nowrap inline-block">
                   {el.label}

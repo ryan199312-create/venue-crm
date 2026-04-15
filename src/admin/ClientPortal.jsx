@@ -6,6 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { renderToString } from 'react-dom/server';
 import { TOOL_GROUPS } from '../components/FloorplanEditor';
 import DocumentManager from '../components/DocumentManager';
+import { STYLES } from './DocumentRenderer';
 
 export default function ClientPortal() {
   const { eventId: urlEventId } = useParams();
@@ -324,7 +325,7 @@ export default function ClientPortal() {
 
   // --- AUTHENTICATED VIEW ---
   return (
-    <div className="min-h-screen bg-slate-50 font-sans pb-24">
+    <div className="min-h-screen bg-slate-50 font-sans md:pb-0">
       {/* Hero Banner with Dynamic Back Button */}
       <div className="bg-slate-900 text-white p-6 pt-12 pb-10 rounded-b-[2.5rem] shadow-lg relative overflow-hidden">
         {/* Background Pattern */}
@@ -350,13 +351,23 @@ export default function ClientPortal() {
         </button>
       </div>
 
+      {/* Desktop Navigation Tabs */}
+      <div className="hidden md:flex justify-center gap-4 mt-8 px-4 flex-wrap max-w-5xl mx-auto">
+        <DesktopTab icon={Calendar} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+        <DesktopTab icon={CreditCard} label="Billing" active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
+        <DesktopTab icon={Utensils} label="Menu" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
+        <DesktopTab icon={Clock} label="Rundown" active={activeTab === 'logistics'} onClick={() => setActiveTab('logistics')} />
+        <DesktopTab icon={Download} label="Documents" active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} />
+      </div>
+
       {/* Main Content Area based on Tabs */}
-      <div className="p-4 max-w-lg mx-auto mt-2 space-y-6">
+      <div className="p-4 max-w-lg md:max-w-5xl mx-auto mt-2 md:mt-4 space-y-6 pb-28 md:pb-12">
         
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className={`${STYLES.gridBox} flex items-center justify-between`}>
               <div className="flex items-center">
                 <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
                   <MapPin size={20} className="text-[#A57C00]" />
@@ -371,9 +382,9 @@ export default function ClientPortal() {
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
 
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+              <div className={`${STYLES.gridBox} flex items-center justify-between`}>
               <div className="flex items-center">
                 <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
                   <Clock size={20} className="text-[#A57C00]" />
@@ -383,6 +394,7 @@ export default function ClientPortal() {
                   <p className="font-bold text-slate-800 text-sm">{eventData.startTime} - {eventData.endTime}</p>
                 </div>
               </div>
+            </div>
             </div>
             
             <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={eventData.selectedLocations || [eventData.venueLocation]} />
@@ -417,31 +429,33 @@ export default function ClientPortal() {
           ].filter(m => m.amount > 0);
           
           return (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
-              <h3 className="text-4xl font-black text-[#A57C00] font-mono tracking-tight">
-                ${remaining.toLocaleString()}
-              </h3>
-              <p className="text-xs text-slate-400 mt-2">Total: ${total.toLocaleString()}</p>
-              
-              {/* --- PROGRESS BAR --- */}
-              <div className="mt-6 pt-5 border-t border-slate-100 text-left">
-                <div className="flex justify-between text-[10px] font-bold mb-2">
-                  <span className="text-emerald-600 uppercase tracking-widest">Paid: ${paid.toLocaleString()}</span>
-                  <span className="text-slate-400 uppercase tracking-widest">{progressPercent}% Settled</span>
-                </div>
-                <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                  <div 
-                    className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-1000 ease-out" 
-                    style={{ width: `${progressPercent}%` }}
-                  ></div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
+            <div className="md:col-span-5 space-y-6">
+              <div className={`${STYLES.gridBox} text-center h-max`}>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
+                <h3 className="text-4xl font-black text-[#A57C00] font-mono tracking-tight">
+                  ${remaining.toLocaleString()}
+                </h3>
+                <p className="text-xs text-slate-400 mt-2">Total: ${total.toLocaleString()}</p>
+                
+                {/* --- PROGRESS BAR --- */}
+                <div className="mt-6 pt-5 border-t border-slate-100 text-left">
+                  <div className="flex justify-between text-[10px] font-bold mb-2">
+                    <span className="text-emerald-600 uppercase tracking-widest">Paid: ${paid.toLocaleString()}</span>
+                    <span className="text-slate-400 uppercase tracking-widest">{progressPercent}% Settled</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-1000 ease-out" 
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-              <h4 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Payment Status</h4>
+            <div className={`md:col-span-7 ${STYLES.gridBox}`}>
+              <h3 className={STYLES.h3}>Payment Status</h3>
               <div className="space-y-4">
                 {milestones.map((m, idx) => (
                   <div key={idx} className="flex flex-col border border-slate-100 rounded-xl p-3 bg-slate-50 shadow-sm">
@@ -517,61 +531,66 @@ export default function ClientPortal() {
 
         {/* TAB 3: MENU */}
         {activeTab === 'menu' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-            {eventData.menus.map(menu => (
-              <div key={menu.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h3 className="font-black text-[#A57C00] text-lg mb-4 text-center border-b border-slate-100 pb-3">{menu.title}</h3>
-                <p className="text-sm text-slate-700 leading-loose text-center whitespace-pre-wrap font-serif">
-                  {menu.content}
-                </p>
-              </div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
+            <div className="md:col-span-7 space-y-4">
+              {eventData.menus.map(menu => (
+                <div key={menu.id} className={STYLES.gridBox}>
+                  <h3 className="font-black text-[#A57C00] text-lg mb-4 text-center border-b border-slate-100 pb-3">{menu.title}</h3>
+                  <p className="text-sm text-slate-700 leading-loose text-center whitespace-pre-wrap font-serif">
+                    {menu.content}
+                  </p>
+                </div>
+              ))}
+            </div>
 
             {/* Dietary Requirements Form */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4">
-              <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-100 pb-2">Dietary Requirements (特殊餐飲要求)</h4>
-              <p className="text-[10px] text-slate-500 mb-4">Please let us know if any guests have special dietary needs or allergies. (如賓客有任何特殊飲食需求或過敏，請在此填寫。)</p>
-              
-              <form onSubmit={handleDietarySubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Special Requirements (特殊要求 e.g. 3 Vegetarians)</label>
-                  <textarea 
-                    rows={2} 
-                    className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#A57C00]/50 outline-none resize-none bg-slate-50"
-                    placeholder="e.g. 3位素食, 1位走青..."
-                    value={dietaryReq}
-                    onChange={(e) => setDietaryReq(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Allergies (食物過敏)</label>
-                  <textarea 
-                    rows={2} 
-                    className="w-full border border-red-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-500/50 outline-none resize-none bg-red-50"
-                    placeholder="e.g. 1位對花生敏感..."
-                    value={allergies}
-                    onChange={(e) => setAllergies(e.target.value)}
-                  />
-                </div>
-                <button type="submit" disabled={isSubmittingDietary} className="w-full bg-[#1a1a1a] hover:bg-[#333] text-white py-3 rounded-xl font-bold tracking-wide transition-colors flex justify-center items-center text-xs">
-                  {isSubmittingDietary ? <Loader2 className="animate-spin mr-2" size={16} /> : null} Submit Requirements (提交要求)
-                </button>
-              </form>
+            <div className="md:col-span-5">
+              <div className={`${STYLES.gridBox} sticky top-6`}>
+                <h3 className={STYLES.h3}>Dietary Requirements (特殊餐飲要求)</h3>
+                <p className="text-[10px] text-slate-500 mb-4">Please let us know if any guests have special dietary needs or allergies. (如賓客有任何特殊飲食需求或過敏，請在此填寫。)</p>
+                
+                <form onSubmit={handleDietarySubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Special Requirements (特殊要求 e.g. 3 Vegetarians)</label>
+                    <textarea 
+                      rows={2} 
+                      className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#A57C00]/50 outline-none resize-none bg-slate-50"
+                      placeholder="e.g. 3位素食, 1位走青..."
+                      value={dietaryReq}
+                      onChange={(e) => setDietaryReq(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Allergies (食物過敏)</label>
+                    <textarea 
+                      rows={2} 
+                      className="w-full border border-red-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-500/50 outline-none resize-none bg-red-50"
+                      placeholder="e.g. 1位對花生敏感..."
+                      value={allergies}
+                      onChange={(e) => setAllergies(e.target.value)}
+                    />
+                  </div>
+                  <button type="submit" disabled={isSubmittingDietary} className="w-full bg-[#1a1a1a] hover:bg-[#333] text-white py-3 rounded-xl font-bold tracking-wide transition-colors flex justify-center items-center text-xs">
+                    {isSubmittingDietary ? <Loader2 className="animate-spin mr-2" size={16} /> : null} Submit Requirements (提交要求)
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         )}
 
         {/* TAB 4: RUNDOWN */}
         {activeTab === 'logistics' && (
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex justify-between items-center mb-6">
-              <h4 className="font-bold text-slate-800 flex items-center"><Clock size={18} className="mr-2 text-[#A57C00]" /> Event Rundown</h4>
-              {!isEditingRundown && (
-                <button onClick={() => setIsEditingRundown(true)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
-                  <PenTool size={12} className="mr-1"/> 編輯 (Edit)
-                </button>
-              )}
-            </div>
+          <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+            <div className={STYLES.gridBox}>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Clock size={16} /> Event Rundown</h3>
+                {!isEditingRundown && (
+                  <button onClick={() => setIsEditingRundown(true)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
+                    <PenTool size={12} className="mr-1"/> 編輯 (Edit)
+                  </button>
+                )}
+              </div>
             
             {isEditingRundown ? (
               <div className="space-y-3">
@@ -653,15 +672,16 @@ export default function ClientPortal() {
                 ))}
               </div>
             )}
+            </div>
           </div>
         )}
 
         {/* TAB 6: DOCUMENTS */}
         {activeTab === 'documents' && (
-          <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
-            <h4 className="font-bold text-slate-800 mb-4 flex items-center px-1"><FileText size={18} className="mr-2 text-[#A57C00]" /> Official Documents</h4>
+          <div className="max-w-4xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-4">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center px-1"><FileText size={18} className="mr-2 text-[#A57C00]" /> Official Documents</h3>
             
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div>
               <DocumentManager 
                 eventData={eventData} 
                 appSettings={appSettings} 
@@ -674,7 +694,7 @@ export default function ClientPortal() {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-between px-1 p-2 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-between px-1 p-2 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <NavButton icon={Calendar} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
         <NavButton icon={CreditCard} label="Billing" active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
         <NavButton icon={Utensils} label="Menu" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
@@ -695,6 +715,20 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
   </button>
 );
 
+const DesktopTab = ({ icon: Icon, label, active, onClick }) => (
+  <button 
+    onClick={onClick} 
+    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+      active 
+        ? 'bg-[#A57C00] text-white shadow-lg shadow-[#A57C00]/20 scale-105' 
+        : 'bg-white text-slate-500 hover:bg-[#A57C00]/5 hover:text-[#A57C00] border border-slate-200'
+    }`}
+  >
+    <Icon size={18} />
+    <span>{label}</span>
+  </button>
+);
+
 // --- FLOORPLAN VIEWER COMPONENT ---
 const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   const containerRef = useRef(null);
@@ -708,7 +742,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   
   if (!bgImage && elements.length === 0 && zones.length === 0) {
     return (
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 mt-4 text-center">
+      <div className={`${STYLES.gridBox} mt-4 text-center p-8`}>
         <Layout size={32} className="mx-auto text-slate-300 mb-3" />
         <h4 className="font-bold text-slate-700">尚未設定平面圖</h4>
         <p className="text-xs text-slate-500 mt-1">Floorplan is not yet configured for this event.</p>
@@ -768,11 +802,9 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   }, [contentW, contentH]);
 
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mt-4">
+    <div className={`${STYLES.gridBox} mt-4`}>
       <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-        <h4 className="font-bold text-slate-800 flex items-center">
-          <Layout size={18} className="mr-2 text-[#A57C00]" /> Venue Floorplan (場地平面圖)
-        </h4>
+        <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Layout size={16} /> Venue Floorplan (場地平面圖)</h3>
         {canZoom && (
           <button onClick={() => setIsZoomed(!isZoomed)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
             {isZoomed ? <><ZoomOut size={12} className="mr-1"/> 顯示全圖 (View All)</> : <><ZoomIn size={12} className="mr-1"/> 放大區域 (Zoom In)</>}

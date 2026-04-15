@@ -91,6 +91,12 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
         </html>
       `;
 
+      // Define hasClientSig for file naming
+      const sigData = eventData.signatures?.[docType] || {};
+      const legacySig = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType) ? eventData.clientSignature : null;
+      const clientSig = sigData.client || legacySig;
+      const hasClientSig = !!clientSig;
+
       const sigTag = (includeSignature && hasClientSig && ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType)) ? '_Signed' : '';
       
       // Sanitize file name to prevent browser download path errors

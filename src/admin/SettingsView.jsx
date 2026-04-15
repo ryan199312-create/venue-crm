@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize } from 'lucide-react';
+import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon } from 'lucide-react';
 import {
   LOCATION_CHECKBOXES, DAYS_OF_WEEK, DEPARTMENTS,
   formatMoney
@@ -8,7 +8,7 @@ import { Card, FormInput, MoneyInput, FormTextArea } from '../components/ui';
 
 const SettingsView = ({ settings, onSave, addToast, onUploadProof }) => {
   const [localSettings, setLocalSettings] = useState({ minSpendRules: [], defaultMenus: [], paymentRules: [], defaultFloorplan: settings.defaultFloorplan || { bgImage: '', itemScale: 40 }, ...settings });
-  const [activeSubTab, setActiveSubTab] = useState('minSpend');
+  const [activeSubTab, setActiveSubTab] = useState('companyInfo');
   const [isUploadingBg, setIsUploadingBg] = useState(false);
   const [isFullscreenMap, setIsFullscreenMap] = useState(false);
   const [isDrawingZone, setIsDrawingZone] = useState(false);
@@ -114,11 +114,80 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof }) => {
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20">
       <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div><h2 className="text-2xl font-bold text-slate-800">系統設定 (Settings)</h2><p className="text-slate-500">管理場地規則、預設餐單與付款條款</p></div></div>
       <div className="flex space-x-1 border-b border-slate-200">
+        <button onClick={() => setActiveSubTab('companyInfo')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>公司資料 (Company Info)</button>
         <button onClick={() => setActiveSubTab('minSpend')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>場地低消 (Min Spend)</button>
         <button onClick={() => setActiveSubTab('menus')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>餐飲預設 (Presets)</button>
         <button onClick={() => setActiveSubTab('payment')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'payment' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>付款規則 (Payment Rules)</button>
         <button onClick={() => setActiveSubTab('floorplan')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'floorplan' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>場地平面圖 (Floorplan)</button>
       </div>
+
+      {/* Company Info Tab */}
+      {activeSubTab === 'companyInfo' && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Company Logo Upload */}
+          <Card className="p-5 border-l-4 border-l-blue-500 max-w-2xl">
+            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
+              <ImageIcon size={18} className="mr-2" /> 公司標誌設定 (Company Logo)
+            </h3>
+            <div className="flex gap-6 items-center">
+              <div className="w-32 h-24 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center bg-slate-50 relative overflow-hidden shrink-0 p-2">
+                {localSettings.companyLogoUrl ? (
+                  <>
+                    <img src={localSettings.companyLogoUrl} alt="Logo" className="w-full h-full object-contain" />
+                    <button onClick={() => { setLocalSettings(p => ({...p, companyLogoUrl: ''})); onSave({...localSettings, companyLogoUrl: ''}); }} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><Trash2 size={12}/></button>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-400 font-bold text-center">No Logo<br/>Uploaded</span>
+                )}
+              </div>
+              <div className="flex-1 space-y-3">
+                <p className="text-sm text-slate-500">上傳 PNG 或 JPG 標誌，將會自動顯示於對外文件 (如報價單、合約等) 的左上角。</p>
+                <label className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm">
+                  {isUploadingBg ? <span className="animate-pulse">上傳中...</span> : '上傳標誌 (Upload Logo)'}
+                  <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    setIsUploadingBg(true);
+                    try { const url = await onUploadProof(file); const newSettings = { ...localSettings, companyLogoUrl: url }; setLocalSettings(newSettings); onSave(newSettings); addToast("公司標誌上傳成功", "success"); } catch(err) { addToast("上傳失敗", "error"); }
+                    setIsUploadingBg(false);
+                  }} disabled={isUploadingBg} />
+                </label>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5 border-l-4 border-l-pink-500 max-w-2xl">
+            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
+              <ImageIcon size={18} className="mr-2" /> 公司蓋章設定 (Company Chop)
+            </h3>
+            <div className="flex gap-6 items-center">
+              <div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center bg-slate-50 relative overflow-hidden shrink-0">
+                {localSettings.companyChopUrl ? (
+                  <>
+                    <img src={localSettings.companyChopUrl} alt="Chop" className="w-full h-full object-contain mix-blend-multiply" />
+                    <button onClick={() => { setLocalSettings(p => ({...p, companyChopUrl: ''})); onSave({...localSettings, companyChopUrl: ''}); }} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><Trash2 size={12}/></button>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-400 font-bold text-center">No Chop<br/>Uploaded</span>
+                )}
+              </div>
+              <div className="flex-1 space-y-3">
+                <p className="text-sm text-slate-500">上傳透明背景的 PNG 圖章，將會自動疊加在合約的授權簽名位置上。</p>
+                <label className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm">
+                  {isUploadingBg ? <span className="animate-pulse">上傳中...</span> : '上傳圖章 (Upload PNG)'}
+                  <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    setIsUploadingBg(true);
+                    try { const url = await onUploadProof(file); const newSettings = { ...localSettings, companyChopUrl: url }; setLocalSettings(newSettings); onSave(newSettings); addToast("公司圖章上傳成功", "success"); } catch(err) { addToast("上傳失敗", "error"); }
+                    setIsUploadingBg(false);
+                  }} disabled={isUploadingBg} />
+                </label>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Min Spend Tab - UPDATED with Dual Inputs */}
       {activeSubTab === 'minSpend' && (
@@ -432,6 +501,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof }) => {
       {/* Floorplan Default Tab */}
       {activeSubTab === 'floorplan' && (
         <div className="space-y-6 animate-in fade-in">
+
           <Card className="p-5 border-l-4 border-l-amber-500 max-w-2xl">
             <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
               <Map size={18} className="mr-2" /> 預設平面圖設定 (Default Map Settings)

@@ -242,6 +242,9 @@ export default function AdminApp() {
       },
       quotation: {
         showClientInfo: true,           // Default: Show Client Name/Details
+      },
+      contract: {
+        showChop: true                  // Default: Show Company Chop on Contract
       }
     },
     //AI feature
@@ -653,15 +656,28 @@ export default function AdminApp() {
     try {
       const htmlContent = renderToString(<DocumentRenderer data={dataToRender} printMode={docType} appSettings={appSettings} />);
 
-      // 2. Wrap it with Tailwind CSS CDN for the backend to render beautifully
+        // 1. Fetch pre-compiled Tailwind CSS to inject statically
+        let tailwindCss = '';
+        try {
+          const cssResponse = await fetch(`${window.location.origin}/tailwind-print.css`);
+          if (cssResponse.ok) {
+            tailwindCss = await cssResponse.text();
+          } else {
+            console.warn("Failed to fetch tailwind-print.css. Falling back to unstyled.");
+          }
+        } catch (err) {
+          console.warn("Error fetching tailwind-print.css:", err);
+        }
+
+        // 2. Wrap it with the static CSS for the backend to render beautifully without CDN timeouts
       const fullHtml = `
         <!DOCTYPE html>
         <html>
           <head>
             <meta charset="utf-8">
-            <script src="https://cdn.tailwindcss.com"></script>
             <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
             <style>
+                ${tailwindCss}
               body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               @media print {
                 html, body, #root { 

@@ -981,6 +981,26 @@ export default function EventFormModal({
                   </div>
                 </div>
                 <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100"><h5 className="font-bold text-emerald-800 text-sm mb-3">報價單 (Quotation)</h5><label className="flex items-center space-x-3 cursor-pointer"><div className="relative"><input type="checkbox" className="sr-only peer" checked={formData.printSettings?.quotation?.showClientInfo !== false} onChange={(e) => setFormData(prev => ({ ...prev, printSettings: { ...prev.printSettings, quotation: { ...prev.printSettings?.quotation, showClientInfo: e.target.checked } } }))} /><div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div></div><span className="text-sm font-bold text-slate-700">顯示客戶資料 (Show Client Info)</span></label></div>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <div className="flex justify-between items-start mb-3">
+                    <h5 className="font-bold text-blue-800 text-sm">合約 (Contract)</h5>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <div className="relative">
+                        <input type="checkbox" className="sr-only peer" checked={formData.printSettings?.contract?.showChop !== false} onChange={(e) => setFormData(prev => ({ ...prev, printSettings: { ...prev.printSettings, contract: { ...prev.printSettings?.contract, showChop: e.target.checked } } }))} />
+                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">顯示公司蓋章 (Chop)</span>
+                    </label>
+                  </div>
+                  <FormTextArea 
+                    label="自訂合約條款 (Custom Terms)" 
+                    name="customTerms" 
+                    value={formData.customTerms} 
+                    onChange={handleInputChange} 
+                    rows={4}
+                    placeholder="此處輸入的條款將會顯示在合約的最後一項..."
+                  />
+                </div>
               </div>
             </div>
           )}

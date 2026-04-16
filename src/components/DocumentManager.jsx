@@ -75,7 +75,8 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
 
   const docs = [
     { id: 'EO', label: '內部行政單', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true },
-    { id: 'BRIEFING', label: '樓面工作單', sub: 'Briefing', clientSignable: false, adminSignable: false, internalOnly: true }
+    { id: 'BRIEFING', label: '樓面工作單', sub: 'Briefing', clientSignable: false, adminSignable: false, internalOnly: true },
+    { id: 'INTERNAL_NOTES', label: '內部備註', sub: 'Internal Notes', clientSignable: false, adminSignable: false, internalOnly: true, icon: PenTool }
   ];
 
   const externalDocsList = [

@@ -28,7 +28,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   }
   
   const isWholeVenue = selectedLocations.includes('全場');
-  const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.some(l => l && typeof l === 'string' && l.includes(z.name)));
+  const visibleZones = zones; // Always show all zones
   const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

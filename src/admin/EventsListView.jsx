@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Calendar as CalendarIcon, Clock, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Calendar as CalendarIcon, Clock, Edit2, Trash2, ChevronLeft, ChevronRight, Heart, Briefcase, Utensils, Star } from 'lucide-react';
 import { formatMoney } from '../utils/vmsUtils';
 import { Card, Badge } from '../components/ui';
 
@@ -156,10 +156,22 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
 
                 // B. Render Standard Event Row
                 const event = row.data;
+                const isVisionLead = event.source === 'vision_builder_lead';
+
                 return (
                   <tr key={row.id} onClick={() => openEditModal(event)} className="bg-white hover:bg-slate-50 active:bg-slate-100 transition-all duration-200 cursor-pointer group hover:shadow-sm hover:z-10 relative active:scale-[0.995]">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
+                        {isVisionLead && (
+                          <div className="flex items-center gap-3 mb-2">
+                            {event.vision?.occasion?.includes('Wedding') && <Badge status="confirmed" className="!bg-pink-100 !text-pink-700"><Heart size={12} className="mr-1"/> 婚宴</Badge>}
+                            {event.vision?.occasion?.includes('Corporate') && <Badge status="confirmed" className="!bg-blue-100 !text-blue-700"><Briefcase size={12} className="mr-1"/> 企業</Badge>}
+                            {event.vision?.culinaryStyle && <Badge status="confirmed" className="!bg-amber-100 !text-amber-700"><Utensils size={12} className="mr-1"/> {event.vision.culinaryStyle.split(' ')[0]}</Badge>}
+                            {event.vision?.wowFactors?.length > 0 && (
+                              <Badge status="confirmed" className="!bg-violet-100 !text-violet-700"><Star size={12} className="mr-1"/> {event.vision.wowFactors.length}個重點</Badge>
+                            )}
+                          </div>
+                        )}
                         <span className="font-bold text-slate-800 text-base group-hover:text-blue-600 transition-colors">{event.eventName}</span>
                         <span className="text-xs text-blue-600 font-mono mt-1">{event.orderId}</span>
                         <div className="text-xs text-slate-500 mt-1 flex items-center">

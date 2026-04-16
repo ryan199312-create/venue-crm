@@ -23,12 +23,12 @@ import FnBTab from './FnBTab';
 import BillingTab from './BillingTab';
 import VenueTab from './VenueTab';
 import PrintConfigTab from './PrintConfigTab';
-import RemarksTab from './RemarksTab';
+import InternalNotesTab from './RemarksTab';
 
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings,
   onSubmit, onSaveSignature, onUploadProof, onMultiImageUpload, onRemoveProof, addToast,
-  onOpenAi, onPrintEO, onPrintBriefing, onPrintQuotation, onPrintInvoice, onPrintReceipt,
+  onOpenAi, onPrintEO, onPrintBriefing, onPrintQuotation, onPrintInvoice, onPrintReceipt, onPrintInternalNotes,
   onPrintContractEN, onPrintContractCN, onOpenMenuPrint, onDownloadPDF,
   onSendSleekFlow, onSendEmail, events
 }) {
@@ -463,7 +463,7 @@ export default function EventFormModal({
             { id: 'billing', label: '費用付款', icon: CreditCard },
             { id: 'venue', label: '場地佈置', icon: Monitor },
             { id: 'logistics', label: '物流細節', icon: Truck },
-            { id: 'remarks', label: '備註', icon: PenTool },
+            { id: 'remarks', label: '內部備註', icon: PenTool },
             { id: 'printConfig', label: '列印設定', icon: Printer },
           ].map(tab => (
             <button
@@ -559,7 +559,7 @@ export default function EventFormModal({
           )}
 
           {formTab === 'remarks' && (
-            <RemarksTab
+            <InternalNotesTab
               formData={formData}
               setFormData={setFormData}
               handleInputChange={handleInputChange}
@@ -607,6 +607,7 @@ export default function EventFormModal({
                           else if (docType === 'INVOICE') onPrintInvoice();
                           else if (docType === 'RECEIPT') onPrintReceipt();
                           else if (docType === 'MENU_CONFIRM') onOpenMenuPrint();
+                          else if (docType === 'INTERNAL_NOTES') onPrintInternalNotes();
                         }}
                         onSign={handleAdminSign}
                       />

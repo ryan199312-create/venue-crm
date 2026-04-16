@@ -18,6 +18,11 @@ export const shouldShowField = (data, printMode, field, defaultClient, defaultIn
   const isInternal = printMode === 'BRIEFING' || !printMode || printMode === 'EO' || printMode === 'KITCHEN';
   const isClient = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT', 'MENU_CONFIRM'].includes(printMode);
   const showClient = data[`${field}ShowClient`] !== undefined ? data[`${field}ShowClient`] : defaultClient;
+
+  if (field === 'generalRemarks') {
+    return data.generalRemarksVisibility?.[printMode] || false;
+  }
+
   const showInternal = data[`${field}ShowInternal`] !== undefined ? data[`${field}ShowInternal`] : defaultInternal;
   return (isClient && showClient) || (isInternal && showInternal);
 };

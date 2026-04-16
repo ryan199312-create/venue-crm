@@ -295,6 +295,7 @@ export default function AdminApp() {
   const handlePrintContractEN = () => triggerLocalPrint('CONTRACT');
   const handlePrintContractCN = () => triggerLocalPrint('CONTRACT_CN');
   const handleOpenMenuPrint = () => triggerLocalPrint('MENU_CONFIRM');
+  const handlePrintInternalNotes = () => triggerLocalPrint('INTERNAL_NOTES');
 
   // --- Toast Helpers ---
   const addToast = (message, type = 'info') => {
@@ -808,6 +809,7 @@ export default function AdminApp() {
           onPrintContractEN={handlePrintContractEN}
           onPrintContractCN={handlePrintContractCN}
           onOpenMenuPrint={handleOpenMenuPrint}
+          onPrintInternalNotes={handlePrintInternalNotes}
           onDownloadPDF={handleDownloadPDF}
           onSendSleekFlow={handleSendSleekFlow}
           onSendEmail={handleSendEmail}

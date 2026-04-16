@@ -1,11 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Clock } from 'lucide-react';
-import { functions } from '../firebase';
-import { httpsCallable } from 'firebase/functions';
-import { renderToString } from 'react-dom/server';
+import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Clock, Plus } from 'lucide-react';
  import DocumentRenderer from '../admin/DocumentRenderer';
 import { SignaturePad } from './ui';
+import { usePdfGenerator } from '../hooks/usePdfGenerator';
 
 export default function DocumentManager({ eventData, appSettings, onSign, onPrint, isClientPortal = false }) {
   const [isDownloading, setIsDownloading] = useState(null);
@@ -13,6 +11,8 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const [stagedSignature, setStagedSignature] = useState(null);
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [isSubmittingSignature, setIsSubmittingSignature] = useState(false);
+  
+  const { generatePdf } = usePdfGenerator();
 
   const openPreview = (docId) => {
     setStagedSignature(null);
@@ -57,67 +57,13 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const handleDownloadPDF = async (docType, includeSignature = true) => {
     setIsDownloading(`${docType}-${includeSignature}`);
     try {
-      const pdfData = includeSignature ? eventData : { 
-        ...eventData, 
-        clientSignature: null, 
-        clientSignatureDate: null,
-        signatures: null // Strip out per-document signatures
-      };
-      
-      const htmlContent = renderToString(<DocumentRenderer data={pdfData} printMode={docType} appSettings={appSettings} />);
-      
-      const fullHtml = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-            <style>
-              body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              /* Unlock pagination constraints */
-              @media print { 
-                html, body, #root { 
-                  height: auto !important; 
-                  min-height: auto !important; 
-                  overflow: visible !important; 
-                  position: static !important;
-                  display: block !important;
-                } 
-              }
-            </style>
-          </head>
-          <body>${htmlContent}</body>
-        </html>
-      `;
-
-      // Define hasClientSig for file naming
-      const sigData = eventData.signatures?.[docType] || {};
-      const legacySig = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType) ? eventData.clientSignature : null;
-      const clientSig = sigData.client || legacySig;
-      const hasClientSig = !!clientSig;
-
-      const sigTag = (includeSignature && hasClientSig && ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType)) ? '_Signed' : '';
-      
-      // Sanitize file name to prevent browser download path errors
-      const safeName = (eventData.orderId || eventData.eventName || 'Document').replace(/[\/\\]/g, '-');
-      const fileName = `${safeName}_${docType}${sigTag}.pdf`;
-      
-      // Explicitly set client timeout to 120s to match Cloud Function and prevent cold-start failures
-      const generatePdfApi = httpsCallable(functions, 'generatePdfBackend', { timeout: 120000 });
-      const response = await generatePdfApi({ html: fullHtml, fileName, docType });
-
-      if (!response.data || !response.data.url) {
-        throw new Error("伺服器未能返回 PDF 連結 (No PDF URL returned from server)");
-      }
-
-      // Trigger the actual file download in the browser
-      const a = document.createElement('a');
-      a.href = response.data.url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await generatePdf({
+        docType,
+        data: eventData,
+        appSettings,
+        download: true,
+        includeSignature
+      });
 
     } catch (error) {
       console.error("PDF Download Error:", error);
@@ -138,7 +84,8 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     { id: 'CONTRACT', label: '英文合約', sub: 'Contract (EN)', clientSignable: true, adminSignable: true },
     { id: 'CONTRACT_CN', label: '中文合約', sub: 'Contract (CN)', clientSignable: true, adminSignable: true },
     { id: 'INVOICE', label: '發票', sub: 'Invoice', clientSignable: false, adminSignable: false },
-    { id: 'RECEIPT', label: '收據', sub: 'Receipt', clientSignable: false, adminSignable: false, condition: (eventData.deposit1Received || eventData.deposit2Received || eventData.deposit3Received || eventData.balanceReceived) },
+    { id: 'RECEIPT', label: '收據', sub: 'Receipt', clientSignable: false, adminSignable: false },
+    { id: 'ADDENDUM', label: '附加條款', sub: 'Addendum', clientSignable: true, adminSignable: true, icon: Plus },
     { id: 'FLOORPLAN', label: '平面圖', sub: 'Floorplan', clientSignable: false, adminSignable: false, icon: Layout }
   ];
 

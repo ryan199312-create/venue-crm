@@ -2,6 +2,8 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2"); // Import this
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onTaskDispatched } = require("firebase-functions/v2/tasks");
+const { getFunctions } = require("firebase-admin/functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const FormData = require("form-data");
@@ -10,6 +12,9 @@ const chromium = require("@sparticuz/chromium");
 const crypto = require("crypto");
 
 admin.initializeApp();
+
+// Global cache for Puppeteer to dramatically speed up PDF generation
+let cachedBrowser = null;
 
 // 1. SET GLOBAL REGION TO HONG KONG
 setGlobalOptions({ region: "asia-east2" });
@@ -93,40 +98,84 @@ exports.ping = onCall({}, (request) => {
     return { message: "Pong from Hong Kong! (asia-east2)" };
 });
 
-// 5. SECURE PDF GENERATOR
-exports.generatePdfBackend = onCall(
+// 5a. ENQUEUE PDF JOB (Stores HTML safely, avoids 100KB Task Queue limit)
+exports.enqueuePdfJob = onCall(
+  async (request) => {
+    const { html, fileName, docType } = request.data;
+    if (!html) throw new HttpsError("invalid-argument", "HTML string is required.");
+
+    const db = admin.firestore();
+    const jobId = `job_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const jobRef = db.collection('artifacts').doc('my-venue-crm').collection('private').doc('data').collection('pdf_jobs').doc(jobId);
+
+    // Store the massive HTML string in Firestore
+    await jobRef.set({
+      status: 'pending', html, fileName, docType, createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Enqueue the background task
+    const queue = getFunctions().taskQueue("generatePdfTask");
+    await queue.enqueue({ jobId }, { dispatchDeadlineSeconds: 60 * 5 }); // 5 minute timeout
+
+    return { jobId };
+  }
+);
+
+// 5b. ASYNC TASK GENERATOR (Does the heavy lifting in the background)
+exports.generatePdfTask = onTaskDispatched(
   { memory: "2GiB", timeoutSeconds: 120 },
   async (request) => {
-    const { html, fileName } = request.data;
+    const { jobId } = request.data;
+    const db = admin.firestore();
+    const jobRef = db.collection('artifacts').doc('my-venue-crm').collection('private').doc('data').collection('pdf_jobs').doc(jobId);
 
-    if (!html) {
-      throw new HttpsError("invalid-argument", "HTML string is required.");
-    }
+    const jobSnap = await jobRef.get();
+    if (!jobSnap.exists) return;
+    const { html, fileName } = jobSnap.data();
+    
+    await jobRef.update({ status: 'processing' });
 
-    let browser = null;
+    let page = null;
     try {
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-      });
+      // 1. Reuse browser instance to avoid 3-5 second Chromium cold start
+      if (!cachedBrowser || !cachedBrowser.isConnected()) {
+        cachedBrowser = await puppeteer.launch({
+          args: chromium.args,
+          defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless,
+          ignoreHTTPSErrors: true,
+        });
+      }
 
-      const page = await browser.newPage();
+      try {
+        page = await cachedBrowser.newPage();
+      } catch (e) {
+        // Fallback: If the cached browser crashed while the container was frozen, relaunch it
+        cachedBrowser = await puppeteer.launch({
+          args: chromium.args, defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(), headless: chromium.headless, ignoreHTTPSErrors: true,
+        });
+        page = await cachedBrowser.newPage();
+      }
       
       // 1. Force high DPI (4x) for crisp vector/raster rendering (fixes "low resolution" look)
       await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 4 });
 
-      // 2. Wait for 'networkidle0' so Tailwind CDN and external images finish loading completely
+      // 2. Wait for 'networkidle0'
       await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
       
+      // 🌟 CRITICAL FIX: Force Puppeteer to wait until custom fonts (Noto Sans TC) are fully loaded
+      await page.evaluateHandle('document.fonts.ready');
+
       // 3. Add a small buffer to let the browser paint complex floorplan transforms
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // 4. Force Puppeteer to respect CSS page sizes and pagination
       const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true });
-      await browser.close();
+      
+      // 5. ONLY close the page, keep the browser alive for the next request
+      await page.close();
 
       // Save to Firebase Storage instead of returning Base64 payload
       const bucket = admin.storage().bucket("event-management-system-9f764.firebasestorage.app");
@@ -145,11 +194,16 @@ exports.generatePdfBackend = onCall(
 
       const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniquePath)}?alt=media&token=${token}`;
 
-      return { url: publicUrl, fileName: safeFileName };
+      // Update job as completed and delete the heavy HTML string to save database space
+      await jobRef.update({
+        status: 'completed', url: publicUrl, html: admin.firestore.FieldValue.delete()
+      });
+
     } catch (error) {
-      if (browser) await browser.close();
+      if (page) await page.close().catch(() => {});
       console.error("PDF Generation failed:", error);
-      throw new HttpsError("internal", "Failed to generate PDF: " + error.message);
+      await jobRef.update({ status: 'error', error: error.message });
+      throw error; // Throwing triggers Cloud Tasks to automatically retry
     }
 });
 
@@ -324,14 +378,11 @@ exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
         }
       }
     } else {
-      // General Login Access (Memory filter for phone matches)
-      const snapshot = await eventsRef.get();
+      // General Login Access (Indexed Query)
+      const snapshot = await eventsRef.where('clientPhoneClean', '==', cleanInputPhone).get();
       snapshot.forEach(doc => {
         const data = doc.data();
-        const cleanDbPhone = String(data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
-        if (cleanDbPhone === cleanInputPhone) {
-          matchedEvents.push({ id: doc.id, ...data });
-        }
+        matchedEvents.push({ id: doc.id, ...data });
       });
     }
 

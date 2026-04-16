@@ -154,7 +154,7 @@ export const generateBillingSummary = (eventData) => {
     const qty = safeFloat(i.qty);
     const amount = price * qty;
     subtotal += amount;
-    if (i.applySC) scBase += amount;
+    if (i.applySC !== false) scBase += amount;
     return { ...i, cleanPrice: price, cleanQty: qty, amount };
   });
 

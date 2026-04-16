@@ -3,8 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
 
 // Firebase
-import { db, auth, storage, functions } from '../firebase';
-import { httpsCallable } from 'firebase/functions'; 
+import { db, auth, storage } from '../firebase';
 import {
   signInAnonymously,
   signInWithEmailAndPassword,
@@ -43,7 +42,8 @@ import EventsListView from './EventsListView';
 import SettingsView from './SettingsView';
 import LoginView from './LoginView';
 import EventFormModal from './EventFormModal';
-import DocumentRenderer from '../admin/DocumentRenderer'
+import DocumentRenderer from './DocumentRenderer';
+import { usePdfGenerator } from '../hooks/usePdfGenerator';
 
 // ==========================================
 // SECTION 1: CONFIGURATION & CONSTANTS
@@ -58,7 +58,10 @@ export default function AdminApp() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
   const [isDataAiOpen, setIsDataAiOpen] = useState(false);
+
+  const { generatePdf } = usePdfGenerator();
 
   // UI State for Toast & Modals
   const [toasts, setToasts] = useState([]);
@@ -76,8 +79,6 @@ export default function AdminApp() {
     defaultMenus: [],
     paymentRules: []
   });
-
-  const [isMenuSelectOpen, setIsMenuSelectOpen] = useState(false); // Control the modal
 
   // User Management State
   const [userProfile, setUserProfile] = useState(null);
@@ -227,6 +228,9 @@ export default function AdminApp() {
     busCharge: '',
     otherNotesShowClient: true,
     otherNotesShowInternal: true,
+    generalRemarks: '',
+    generalRemarksShowClient: true,
+    generalRemarksShowInternal: true,
 
     // ✅ UPDATED BUS STRUCTURE (Arrays for multiple buses)
     busInfo: {
@@ -255,33 +259,42 @@ export default function AdminApp() {
 
   const [formData, setFormData] = useState(initialFormState);
 
-  const handleMenuPrintSelection = (selection) => {
-    let dataToPrint = { ...formData };
-    if (selection !== 'all') {
-      dataToPrint.menus = [formData.menus[selection]];
-    }
-    setPrintData(dataToPrint);
-    setPrintMode('MENU_CONFIRM');
-    setIsMenuSelectOpen(false);
-    setTimeout(() => window.print(), 100);
-  };
-
   // --- Printing Handlers (Native Browser Print) ---
-  const handlePrintEO = () => { setPrintData(formData); setPrintMode('EO'); setTimeout(() => window.print(), 100); };
-  const handlePrintReceipt = () => { setPrintData(formData); setPrintMode('RECEIPT'); setTimeout(() => window.print(), 100); };
-  const handlePrintInvoice = () => { setPrintData(formData); setPrintMode('INVOICE'); setTimeout(() => window.print(), 100); };
-  const handlePrintBriefing = () => { setPrintData(formData); setPrintMode('BRIEFING'); setTimeout(() => window.print(), 100); };
-  const handlePrintQuotation = () => { setPrintData(formData); setPrintMode('QUOTATION'); setTimeout(() => window.print(), 100); };
-  const handlePrintContractEN = () => { setPrintData(formData); setPrintMode('CONTRACT'); setTimeout(() => window.print(), 100); };
-  const handlePrintContractCN = () => { setPrintData(formData); setPrintMode('CONTRACT_CN'); setTimeout(() => window.print(), 100); };
-
-  const handleOpenMenuPrint = () => {
-    if (formData.menus && formData.menus.length > 1) {
-      setIsMenuSelectOpen(true);
-    } else {
-      handleMenuPrintSelection('all');
-    }
+  const triggerLocalPrint = (mode) => {
+    // 1. Show loader immediately to give user feedback
+    setIsPreparingPrint(true);
+    // 2. Set the data. This will trigger the slow, blocking render of DocumentRenderer.
+    // The user will see the loader overlay during this UI freeze.
+    setPrintData(formData);
+    setPrintMode(mode);
   };
+
+  // This effect handles the actual printing AFTER the component has rendered
+  useEffect(() => {
+    if (isPreparingPrint && printData) {
+      const handleAfterPrint = () => {
+        // Reset state after print dialog is closed or cancelled.
+        setPrintData(null);
+        setIsPreparingPrint(false);
+        window.removeEventListener('afterprint', handleAfterPrint);
+      };
+      window.addEventListener('afterprint', handleAfterPrint);
+
+      // Use requestAnimationFrame to ensure the DOM is painted before printing
+      requestAnimationFrame(() => {
+        setTimeout(() => window.print(), 50); // A small delay to let the browser fully render the complex doc
+      });
+    }
+  }, [isPreparingPrint, printData]);
+
+  const handlePrintEO = () => triggerLocalPrint('EO');
+  const handlePrintReceipt = () => triggerLocalPrint('RECEIPT');
+  const handlePrintInvoice = () => triggerLocalPrint('INVOICE');
+  const handlePrintBriefing = () => triggerLocalPrint('BRIEFING');
+  const handlePrintQuotation = () => triggerLocalPrint('QUOTATION');
+  const handlePrintContractEN = () => triggerLocalPrint('CONTRACT');
+  const handlePrintContractCN = () => triggerLocalPrint('CONTRACT_CN');
+  const handleOpenMenuPrint = () => triggerLocalPrint('MENU_CONFIRM');
 
   // --- Toast Helpers ---
   const addToast = (message, type = 'info') => {
@@ -546,11 +559,16 @@ export default function AdminApp() {
 
     try {
       let docId;
+      
+      // Create a clean phone number for backend querying
+      const cleanPhone = formData.clientPhone ? formData.clientPhone.replace(/[^0-9]/g, '').slice(-8) : '';
+      const dataToSave = { ...formData, clientPhoneClean: cleanPhone };
+
       if (editingEvent) {
         docId = editingEvent.id;
-        await updateDoc(doc(privateRef, docId), formData);
+        await updateDoc(doc(privateRef, docId), dataToSave);
       } else {
-        const newDoc = await addDoc(privateRef, { ...formData, createdAt: serverTimestamp() });
+        const newDoc = await addDoc(privateRef, { ...dataToSave, createdAt: serverTimestamp() });
         docId = newDoc.id;
           
           // Mark as editing so subsequent saves in the same modal session update instead of creating duplicates
@@ -615,7 +633,7 @@ export default function AdminApp() {
   const generateAndUploadPDF = async (docType) => {
     try {
       addToast(`正在雲端產生並儲存 ${docType} PDF...`, "info");
-      const pdfData = await generatePDFCloud(docType);
+      const pdfData = await generatePdf({ docType, data: formData, appSettings });
       if (!pdfData || !pdfData.url) return null;
       
       addToast("文件產生並上傳成功！", "success");
@@ -648,68 +666,6 @@ export default function AdminApp() {
     addToast("已開啟電郵草稿 (Email client opened)", "success");
   };
   
-  // ==========================================
-  // 📄 PDF GENERATOR (CLOUD URL)
-  // ==========================================
-  const generatePDFCloud = async (docType, customData = null) => {
-    const dataToRender = customData || formData;
-    try {
-      const htmlContent = renderToString(<DocumentRenderer data={dataToRender} printMode={docType} appSettings={appSettings} />);
-
-        // 1. Fetch pre-compiled Tailwind CSS to inject statically
-        let tailwindCss = '';
-        try {
-          const cssResponse = await fetch(`${window.location.origin}/tailwind-print.css`);
-          if (cssResponse.ok) {
-            tailwindCss = await cssResponse.text();
-          } else {
-            console.warn("Failed to fetch tailwind-print.css. Falling back to unstyled.");
-          }
-        } catch (err) {
-          console.warn("Error fetching tailwind-print.css:", err);
-        }
-
-        // 2. Wrap it with the static CSS for the backend to render beautifully without CDN timeouts
-      const fullHtml = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-            <style>
-                ${tailwindCss}
-              body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              @media print {
-                html, body, #root { 
-                  height: auto !important; 
-                  min-height: auto !important; 
-                  overflow: visible !important; 
-                  position: static !important;
-                  display: block !important;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            ${htmlContent}
-          </body>
-        </html>
-      `;
-
-      const safeName = (dataToRender.orderId || dataToRender.eventName || 'Document').replace(/[\/\\]/g, '-');
-      const fileName = `${safeName}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
-
-      const generatePdfApi = httpsCallable(functions, 'generatePdfBackend', { timeout: 120000 });
-      const response = await generatePdfApi({ html: fullHtml, fileName, docType });
-
-      return { url: response.data.url, fileName: response.data.fileName };
-
-    } catch (error) {
-      console.error("PDF Cloud Function Error:", error);
-      addToast(`PDF 產生失敗: ${error.message || "未知錯誤"}`, "error");
-      throw error; // 讓外層的函數也能捕捉到這個錯誤
-    }
-  };
 
   // ==========================================
   // 📤 SLEEKFLOW HANDLER
@@ -725,7 +681,7 @@ export default function AdminApp() {
       addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
 
       // 取得 PDF 雲端連結資料
-      const pdfData = await generatePDFCloud(docType);
+      const pdfData = await generatePdf({ docType, data: formData, appSettings });
       if (!pdfData) return;
 
       const messageContent = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
@@ -756,16 +712,7 @@ export default function AdminApp() {
     addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
     
     try {
-      const pdfData = await generatePDFCloud(docType);
-      if (!pdfData || !pdfData.url) throw new Error("伺服器未能返回 PDF 連結");
-
-      // Trigger the actual file download in the browser
-      const a = document.createElement('a');
-      a.href = pdfData.url;
-      a.download = pdfData.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await generatePdf({ docType, data: formData, appSettings, download: true });
 
       addToast(`${docType} PDF 產生完成！`, "success");
     } catch (error) {
@@ -794,6 +741,14 @@ export default function AdminApp() {
         onConfirm={confirmConfig.onConfirm}
         onCancel={() => setConfirmConfig({ isOpen: false, title: '', message: '', onConfirm: null })}
       />
+
+      {/* Print Preparation Overlay */}
+      {isPreparingPrint && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center text-slate-700 font-bold animate-in fade-in print:hidden">
+          <Loader2 className="animate-spin mb-4 text-blue-600" size={48} />
+          正在準備列印... (Preparing Print...)
+        </div>
+      )}
 
       <div className="fixed bottom-4 right-4 z-[100] flex flex-col space-y-2 print:hidden no-print">
         {toasts.map(t => (
@@ -877,16 +832,6 @@ export default function AdminApp() {
           onClose={() => setIsDataAiOpen(false)}
         />
       )}
-
-
-      {/* 4. Menu Selector Modal */}
-      <MenuPrintSelector
-        isOpen={isMenuSelectOpen}
-        onClose={() => setIsMenuSelectOpen(false)}
-        menus={formData.menus || []}
-        onSelect={handleMenuPrintSelection}
-      />
-
 
       {/* 5. Print Output */}
       {printData && (

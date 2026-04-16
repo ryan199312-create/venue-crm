@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Users, Maximize, Star, Download, ChefHat, Heart, ChevronLeft, ChevronRight, Quote, Plus, Minus, LayoutTemplate } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
+import { formatMoney } from '../utils/vmsUtils';
 
 // --- FIREBASE IMPORTS ---
 import { db } from '../firebase'; 
@@ -213,11 +214,6 @@ const content = {
       cta: "查詢婚宴檔期"
     }
   }
-};
-
-const formatMoney = (val) => {
-  if (!val) return '0';
-  return Math.round(parseFloat(val)).toLocaleString('en-US');
 };
 
 const Weddings = () => {

@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, Layout, LogOut, Sparkles, AlertTriangle, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, ZoomIn, ZoomOut } from 'lucide-react';
+import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertTriangle, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus } from 'lucide-react';
 import { functions, db } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 import { renderToString } from 'react-dom/server';
-import { TOOL_GROUPS } from '../components/FloorplanEditor';
 import DocumentManager from '../components/DocumentManager';
-import { STYLES } from './DocumentRenderer';
+import FloorplanViewer from '../components/FloorplanViewer';
+
+const STYLES = {
+  gridBox: "bg-white p-6 rounded-2xl shadow-sm border border-slate-200",
+  h3: "text-lg font-bold text-slate-800 mb-4"
+};
 
 export default function ClientPortal() {
   const { eventId: urlEventId } = useParams();
@@ -17,7 +21,7 @@ export default function ClientPortal() {
   const [allEvents, setAllEvents] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [eventData, setEventData] = useState(null);
-  const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [uploadingMilestone, setUploadingMilestone] = useState(null); // Track specific upload
   const [dietaryReq, setDietaryReq] = useState('');
   const [allergies, setAllergies] = useState('');
   const [isSubmittingDietary, setIsSubmittingDietary] = useState(false);
@@ -120,7 +124,7 @@ export default function ClientPortal() {
       return;
     }
 
-    setIsUploadingProof(true);
+    setUploadingMilestone(milestoneLabel);
     const reader = new FileReader();
     
     reader.readAsDataURL(file);
@@ -154,13 +158,13 @@ export default function ClientPortal() {
         console.error("Upload Error:", error);
         alert(`上傳失敗 (Upload Failed): ${error.message}`);
       } finally {
-        setIsUploadingProof(false);
+        setUploadingMilestone(null);
         target.value = null; // Clear input safely after processing
       }
     };
     reader.onerror = (err) => {
       alert("讀取手機檔案失敗 (Failed to read local file).");
-      setIsUploadingProof(false);
+      setUploadingMilestone(null);
       target.value = null;
     };
   };
@@ -244,6 +248,38 @@ export default function ClientPortal() {
       return decoded;
     } catch(e) { return "Receipt.jpg"; }
   };
+
+  // --- MEMOIZED BILLING DATA ---
+  // Prevents heavy recalculations when typing in other tabs
+  const billingMetrics = useMemo(() => {
+    if (!eventData) return null;
+    const total = eventData.totalAmount || 0;
+    const remaining = eventData.balanceDue || 0;
+    const paid = Math.max(0, total - remaining);
+    const progressPercent = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+    
+    const dep1 = Number(eventData.deposit1) || 0;
+    const dep2 = Number(eventData.deposit2) || 0;
+    const dep3 = Number(eventData.deposit3) || 0;
+    const expectedFinalBalance = Math.max(0, total - dep1 - dep2 - dep3);
+    
+    let balanceDueDateDisplay = eventData.date || 'Before Event';
+    if (eventData.balanceDueDateType === 'manual' && eventData.balanceDueDateOverride) {
+      balanceDueDateDisplay = eventData.balanceDueDateOverride;
+    } else if (eventData.balanceDueDateType === '10daysPrior' && eventData.date) {
+      const d = new Date(eventData.date); d.setDate(d.getDate() - 10);
+      if (!isNaN(d.getTime())) balanceDueDateDisplay = d.toISOString().split('T')[0];
+    }
+
+    const milestones = [
+      { key: 'deposit1', label: '1st Payment', amount: dep1, date: eventData.deposit1Date, received: eventData.deposit1Received },
+      { key: 'deposit2', label: '2nd Payment', amount: dep2, date: eventData.deposit2Date, received: eventData.deposit2Received },
+      { key: 'deposit3', label: '3rd Payment', amount: dep3, date: eventData.deposit3Date, received: eventData.deposit3Received },
+      { key: 'balance', label: 'Final Balance', amount: expectedFinalBalance, date: balanceDueDateDisplay, received: eventData.balanceReceived }
+    ].filter(m => m.amount > 0);
+
+    return { total, remaining, paid, progressPercent, milestones };
+  }, [eventData]);
 
   // --- LOGIN VIEW ---
   if (viewState === 'LOGIN') {
@@ -402,52 +438,26 @@ export default function ClientPortal() {
         )}
 
         {/* TAB 2: BILLING */}
-        {activeTab === 'billing' && (() => {
-          const total = eventData.totalAmount || 0;
-          const remaining = eventData.balanceDue || 0;
-          const paid = Math.max(0, total - remaining);
-          const progressPercent = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-          
-          const dep1 = Number(eventData.deposit1) || 0;
-          const dep2 = Number(eventData.deposit2) || 0;
-          const dep3 = Number(eventData.deposit3) || 0;
-          const expectedFinalBalance = Math.max(0, total - dep1 - dep2 - dep3);
-          
-          let balanceDueDateDisplay = eventData.date || 'Before Event';
-          if (eventData.balanceDueDateType === 'manual' && eventData.balanceDueDateOverride) {
-            balanceDueDateDisplay = eventData.balanceDueDateOverride;
-          } else if (eventData.balanceDueDateType === '10daysPrior' && eventData.date) {
-            const d = new Date(eventData.date); d.setDate(d.getDate() - 10);
-            if (!isNaN(d.getTime())) balanceDueDateDisplay = d.toISOString().split('T')[0];
-          }
-
-          const milestones = [
-            { key: 'deposit1', label: '1st Payment', amount: dep1, date: eventData.deposit1Date, received: eventData.deposit1Received },
-            { key: 'deposit2', label: '2nd Payment', amount: dep2, date: eventData.deposit2Date, received: eventData.deposit2Received },
-            { key: 'deposit3', label: '3rd Payment', amount: dep3, date: eventData.deposit3Date, received: eventData.deposit3Received },
-            { key: 'balance', label: 'Final Balance', amount: expectedFinalBalance, date: balanceDueDateDisplay, received: eventData.balanceReceived }
-          ].filter(m => m.amount > 0);
-          
-          return (
+        {activeTab === 'billing' && billingMetrics && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="md:col-span-5 space-y-6">
               <div className={`${STYLES.gridBox} text-center h-max`}>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
                 <h3 className="text-4xl font-black text-[#A57C00] font-mono tracking-tight">
-                  ${remaining.toLocaleString()}
+                  ${billingMetrics.remaining.toLocaleString()}
                 </h3>
-                <p className="text-xs text-slate-400 mt-2">Total: ${total.toLocaleString()}</p>
+                <p className="text-xs text-slate-400 mt-2">Total: ${billingMetrics.total.toLocaleString()}</p>
                 
                 {/* --- PROGRESS BAR --- */}
                 <div className="mt-6 pt-5 border-t border-slate-100 text-left">
                   <div className="flex justify-between text-[10px] font-bold mb-2">
-                    <span className="text-emerald-600 uppercase tracking-widest">Paid: ${paid.toLocaleString()}</span>
-                    <span className="text-slate-400 uppercase tracking-widest">{progressPercent}% Settled</span>
+                    <span className="text-emerald-600 uppercase tracking-widest">Paid: ${billingMetrics.paid.toLocaleString()}</span>
+                    <span className="text-slate-400 uppercase tracking-widest">{billingMetrics.progressPercent}% Settled</span>
                   </div>
                   <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
                     <div 
                       className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-1000 ease-out" 
-                      style={{ width: `${progressPercent}%` }}
+                      style={{ width: `${billingMetrics.progressPercent}%` }}
                     ></div>
                   </div>
                 </div>
@@ -457,7 +467,7 @@ export default function ClientPortal() {
             <div className={`md:col-span-7 ${STYLES.gridBox}`}>
               <h3 className={STYLES.h3}>Payment Status</h3>
               <div className="space-y-4">
-                {milestones.map((m, idx) => (
+                {billingMetrics.milestones.map((m, idx) => (
                   <div key={idx} className="flex flex-col border border-slate-100 rounded-xl p-3 bg-slate-50 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -513,10 +523,10 @@ export default function ClientPortal() {
 
                             {/* UPLOAD BOX (Only visible if not received) */}
                             {!m.received && (
-                              <div className={`mt-2 relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${isUploadingProof ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
-                                {isUploadingProof ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
-                                <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{isUploadingProof ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
-                                <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={isUploadingProof} title="Upload Proof" />
+                              <div className={`mt-2 relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${uploadingMilestone === m.label ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
+                                {uploadingMilestone === m.label ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
+                                <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{uploadingMilestone === m.label ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
+                                <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={!!uploadingMilestone} title="Upload Proof" />
                               </div>
                             )}
                           </div>
@@ -527,7 +537,7 @@ export default function ClientPortal() {
               </div>
             </div>
           </div>
-        )})()}
+        )}
 
         {/* TAB 3: MENU */}
         {activeTab === 'menu' && (
@@ -728,159 +738,3 @@ const DesktopTab = ({ icon: Icon, label, active, onClick }) => (
     <span>{label}</span>
   </button>
 );
-
-// --- FLOORPLAN VIEWER COMPONENT ---
-const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
-  const containerRef = useRef(null);
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [scaleInfo, setScaleInfo] = useState({ scale: 1, height: 400 });
-
-  const bgImage = floorplan?.bgImage || '';
-  const itemScale = floorplan?.itemScale || 40;
-  const zones = floorplan?.zones || [];
-  const elements = floorplan?.elements || [];
-  
-  if (!bgImage && elements.length === 0 && zones.length === 0) {
-    return (
-      <div className={`${STYLES.gridBox} mt-4 text-center p-8`}>
-        <Layout size={32} className="mx-auto text-slate-300 mb-3" />
-        <h4 className="font-bold text-slate-700">尚未設定平面圖</h4>
-        <p className="text-xs text-slate-500 mt-1">Floorplan is not yet configured for this event.</p>
-      </div>
-    );
-  }
-  
-  const isWholeVenue = selectedLocations.includes('全場');
-  const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.some(l => l && typeof l === 'string' && l.includes(z.name)));
-  const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
-
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  
-  // If zoomed, focus ONLY on the selected zones
-  const targetZones = (isZoomed && canZoom) ? visibleZones : zones;
-
-  targetZones.forEach(z => {
-      z.points.forEach(p => {
-         minX = Math.min(minX, p.x_m * itemScale);
-         maxX = Math.max(maxX, p.x_m * itemScale);
-         minY = Math.min(minY, p.y_m * itemScale);
-         maxY = Math.max(maxY, p.y_m * itemScale);
-      });
-  });
-  
-  // If NOT zoomed, include all elements to ensure everything fits on screen
-  if (!isZoomed || !canZoom) {
-    elements.forEach(el => {
-        const w = (el.w_m || (el.w ? el.w / 40 : 1)) * itemScale;
-        const h = (el.h_m || (el.h ? el.h / 40 : 1)) * itemScale;
-        minX = Math.min(minX, el.x || 0);
-        maxX = Math.max(maxX, (el.x || 0) + w);
-        minY = Math.min(minY, el.y || 0);
-        maxY = Math.max(maxY, (el.y || 0) + h);
-    });
-  }
-
-  if (minX === Infinity) { minX = 0; minY = 0; maxX = 1000; maxY = 700; }
-  
-  const pad = 20;
-  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
-  const contentW = maxX - minX;
-  const contentH = Math.max(maxY - minY, 1);
-
-  // Resize observer to scale map dynamically
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        const { width, height } = entry.contentRect;
-        const scaleW = width / contentW;
-        setScaleInfo({ scale: scaleW, height: contentH * scaleW });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, [contentW, contentH]);
-
-  return (
-    <div className={`${STYLES.gridBox} mt-4`}>
-      <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-        <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Layout size={16} /> Venue Floorplan (場地平面圖)</h3>
-        {canZoom && (
-          <button onClick={() => setIsZoomed(!isZoomed)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
-            {isZoomed ? <><ZoomOut size={12} className="mr-1"/> 顯示全圖 (View All)</> : <><ZoomIn size={12} className="mr-1"/> 放大區域 (Zoom In)</>}
-          </button>
-        )}
-      </div>
-
-      <div ref={containerRef} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl relative shadow-inner overflow-hidden" style={{ height: scaleInfo.height > 0 ? scaleInfo.height : 400 }}>
-        <div 
-          className="absolute origin-top-left transition-transform" 
-          style={{ 
-            transform: `scale(${scaleInfo.scale})`,
-            left: `${-minX * scaleInfo.scale}px`,
-            top: `${-minY * scaleInfo.scale}px`,
-            width: `${maxX}px`, 
-            height: `${maxY}px`,
-            backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.4) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
-            backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`,
-            backgroundPosition: 'top left',
-            backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat'
-          }}
-        >
-          {/* Render Zones */}
-          {visibleZones.length > 0 && (
-             <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-               {visibleZones.map(z => {
-                  const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
-                  const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;
-                  const cy = ((Math.min(...z.points.map(p => p.y_m)) + Math.max(...z.points.map(p => p.y_m))) / 2) * itemScale;
-                  return (
-                    <g key={z.id}>
-                      <polygon points={points} fill={z.color} stroke={z.color.replace(/0\.\d+\)/, '0.8)')} strokeWidth="2" strokeDasharray="4 4" />
-                      <text x={cx} y={cy} fill={z.color.replace(/0\.\d+\)/, '1.0)')} fontSize={Math.max(14, itemScale * 0.8)} fontWeight="bold" textAnchor="middle" dominantBaseline="middle" style={{textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff'}} opacity="0.8">{z.name}</text>
-                    </g>
-                  );
-               })}
-             </svg>
-          )}
-
-          {/* Render Elements */}
-          {elements.map(el => {
-            const w_m = el.w_m || (el.w ? el.w / 40 : 1);
-            const h_m = el.h_m || (el.h ? el.h / 40 : 1);
-            
-            const toolDef = typeof TOOL_GROUPS !== 'undefined' ? TOOL_GROUPS.flatMap(g => g.items).find(t => t.type === el.type) : null;
-            const displayStyle = toolDef && el.type !== 'text' ? toolDef.style : el.style || '';
-            const displayContent = toolDef && el.type !== 'text' ? toolDef.content : el.content;
-
-            return (
-              <div
-                key={el.id}
-                className={`absolute flex items-center justify-center transition-all ${displayStyle}`}
-                style={{ left: el.x || 0, top: el.y || 0, width: w_m * itemScale, height: h_m * itemScale, transform: `rotate(${el.rotation || 0}deg)` }}
-              >
-                {el.type === 'text' ? (
-                  <div className="w-full h-full flex items-center justify-center overflow-visible">
-                    <span className="font-bold text-slate-800 whitespace-nowrap text-sm">{el.label || ''}</span>
-                  </div>
-                ) : (
-                  displayContent
-                )}
-                {el.label && el.type !== 'text' && (
-                  <div 
-                    className="absolute left-1/2 bottom-0 pointer-events-none"
-                    style={{ transform: `translate(-50%, 120%) rotate(${-(el.rotation || 0)}deg)` }}
-                  >
-                    <span className="bg-white/90 backdrop-blur-sm text-slate-800 border border-slate-300 px-1.5 py-0.5 rounded shadow-sm text-[10px] font-black whitespace-nowrap inline-block">
-                      {el.label}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};

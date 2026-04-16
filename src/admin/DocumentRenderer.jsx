@@ -16,13 +16,9 @@ import { TOOL_GROUPS } from '../components/FloorplanEditor';
 // ==========================================
 export const shouldShowField = (data, printMode, field, defaultClient, defaultInternal) => {
   const isInternal = printMode === 'BRIEFING' || !printMode || printMode === 'EO' || printMode === 'KITCHEN';
-  const isClient = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT', 'MENU_CONFIRM'].includes(printMode);
+  const isClient = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT', 'MENU_CONFIRM', 'ADDENDUM', 'FLOORPLAN'].includes(printMode);
   const showClient = data[`${field}ShowClient`] !== undefined ? data[`${field}ShowClient`] : defaultClient;
-
-  if (field === 'generalRemarks') {
-    return data.generalRemarksVisibility?.[printMode] || false;
-  }
-
+  
   const showInternal = data[`${field}ShowInternal`] !== undefined ? data[`${field}ShowInternal`] : defaultInternal;
   return (isClient && showClient) || (isInternal && showInternal);
 };
@@ -108,19 +104,45 @@ const getPackageStrings = (data, isEn = false) => {
 // ==========================================
 // SHARED UI COMPONENTS
 // ==========================================
-const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {
-  if (!data.floorplan || !data.floorplan.elements || data.floorplan.elements.length === 0) return null;
-  const fp = data.floorplan;
+const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {  
+  const fp = data.floorplan || {};
   const bgImage = fp.bgImage || appSettings?.defaultFloorplan?.bgImage || '';
+  const hasElements = fp.elements && fp.elements.length > 0;
+
+  // If there is no background image AND no elements, then render nothing.
+  if (!bgImage && !hasElements) return null;
+
   const itemScale = fp.itemScale || appSettings?.defaultFloorplan?.itemScale || 40;
   const zones = fp.zones || appSettings?.defaultFloorplan?.zones || [];
   
   const selectedLocs = data.selectedLocations || [];
   const isWholeVenue = selectedLocs.includes('全場');
-  const visibleZones = zones.filter(z => isWholeVenue || selectedLocs.includes(z.name));
+  const visibleZones = zones; // Always show all zones
 
-  const maxRight = Math.max(1200, ...fp.elements.map(el => (el.x || 0) + ((el.w_m || (el.w ? el.w / 40 : 1)) * itemScale)));
-  const scale = Math.min(750 / maxRight, 1);
+  // --- DYNAMIC SCALING & CENTERING LOGIC ---
+  const allElements = [...(fp.elements || []), ...visibleZones.flatMap(z => z.points.map(p => ({ x: p.x_m * itemScale, y: p.y_m * itemScale, w_m: 0, h_m: 0 })))];
+  
+  const minX = allElements.length > 0 ? Math.min(0, ...allElements.map(el => el.x || 0)) : 0;
+  const minY = allElements.length > 0 ? Math.min(0, ...allElements.map(el => el.y || 0)) : 0;
+  const maxX = allElements.length > 0 ? Math.max(1200, ...allElements.map(el => (el.x || 0) + ((el.w_m || 0) * itemScale))) : 1200;
+  const maxY = allElements.length > 0 ? Math.max(800, ...allElements.map(el => (el.y || 0) + ((el.h_m || 0) * itemScale))) : 800;
+
+  const contentWidth = Math.max(1, maxX - minX);
+  const contentHeight = Math.max(1, maxY - minY);
+
+  // A4 paper has an aspect ratio of ~1/1.414. Content area is ~700px wide.
+  // For standalone, we can use more height. For appendix, we must be more conservative.
+  const availableWidth = isStandalone ? 750 : 680;
+  const availableHeight = isStandalone ? 1050 : 750;
+
+  const scale = Math.min(
+    availableWidth / contentWidth,
+    availableHeight / contentHeight,
+    1 // Don't scale up
+  );
+
+  const containerWidth = contentWidth * scale;
+  const containerHeight = contentHeight * scale;
 
   return (
     <>
@@ -135,8 +157,15 @@ const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {
             <div className="inline-block bg-[#A57C00] text-white px-3 py-1 text-[10px] font-bold rounded mb-1 uppercase tracking-widest">APPENDIX</div>
           </div>
         </div>
-        <div className="w-full bg-slate-50/50 border border-slate-200 rounded-xl overflow-hidden mt-4 relative shadow-sm" style={{ height: '750px', breakInside: 'avoid' }}>
-          <div className="absolute inset-0 origin-top-left" style={{ transform: `scale(${scale})`, width: `${100 / scale}%`, height: `${100 / scale}%`, backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat' }}>
+        <div className="w-full bg-slate-50/50 border border-slate-200 rounded-xl overflow-hidden mt-4 relative shadow-sm flex items-center justify-center" style={{ height: `${containerHeight}px`, breakInside: 'avoid' }}>
+          <div className="absolute origin-top-left" style={{ 
+              transform: `scale(${scale})`, 
+              left: `${-minX * scale}px`,
+              top: `${-minY * scale}px`,
+              width: `${contentWidth}px`,
+              height: `${contentHeight}px`,
+              backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat' 
+            }}>
             {bgImage && <img src={bgImage} className="opacity-0 pointer-events-none select-none block" alt="" />}
             {visibleZones.length > 0 && (
                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
@@ -359,13 +388,11 @@ const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, dateStr, 
       {!sigDataUrl ? (
         onSign ? (
           <button type="button" onClick={onSign} className={`absolute inset-0 flex items-center justify-center w-full h-full transition-colors cursor-pointer border-2 border-dashed z-10 ${isAdmin ? 'bg-blue-50 hover:bg-blue-100 border-blue-400' : 'bg-amber-50 hover:bg-amber-100 border-amber-400'}`}>
-            <span className={`text-[10px] font-bold uppercase tracking-widest text-center ${isAdmin ? 'text-blue-600' : 'text-amber-600'}`}>
-              點擊此處簽署<br/>{isAdmin ? 'Admin Sign' : 'Click to Sign'}
-            </span>
+            {/* Intentionally empty for a clean look, the box is clickable */}
           </button>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{isAdmin ? 'Admin Sign' : 'Sign Here'}</span>
+            {/* Empty placeholder */}
           </div>
         )
       ) : (
@@ -1743,6 +1770,22 @@ const AddendumView = ({ data, printMode, onClientSign, onAdminSign }) => {
   );
 };
 
+const InternalNotesView = ({ data }) => (
+  <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col">
+    <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <DocumentHeader data={data} typeEn="INTERNAL NOTES" typeZh="內部備註" />
+    <ClientInfoGrid data={data} />
+    <div className="mt-8 flex-1">
+      <h3 className="text-sm font-black uppercase tracking-widest pb-2 border-b-2 inline-block border-slate-800 text-slate-800 mb-4">
+        備註內容 (Notes Content)
+      </h3>
+      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+        {data.generalRemarks || '(無內容)'}
+      </div>
+    </div>
+  </div>
+);
+
 // ==========================================
 // MAIN RENDERER (ROUTER)
 // ==========================================
@@ -1767,6 +1810,8 @@ export default function DocumentRenderer({ data, printMode, appSettings, onClien
       return <MenuConfirmView data={data} printMode={printMode} onClientSign={onClientSign} />;
     case 'ADDENDUM':
       return <AddendumView data={data} printMode={printMode} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
+    case 'INTERNAL_NOTES':
+      return <InternalNotesView data={data} />;
     case 'EO':
     default:
       return <InternalEOView data={data} printMode={printMode} appSettings={appSettings} />;

@@ -108,21 +108,6 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
           <DocumentVisibilityToggles field="otherNotes" defaultClient={true} defaultInternal={true} />
         </div>
       </div>
-
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <PenTool size={18} className="text-blue-600" />
-          <h4 className="font-bold text-slate-800">通用備註 (General Remarks)</h4>
-        </div>
-        <FormTextArea 
-          name="generalRemarks" 
-          rows={5} 
-          value={formData.generalRemarks} 
-          onChange={handleInputChange}
-          placeholder="輸入任何其他備註..."
-        />
-        <DocumentVisibilityToggles field="generalRemarks" defaultClient={true} defaultInternal={true} />
-      </div>
     </div>
   );
 };

@@ -23,6 +23,7 @@ import FnBTab from './FnBTab';
 import BillingTab from './BillingTab';
 import VenueTab from './VenueTab';
 import PrintConfigTab from './PrintConfigTab';
+import RemarksTab from './RemarksTab';
 
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings,
@@ -462,6 +463,7 @@ export default function EventFormModal({
             { id: 'billing', label: '費用付款', icon: CreditCard },
             { id: 'venue', label: '場地佈置', icon: Monitor },
             { id: 'logistics', label: '物流細節', icon: Truck },
+            { id: 'remarks', label: '備註', icon: PenTool },
             { id: 'printConfig', label: '列印設定', icon: Printer },
           ].map(tab => (
             <button
@@ -553,6 +555,14 @@ export default function EventFormModal({
               setFormData={setFormData}
               handleInputChange={handleInputChange}
               DocumentVisibilityToggles={DocumentVisibilityToggles}
+            />
+          )}
+
+          {formTab === 'remarks' && (
+            <RemarksTab
+              formData={formData}
+              setFormData={setFormData}
+              handleInputChange={handleInputChange}
             />
           )}
 

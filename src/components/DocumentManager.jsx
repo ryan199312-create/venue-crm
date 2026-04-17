@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Clock, Plus } from 'lucide-react';
  import DocumentRenderer from '../admin/DocumentRenderer';
@@ -22,7 +22,22 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const closePreview = () => {
     setStagedSignature(null);
     setPreviewDoc(null);
+    setIsSigningModalOpen(false);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (isSigningModalOpen) {
+          setIsSigningModalOpen(false);
+        } else if (previewDoc) {
+          closePreview();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewDoc, isSigningModalOpen]);
 
   const handleConfirmSignature = async () => {
     setIsSubmittingSignature(true);

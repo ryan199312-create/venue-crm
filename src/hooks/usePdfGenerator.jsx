@@ -50,7 +50,7 @@ export function usePdfGenerator() {
     const hasClientSig = !!(sigData.client || legacySig);
     const sigTag = (includeSignature && hasClientSig && ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType)) ? '_Signed' : '';
     
-    const safeName = (data.orderId || data.eventName || 'Document').replace(/[\/\\]/g, '-');
+    const safeName = (data.orderId || data.eventName || 'Document').replace(/[/\\]/g, '-');
     const fileName = `${safeName}_${docType}${sigTag}.pdf`;
     
     const enqueueApi = httpsCallable(functions, 'enqueuePdfJob');
@@ -63,10 +63,11 @@ export function usePdfGenerator() {
         if (jobStatus?.status === 'completed') {
           unsubscribe();
           if (download) {
-            const a = document.createElement('a');
-            a.href = jobStatus.url;
-            a.download = fileName;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            // Because this executes asynchronously after Firebase replies, 
+            // browser popup blockers often block a.click() or window.open().
+            // But since the Cloud Function sets Content-Disposition to 'attachment', 
+            // navigating to the URL safely forces a download without replacing the page.
+            window.location.href = jobStatus.url;
           }
           resolve({ url: jobStatus.url, fileName });
         } else if (jobStatus?.status === 'error') {

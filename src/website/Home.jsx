@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, Star, ChevronDown } from 'lucide-react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
 
 // --- CONTENT DICTIONARY ---
 const content = {
@@ -9,6 +9,8 @@ const content = {
     heroTitle: "A Symphony of Taste",
     heroSub: "In the Heart of Culture",
     heroDesc: "Where culinary heritage meets the majestic Victoria Harbour skyline. Experience the art of Cantonese fine dining at the Hong Kong Palace Museum.",
+    philosophyTitle: "Our Philosophy",
+    philosophyDesc: "We believe every banquet is a continuation of culture. Set against the majestic backdrop of the Palace Museum, we blend traditional Cantonese craftsmanship with modern artistry.",
     inquire: "Book Table",
     scroll: "Scroll to Discover",
     sections: [
@@ -42,6 +44,8 @@ const content = {
     heroTitle: "味覺交響",
     heroSub: "文化與美饌",
     heroDesc: "於香港故宮文化博物館，細味傳統粵菜精髓。在維港璀璨景致下，體驗一場視覺與味覺的非凡饗宴。",
+    philosophyTitle: "匠心傳承",
+    philosophyDesc: "我們相信每一場盛宴都是文化的延續。在故宮博物館的宏偉背景下，我們將傳統粵菜與現代藝術完美融合，為每一位賓客創造難忘的回憶。",
     inquire: "立即訂座",
     scroll: "探索更多",
     sections: [
@@ -160,9 +164,9 @@ const EditorialSection = ({ t }) => {
                 <p className="text-stone-600 leading-loose font-light mb-8 text-sm md:text-base">
                   {section.desc}
                 </p>
-                <button className="group flex items-center text-xs font-bold uppercase tracking-widest text-[#1a1a1a] hover:text-[#C5A059] transition-colors">
+                <Link to={`/${section.id}`} className="group flex items-center text-xs font-bold uppercase tracking-widest text-[#1a1a1a] hover:text-[#C5A059] transition-colors">
                   {section.cta} <ArrowRight size={14} className="ml-2 group-hover:translate-x-2 transition-transform"/>
-                </button>
+                </Link>
               </motion.div>
             </div>
           </div>
@@ -197,6 +201,44 @@ const ImmersiveDivider = () => {
 };
 
 // --- PAGE COMPONENT ---
+const PhilosophySection = ({ t }) => (
+  <section id="philosophy" className="py-32 bg-white relative overflow-hidden">
+    {/* Decorative background element */}
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24 bg-gradient-to-b from-[#C5A059] to-transparent opacity-30"></div>
+    
+    <div className="max-w-4xl mx-auto px-6 text-center">
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 1, ease: "easeOut" }}
+      >
+        <span className="text-[#C5A059] font-bold text-xs uppercase tracking-[0.4em] mb-6 block">Est. 2026</span>
+        <h2 className="text-4xl md:text-6xl font-serif text-[#1a1a1a] mb-10 tracking-tight">
+          {t.philosophyTitle}
+        </h2>
+        <div className="w-20 h-px bg-[#C5A059] mx-auto mb-10 opacity-60"></div>
+        <p className="text-stone-600 text-xl md:text-2xl font-light leading-relaxed max-w-3xl mx-auto italic font-serif">
+          "{t.philosophyDesc}"
+        </p>
+        
+        <motion.div 
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          transition={{ delay: 0.5, duration: 1 }}
+          className="mt-16 flex justify-center"
+        >
+          <div className="flex items-center gap-4 text-stone-300">
+            <div className="w-8 h-px bg-stone-200"></div>
+            <Star size={16} className="text-[#C5A059]" fill="currentColor" />
+            <div className="w-8 h-px bg-stone-200"></div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </div>
+  </section>
+);
+
 export default function Home() {
   // Use Context from WebsiteLayout to get shared functions
   const { openBooking, lang } = useOutletContext(); 
@@ -204,6 +246,7 @@ export default function Home() {
   return (
     <div>
       <Hero onOpenBooking={openBooking} t={content[lang]} />
+      <PhilosophySection t={content[lang]} />
       <EditorialSection t={content[lang]} />
       <ImmersiveDivider />
     </div>

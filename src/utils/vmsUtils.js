@@ -190,3 +190,17 @@ export const generateBillingSummary = (eventData) => {
     dep1, dep2, dep3
   };
 };
+
+export const getOverdueStatus = (eventData) => {
+  const { balanceDue, totalPaid, grandTotal } = generateBillingSummary(eventData);
+  if (balanceDue <= 0) return { label: 'Paid', color: 'text-emerald-600' };
+
+  const eventDate = new Date(eventData.date);
+  const today = new Date();
+  const diffDays = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return { label: 'Overdue', color: 'text-red-600' };
+  if (diffDays <= 7) return { label: 'Due Soon', color: 'text-amber-600' };
+  
+  return { label: 'Pending', color: 'text-slate-400' };
+};

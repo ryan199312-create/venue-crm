@@ -191,19 +191,48 @@ const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
 
 // --- 2. FOOTER ---
 const Footer = () => (
-  <footer className="bg-[#1a1a1a] text-stone-400 py-20 px-6 mt-auto">
-    <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start gap-12">
-      <div className="space-y-6 max-w-sm">
-        <h5 className="font-serif font-bold text-3xl text-white">璟瓏軒</h5>
-        <p className="text-sm leading-relaxed text-stone-500">Located at the Hong Kong Palace Museum.</p>
+  <footer className="bg-[#1a1a1a] text-stone-400 py-24 px-6 mt-auto border-t border-white/5">
+    <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 md:gap-24 items-start">
+      <div className="md:col-span-1 space-y-6">
+        <h5 className="font-serif font-bold text-3xl text-white tracking-wide">璟瓏軒</h5>
+        <p className="text-sm leading-relaxed text-stone-500 font-light">
+          Where culinary heritage meets the Victoria Harbour skyline. Experience the art of Cantonese fine dining at the heart of culture.
+        </p>
       </div>
-      <div className="grid grid-cols-2 gap-12 text-sm">
-        <div>
-          <h6 className="text-white font-bold uppercase tracking-widest mb-4 text-xs">Contact</h6>
-          <ul className="space-y-3">
-            <li>+852 2788 3939</li>
-            <li>banquet@kinglungheen.com</li>
-          </ul>
+      
+      <div className="md:col-span-1">
+        <h6 className="text-white font-bold uppercase tracking-[0.2em] mb-6 text-[10px]">Location</h6>
+        <p className="text-sm leading-relaxed font-light text-stone-400">
+          4/F,<br />
+          Hong Kong Palace Museum,<br />
+          8 Museum Drive, West Kowloon
+        </p>
+      </div>
+
+      <div className="md:col-span-1">
+        <h6 className="text-white font-bold uppercase tracking-[0.2em] mb-6 text-[10px]">Reservations</h6>
+        <ul className="space-y-4 text-sm font-light">
+          <li className="flex flex-col">
+            <span className="text-stone-600 text-[10px] uppercase mb-1">Phone</span>
+            <a href="tel:+85227883939" className="hover:text-[#C5A059] transition-colors">+852 2788 3939</a>
+          </li>
+          <li className="flex flex-col">
+            <span className="text-stone-600 text-[10px] uppercase mb-1">Email</span>
+            <a href="mailto:banquet@kinglungheen.com" className="hover:text-[#C5A059] transition-colors">banquet@kinglungheen.com</a>
+          </li>
+        </ul>
+      </div>
+
+      <div className="md:col-span-1">
+        <h6 className="text-white font-bold uppercase tracking-[0.2em] mb-6 text-[10px]">Hours</h6>
+        <div className="space-y-2 text-sm font-light">
+          <div className="flex justify-between border-b border-white/5 pb-2">
+            <span>Daily</span>
+            <span className="text-white">11:00 — 23:00</span>
+          </div>
+          <p className="text-[10px] text-stone-600 mt-4 leading-relaxed">
+            *Hours may vary during special events and public holidays.
+          </p>
         </div>
       </div>
     </div>

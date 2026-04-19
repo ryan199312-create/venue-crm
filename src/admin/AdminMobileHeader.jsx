@@ -10,6 +10,7 @@ export default function AdminMobileHeader({ activeTab, setActiveTab }) {
       <div className="space-x-4 text-sm font-medium">
         <button onClick={() => setActiveTab('dashboard')} className={activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-500'}>Home</button>
         <button onClick={() => setActiveTab('events')} className={activeTab === 'events' ? 'text-blue-600' : 'text-slate-500'}>EOs</button>
+        <button onClick={() => setActiveTab('docs')} className={activeTab === 'docs' ? 'text-blue-600' : 'text-slate-500'}>Docs</button>
       </div>
     </header>
   );

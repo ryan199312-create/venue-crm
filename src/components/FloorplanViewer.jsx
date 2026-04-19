@@ -17,16 +17,6 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   const zones = floorplan?.zones || [];
   const elements = floorplan?.elements || [];
   
-  if (!bgImage && elements.length === 0 && zones.length === 0) {
-    return (
-      <div className={`${STYLES.gridBox} mt-4 text-center p-8`}>
-        <Layout size={32} className="mx-auto text-slate-300 mb-3" />
-        <h4 className="font-bold text-slate-700">尚未設定平面圖</h4>
-        <p className="text-xs text-slate-500 mt-1">Floorplan is not yet configured for this event.</p>
-      </div>
-    );
-  }
-  
   const isWholeVenue = selectedLocations.includes('全場');
   const visibleZones = zones; // Always show all zones
   const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
@@ -78,6 +68,16 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
     return () => observer.disconnect();
   }, [contentW, contentH]);
 
+  if (!bgImage && elements.length === 0 && zones.length === 0) {
+    return (
+      <div className={`${STYLES.gridBox} mt-4 text-center p-8`}>
+        <Layout size={32} className="mx-auto text-slate-300 mb-3" />
+        <h4 className="font-bold text-slate-700">尚未設定平面圖</h4>
+        <p className="text-xs text-slate-500 mt-1">Floorplan is not yet configured for this event.</p>
+      </div>
+    );
+  }
+
   return (
     <div className={`${STYLES.gridBox} mt-4`}>
       <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
@@ -122,7 +122,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
           )}
 
           {/* Render Elements */}
-          {elements.map(el => {
+          {(elements || []).map(el => {
             const w_m = el.w_m || (el.w ? el.w / 40 : 1);
             const h_m = el.h_m || (el.h ? el.h / 40 : 1);
             

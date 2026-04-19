@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Coffee, Plus } from 'lucide-react';
+import { AlertTriangle, Coffee } from 'lucide-react';
 import {
   DEPARTMENTS,
   equipmentMap,
@@ -115,8 +115,6 @@ const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {
   const itemScale = fp.itemScale || appSettings?.defaultFloorplan?.itemScale || 40;
   const zones = fp.zones || appSettings?.defaultFloorplan?.zones || [];
   
-  const selectedLocs = data.selectedLocations || [];
-  const isWholeVenue = selectedLocs.includes('全場');
   const visibleZones = zones; // Always show all zones
 
   // --- DYNAMIC SCALING & CENTERING LOGIC ---
@@ -141,7 +139,6 @@ const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {
     1 // Don't scale up
   );
 
-  const containerWidth = contentWidth * scale;
   const containerHeight = contentHeight * scale;
 
   return (
@@ -182,7 +179,7 @@ const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {
                  })}
                </svg>
             )}
-            {fp.elements.map(el => {
+            {(fp.elements || []).map(el => {
               const w_m = el.w_m || (el.w ? el.w / 40 : 1);
               const h_m = el.h_m || (el.h ? el.h / 40 : 1);
               const toolDef = typeof TOOL_GROUPS !== 'undefined' ? TOOL_GROUPS.flatMap(g => g.items).find(t => t.type === el.type) : null;
@@ -487,16 +484,17 @@ const BriefingView = ({ data, printMode, appSettings }) => {
         </div>
       </div>
       <div className="mt-auto pt-4 border-t-2 border-slate-100 text-[10px] text-slate-400 flex justify-between"><span>Generated: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span><span>Ref: {data.orderId}</span></div>
+      <div className="page-break"></div>
       <FloorplanAppendix data={data} appSettings={appSettings} />
     </div>
   );
 };
 
-const QuotationView = ({ data, printMode, onClientSign, onAdminSign }) => {
+const QuotationView = ({ data, printMode, onClientSign }) => {
   const BRAND_COLOR = '#A57C00';
   const billing = generateBillingSummary(data);
   const { setupStr, avStr, decorStr } = getPackageStrings(data, true);
-  const { clientSig, adminSig, sigData } = getSignatures(data, printMode);
+  const { clientSig, sigData } = getSignatures(data, printMode);
   const balanceDueDateDisplay = getBalanceDueDate(data);
 
   return (
@@ -958,16 +956,15 @@ const ContractView = ({ data, printMode, appSettings, onClientSign, onAdminSign 
           </div>
         </div>
       </div>
+      <div className="page-break"></div>
       <FloorplanAppendix data={data} appSettings={appSettings} />
     </div>
   );
 };
 
 const InvoiceView = ({ data, printMode }) => {
-  const BRAND_COLOR = '#A57C00';
   const billing = generateBillingSummary(data);
   const { setupStr, avStr, decorStr } = getPackageStrings(data, true);
-  const balanceDueDateDisplay = getBalanceDueDate(data);
 
   return (
     <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col text-xs leading-tight">
@@ -1055,16 +1052,10 @@ const ReceiptView = ({ data, printMode }) => {
 
 const MenuConfirmView = ({ data, printMode, onClientSign }) => {
   const BRAND_COLOR = '#A57C00';
-  const verNum = (data.menuVersions && data.menuVersions.length || 0) + 1;
-  const fontSizePx = data.printSettings && data.printSettings.menu && data.printSettings.menu.fontSizeOverride || 18;
+  const verNum = (data.menus || []).reduce((max, m) => Math.max(max, m.versions?.length || 0), 0) + 1;
+  const fontSizePx = data.printSettings?.menu?.fontSizeOverride || 18;
   const defaultExpiry = new Date(new Date().setDate(new Date().getDate() + 14)).toLocaleDateString('zh-HK');
   const { clientSig, sigData } = getSignatures(data, printMode);
-
-  const formatMenuDate = (dateStr) => {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    return `${d.toLocaleDateString('zh-HK')} (${d.toLocaleDateString('en-US', { weekday: 'short' })})`;
-  };
 
   return (
     <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col">
@@ -1084,9 +1075,14 @@ const MenuConfirmView = ({ data, printMode, onClientSign }) => {
           </div>
           <div className="border-2 border-slate-900 p-4 rounded-xl flex flex-col justify-between bg-slate-50">
             <div className="text-center"><p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">客戶確認 Confirmation</p><p className="text-[9px] text-slate-400 mt-1 italic">I confirm the above menu and arrangements.</p></div>
-            <div className="flex justify-center items-end gap-8 mt-8 px-4">
-              <div className="flex-1 text-center"><div className="border-b-2 border-slate-900 mb-1 h-20 relative flex items-end justify-center bg-slate-100/50">{!clientSig ? (onClientSign ? (<button type="button" onClick={onClientSign} className="absolute inset-0 flex items-center justify-center w-full h-full bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer border-2 border-dashed border-amber-400 z-10"><span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest text-center">點擊簽署<br/>Sign</span></button>) : (<div className="absolute inset-0 flex items-center justify-center"><span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sign Here</span></div>)) : (<img src={clientSig} alt="Client Signature" className="absolute bottom-0 max-h-20 max-w-full object-contain" />)}</div><p className="text-[9px] font-black text-slate-900 uppercase">客戶 Client</p></div>
-              <div className="w-28 text-center"><div className="border-b-2 border-slate-900 mb-1 h-20 relative flex items-end justify-center">{(sigData.clientDate || data.clientSignatureDate) && (<span className="text-[10px] font-mono font-bold mb-1">{new Date(sigData.clientDate || data.clientSignatureDate).toLocaleDateString()}</span>)}</div><p className="text-[9px] font-black text-slate-900 uppercase">日期 Date</p></div>
+            <div className="flex justify-center items-end gap-4 mt-8">
+              <SignatureBox 
+                titleEn="" 
+                labelEn="客戶 Client" 
+                sigDataUrl={clientSig} 
+                onSign={onClientSign} 
+                dateStr={sigData.clientDate || data.clientSignatureDate} 
+              />
             </div>
           </div>
         </div>
@@ -1238,7 +1234,7 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
 
       {/* --- LOOP THROUGH COPIES --- */}
       {COPIES.map((copy, idx) => (
-        <div key={idx}>
+        <div key={idx} className={idx > 0 ? "page-break" : ""}>
           <div className="print-page">
 
             {/* ========================================================
@@ -1606,6 +1602,7 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
       <FloorplanAppendix data={data} appSettings={appSettings} />
 
       {/* --- KITCHEN COPY --- */}
+      <div className="page-break"></div>
       <div className="print-page">
         <div className="flex justify-between items-end border-b-4 border-black pb-2 mb-4">
           <div>
@@ -1686,10 +1683,10 @@ const AddendumView = ({ data, printMode, onClientSign, onAdminSign }) => {
 
       <div className="my-8 space-y-2">
         <p className="text-xs text-slate-600 leading-relaxed">
-          This addendum is part of the original agreement for event <strong className="text-slate-800">"{data.eventName}"</strong> (Order ID: {data.orderId}) dated {formatDateEn(data.createdAt?.toDate() || data.date)}. The following items are to be added to the event scope and total cost. All other terms and conditions of the original agreement remain in full force and effect.
+          This addendum is part of the original agreement for event <strong className="text-slate-800">"{data.eventName}"</strong> (Order ID: {data.orderId}) dated {formatDateEn(data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || data.date)}. The following items are to be added to the event scope and total cost. All other terms and conditions of the original agreement remain in full force and effect.
         </p>
         <p className="text-xs text-slate-500 leading-relaxed">
-          此附加條款為活動「{data.eventName}」（訂單編號：{data.orderId}）於 {formatDateEn(data.createdAt?.toDate() || data.date)} 簽訂之原始合約的一部分。以下項目將被新增至活動範圍及總費用中。原始合約中的所有其他條款及細則將繼續維持其全部效力。
+          此附加條款為活動「{data.eventName}」（訂單編號：{data.orderId}）於 {formatDateEn(data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || data.date)} 簽訂之原始合約的一部分。以下項目將被新增至活動範圍及總費用中。原始合約中的所有其他條款及細則將繼續維持其全部效力。
         </p>
       </div>
 
@@ -1762,8 +1759,8 @@ const AddendumView = ({ data, printMode, onClientSign, onAdminSign }) => {
       </div>
 
       <div className="mt-auto pt-12 flex justify-between items-end break-inside-avoid">
-        <SignatureBox titleEn="For and on behalf of" labelEn="KING LUNG HEEN" labelZh="Authorized Signature & Chop" sigDataUrl={adminSig} onSign={() => onAdminSign(printMode)} isAdmin={true} />
-        <SignatureBox titleEn="Confirmed & Accepted by" labelEn={data.clientName} labelZh="Client Signature / Company Chop" sigDataUrl={clientSig} onSign={() => onClientSign(printMode)} dateStr={sigData.clientDate} alignRight={true} />
+        <SignatureBox titleEn="For and on behalf of" labelEn="KING LUNG HEEN" labelZh="Authorized Signature & Chop" sigDataUrl={adminSig} onSign={onAdminSign} isAdmin={true} />
+        <SignatureBox titleEn="Confirmed & Accepted by" labelEn={data.clientName} labelZh="Client Signature / Company Chop" sigDataUrl={clientSig} onSign={onClientSign} dateStr={sigData.clientDate} alignRight={true} />
       </div>
     </div>
   );
@@ -1806,6 +1803,8 @@ export default function DocumentRenderer({ data, printMode, appSettings, onClien
     case 'RECEIPT':
       return <ReceiptView data={data} printMode={printMode} />;
     case 'MENU_CONFIRM':
+      return <MenuConfirmView data={data} printMode={printMode} onClientSign={onClientSign} />;
+    case (printMode.startsWith('MENU_CONFIRM_') ? printMode : null):
       return <MenuConfirmView data={data} printMode={printMode} onClientSign={onClientSign} />;
     case 'ADDENDUM':
       return <AddendumView data={data} printMode={printMode} onClientSign={onClientSign} onAdminSign={onAdminSign} />;

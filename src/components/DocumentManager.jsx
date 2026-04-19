@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Clock, Plus } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Plus } from 'lucide-react';
  import DocumentRenderer from '../admin/DocumentRenderer';
 import { SignaturePad } from './ui';
 import { usePdfGenerator } from '../hooks/usePdfGenerator';
@@ -8,20 +8,23 @@ import { usePdfGenerator } from '../hooks/usePdfGenerator';
 export default function DocumentManager({ eventData, appSettings, onSign, onPrint, isClientPortal = false }) {
   const [isDownloading, setIsDownloading] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [selectedMenuId, setSelectedMenuId] = useState(null);
   const [stagedSignature, setStagedSignature] = useState(null);
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [isSubmittingSignature, setIsSubmittingSignature] = useState(false);
   
   const { generatePdf } = usePdfGenerator();
 
-  const openPreview = (docId) => {
+  const openPreview = (docId, menuId = null) => {
     setStagedSignature(null);
     setPreviewDoc(docId);
+    setSelectedMenuId(menuId);
   };
 
   const closePreview = () => {
     setStagedSignature(null);
     setPreviewDoc(null);
+    setSelectedMenuId(null);
     setIsSigningModalOpen(false);
   };
 
@@ -42,7 +45,9 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const handleConfirmSignature = async () => {
     setIsSubmittingSignature(true);
     try {
-      await onSign(previewDoc, stagedSignature);
+      const docType = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
+      const role = isClientPortal ? 'client' : 'admin';
+      await onSign(docType, stagedSignature, role);
       closePreview(); // Force close the preview to reveal the updated status list
     } catch (e) {
       console.error(e);
@@ -55,37 +60,45 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const dataToRender = useMemo(() => {
     if (!previewDoc) return eventData;
     const data = { ...eventData };
-    if (stagedSignature) {
+    const sigKey = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
+
+    if (selectedMenuId) {
+      data.menus = (data.menus || []).filter(m => m.id === selectedMenuId);
+    }
+
+      // Ensure signatures object exists and is a new reference to avoid mutating props
       data.signatures = { ...(data.signatures || {}) };
-      data.signatures[previewDoc] = { ...(data.signatures[previewDoc] || {}) };
+
+      // Copy specific menu signature to the generic previewDoc key so DocumentRenderer finds it
+      const existingSig = data.signatures[sigKey];
+      if (existingSig && sigKey !== previewDoc) {
+        data.signatures[previewDoc] = { 
+          ...(data.signatures[previewDoc] || {}), 
+          ...existingSig 
+        };
+      }
+
+    if (stagedSignature) {
+      data.signatures[sigKey] = { ...(data.signatures[sigKey] || {}) };
+        data.signatures[previewDoc] = { ...(data.signatures[previewDoc] || {}) };
       if (isClientPortal) {
-        data.signatures[previewDoc].client = stagedSignature;
-        data.signatures[previewDoc].clientDate = new Date().toISOString();
+        data.signatures[sigKey].client = stagedSignature;
+        data.signatures[sigKey].clientDate = new Date().toISOString();
+          data.signatures[previewDoc].client = stagedSignature;
+          data.signatures[previewDoc].clientDate = new Date().toISOString();
       } else {
-        data.signatures[previewDoc].admin = stagedSignature;
-        data.signatures[previewDoc].adminDate = new Date().toISOString();
+        data.signatures[sigKey].admin = stagedSignature;
+        data.signatures[sigKey].adminDate = new Date().toISOString();
+          data.signatures[previewDoc].admin = stagedSignature;
+          data.signatures[previewDoc].adminDate = new Date().toISOString();
       }
     }
     return data;
-  }, [eventData, previewDoc, stagedSignature, isClientPortal]);
+  }, [eventData, previewDoc, selectedMenuId, stagedSignature, isClientPortal]);
 
-  const handleDownloadPDF = async (docType, includeSignature = true) => {
-    setIsDownloading(`${docType}-${includeSignature}`);
-    try {
-      await generatePdf({
-        docType,
-        data: eventData,
-        appSettings,
-        download: true,
-        includeSignature
-      });
-
-    } catch (error) {
-      console.error("PDF Download Error:", error);
-      alert(`下載失敗 (Download failed): ${error.message || '未知錯誤'}\n\n請稍後再試。`);
-    } finally {
-      setIsDownloading(null);
-    }
+  const handleDownloadPDF = async (docType, includeSignature = true, menuId = null) => {
+    // Hidden as per user request to remove download button
+    return;
   };
 
   const docs = [
@@ -95,7 +108,15 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   ];
 
   const externalDocsList = [
-    { id: 'MENU_CONFIRM', label: '菜譜確認單', sub: 'Menu Confirmation', clientSignable: true, adminSignable: false, icon: Utensils },
+    ...(eventData.menus || []).map(m => ({
+      id: 'MENU_CONFIRM',
+      menuId: m.id,
+      label: `菜譜確認: ${m.title || '未命名'}`,
+      sub: `Menu Confirmation - ${m.title || 'Unnamed'}`,
+      clientSignable: true,
+      adminSignable: false,
+      icon: Utensils
+    })),
     { id: 'QUOTATION', label: '報價單', sub: 'Quotation', clientSignable: true, adminSignable: false },
     { id: 'CONTRACT', label: '英文合約', sub: 'Contract (EN)', clientSignable: true, adminSignable: true },
     { id: 'CONTRACT_CN', label: '中文合約', sub: 'Contract (CN)', clientSignable: true, adminSignable: true },
@@ -110,8 +131,9 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const externalDocs = externalDocsList.filter(d => (d.condition === undefined || d.condition));
 
   const renderDocRow = (doc) => {
-    const sigData = eventData.signatures?.[doc.id] || {};
-    const legacySig = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(doc.id) ? eventData.clientSignature : null;
+    const sigKey = doc.menuId ? `MENU_CONFIRM_${doc.menuId}` : doc.id;
+    const sigData = eventData.signatures?.[sigKey] || {};
+    const legacySig = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(doc.id) && !doc.menuId ? eventData.clientSignature : null;
     const clientSig = sigData.client || legacySig;
     const adminSig = sigData.admin;
     
@@ -122,53 +144,38 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     const DocIcon = doc.icon || FileText;
     
     return (
-      <div key={doc.id} onClick={() => openPreview(doc.id)} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 gap-3 transition-all duration-200 hover:shadow-sm hover:z-10 relative cursor-pointer active:scale-[0.995] group">
+      <div key={doc.menuId ? `${doc.id}_${doc.menuId}` : doc.id} onClick={() => openPreview(doc.id, doc.menuId)} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 gap-3 transition-all duration-200 hover:shadow-sm hover:z-10 relative cursor-pointer active:scale-[0.995] group">
         <div className="flex items-center gap-3">
-          <DocIcon size={16} className="text-slate-400 shrink-0 group-hover:text-blue-500 transition-colors" />
+          <div className={`p-2 rounded-lg ${isFullySigned ? 'bg-emerald-50 text-emerald-600' : (doc.clientSignable && isClientPortal && !hasClientSig ? 'bg-amber-50 text-amber-600 animate-pulse' : 'bg-slate-50 text-slate-400')}`}>
+            <DocIcon size={18} className="shrink-0" />
+          </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-slate-700 leading-tight">{doc.label}</span>
-            <span className="text-[10px] text-slate-400">{doc.sub}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-700 leading-tight">{doc.label}</span>
+              {doc.clientSignable && isClientPortal && !hasClientSig && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-amber-500 text-white shadow-sm">Action Required</span>
+              )}
+              {isFullySigned && (
+                <CheckCircle size={12} className="text-emerald-500" />
+              )}
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium tracking-tight uppercase">{doc.sub}</span>
           </div>
         </div>
         
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap" onClick={(e) => e.stopPropagation()}>
           {/* Actions */}
-          <div className="flex items-center bg-slate-100 rounded-md p-0.5 ml-1 border border-slate-200" onClick={(e) => e.stopPropagation()}>
-            <button 
-              type="button"
-              onClick={() => handleDownloadPDF(doc.id, false)}
-              disabled={isDownloading !== null}
-              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-colors disabled:opacity-50"
-              title="下載原檔 (Download Original)"
-            >
-              {isDownloading === `${doc.id}-false` ? <Loader2 size={14} className="animate-spin text-[#A57C00]" /> : <Download size={14} />}
+          {doc.clientSignable && isClientPortal && !hasClientSig && (
+            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold shadow-sm flex items-center">
+              <PenTool size={12} className="mr-1" /> 檢視及簽署
             </button>
+          )}
 
-            {(doc.clientSignable || doc.adminSignable) && (isFullySigned || hasClientSig || hasAdminSig) && (
-              <button 
-                type="button"
-                onClick={() => handleDownloadPDF(doc.id, true)}
-                disabled={isDownloading !== null}
-                className="p-1.5 text-[#A57C00] hover:text-[#8a6800] hover:bg-white rounded transition-colors disabled:opacity-50 flex items-center"
-                title="下載已簽署檔案 (Download Signed)"
-              >
-                {isDownloading === `${doc.id}-true` ? <Loader2 size={14} className="animate-spin text-[#A57C00]" /> : <Download size={14} />}
-                <span className="text-[10px] font-bold ml-1 hidden sm:inline-block">已簽署</span>
-              </button>
-            )}
-
-            {doc.clientSignable && isClientPortal && !hasClientSig && (
-              <button type="button" onClick={() => openPreview(doc.id)} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold ml-1 shadow-sm flex items-center">
-                <PenTool size={12} className="mr-1" /> 檢視及簽署
-              </button>
-            )}
-
-            {doc.adminSignable && !isClientPortal && !hasAdminSig && (
-              <button type="button" onClick={() => openPreview(doc.id)} className="px-2 py-1.5 text-[10px] bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors font-bold ml-1 shadow-sm flex items-center">
-                <PenTool size={12} className="mr-1" /> 檢視及簽署
-              </button>
-            )}
-          </div>
+          {doc.adminSignable && !isClientPortal && !hasAdminSig && (
+            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors font-bold shadow-sm flex items-center">
+              <PenTool size={12} className="mr-1" /> 檢視及簽署
+            </button>
+          )}
         </div>
       </div>
     );
@@ -222,14 +229,10 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 ) : (
                   <>
                     {!isClientPortal && onPrint && (
-                      <button type="button" onClick={() => { onPrint(previewDoc); closePreview(); }} className="flex items-center text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">
+                      <button type="button" onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc); closePreview(); }} className="flex items-center text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                         <Printer size={14} className="mr-1.5" /> 列印 (Print)
                       </button>
                     )}
-                    <button type="button" onClick={() => handleDownloadPDF(previewDoc, true)} disabled={isDownloading !== null} className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
-                      {isDownloading === `${previewDoc}-true` ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Download size={14} className="mr-1.5" />}
-                      下載 (Download)
-                    </button>
                     <div className="w-px h-4 bg-slate-700 mx-1"></div>
                     <button type="button" onClick={closePreview} className="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 p-1.5 rounded-lg">
                       <X size={18} />
@@ -241,9 +244,10 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
             <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center relative">
               <div className="bg-white shadow-xl max-w-[210mm] w-full shrink-0 h-max overflow-hidden">
                 {(() => {
-                  const activeDocDef = allDocs.find(d => d.id === previewDoc);
-                  const hasStagedOrRealClientSig = !!(dataToRender.signatures?.[previewDoc]?.client || dataToRender.clientSignature);
-                  const hasStagedOrRealAdminSig = !!dataToRender.signatures?.[previewDoc]?.admin;
+                  const activeDocDef = allDocs.find(d => d.id === previewDoc && (selectedMenuId ? d.menuId === selectedMenuId : true));
+                  const sigKey = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
+                  const hasStagedOrRealClientSig = !!(dataToRender.signatures?.[sigKey]?.client || dataToRender.clientSignature);
+                  const hasStagedOrRealAdminSig = !!dataToRender.signatures?.[sigKey]?.admin;
                   return (
                     <DocumentRenderer 
                       data={dataToRender} 

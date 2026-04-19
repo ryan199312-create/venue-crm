@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Utensils, Coffee, Wine, Star, Download, ChevronLeft, ChevronRight, Clock, MapPin, Users } from 'lucide-react';
+import { Utensils, Clock, Users, Download, ChevronLeft, ChevronRight, Star, MapPin } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 
 // --- FIREBASE IMPORTS ---
@@ -92,7 +92,6 @@ const Dining = () => {
   const { openBooking, lang } = useOutletContext();
   const t = content[lang];
   const [presetMenus, setPresetMenus] = useState([]);
-  const [loadingMenus, setLoadingMenus] = useState(true);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "artifacts", "my-venue-crm", "public", "data", "settings", "config"), (doc) => {
@@ -104,10 +103,8 @@ const Dining = () => {
         const diningMenus = allMenus.filter(m => m.type === 'dining' || m.type === 'food');
         setPresetMenus(diningMenus);
       }
-      setLoadingMenus(false);
     }, (error) => {
       console.error("Error fetching menus:", error);
-      setLoadingMenus(false);
     });
     return () => unsub();
   }, []);
@@ -115,7 +112,7 @@ const Dining = () => {
   return (
     <div className="bg-[#FFFFFF] text-[#2C2C2C]"> 
       
-      {/* 1. HERO SECTION (Warm/Gold Tones) */}
+      {/* 1. HERO SECTION */}
       <section className="relative h-[80vh] flex items-center justify-center overflow-hidden">
         <motion.img 
           initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={{ duration: 20, ease: "easeOut" }}

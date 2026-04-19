@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   CreditCard, Utensils, Coffee, Layout, Tv, Star, Truck, Plus,
   AlertTriangle, Clock, Info, RotateCw, Upload, X, Image as ImageIcon, Trash2

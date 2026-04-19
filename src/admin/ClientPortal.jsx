@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertTriangle, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus } from 'lucide-react';
-import { functions, db } from '../firebase';
+import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, MessageCircle, Users } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
-import { renderToString } from 'react-dom/server';
-import DocumentManager from '../components/DocumentManager';
-import FloorplanViewer from '../components/FloorplanViewer';
+const DocumentManager = React.lazy(() => import('../components/DocumentManager'));
+const FloorplanViewer = React.lazy(() => import('../components/FloorplanViewer'));
 
 const STYLES = {
   gridBox: "bg-white p-6 rounded-2xl shadow-sm border border-slate-200",
@@ -162,7 +162,7 @@ export default function ClientPortal() {
         target.value = null; // Clear input safely after processing
       }
     };
-    reader.onerror = (err) => {
+    reader.onerror = () => {
       alert("讀取手機檔案失敗 (Failed to read local file).");
       setUploadingMilestone(null);
       target.value = null;
@@ -249,8 +249,15 @@ export default function ClientPortal() {
     } catch(e) { return "Receipt.jpg"; }
   };
 
-  // --- MEMOIZED BILLING DATA ---
-  // Prevents heavy recalculations when typing in other tabs
+  // --- MEMOIZED DATA (Hooks must be at top) ---
+  const countdown = useMemo(() => {
+    if (!eventData?.date) return null;
+    const target = new Date(eventData.date);
+    const now = new Date();
+    const diff = target - now;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }, [eventData]);
+
   const billingMetrics = useMemo(() => {
     if (!eventData) return null;
     const total = eventData.totalAmount || 0;
@@ -359,8 +366,8 @@ export default function ClientPortal() {
     );
   }
 
-  // --- AUTHENTICATED VIEW ---
   return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400"><Loader2 className="animate-spin mr-2" /> 載入專屬頁面 (Loading Portal)...</div>}>
     <div className="min-h-screen bg-slate-50 font-sans md:pb-0">
       {/* Hero Banner with Dynamic Back Button */}
       <div className="bg-slate-900 text-white p-6 pt-12 pb-10 rounded-b-[2.5rem] shadow-lg relative overflow-hidden">
@@ -401,64 +408,150 @@ export default function ClientPortal() {
         
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={`${STYLES.gridBox} flex items-center justify-between`}>
-              <div className="flex items-center">
-                <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
-                  <MapPin size={20} className="text-[#A57C00]" />
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            {/* 1. WELCOME & COUNTDOWN */}
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="flex-1 text-center md:text-left">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-[#A57C00] text-[10px] font-bold uppercase tracking-widest mb-4">
+                  <Sparkles size={12} className="mr-1.5" /> Welcome to your portal
+                </span>
+                <h3 className="text-2xl font-black text-slate-800 mb-2">Hello, {eventData.clientName || 'Valued Guest'}</h3>
+                <p className="text-slate-500 text-sm leading-relaxed max-w-md">We are honored to host your {eventData.eventType}. Everything you need to plan your perfect day is right here.</p>
+              </div>
+              
+              {countdown !== null && (
+                <div className="bg-slate-900 rounded-3xl p-6 text-center min-w-[200px] shadow-xl shadow-slate-200">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">{countdown < 0 ? 'Days Since Event' : 'Countdown'}</p>
+                  <div className="text-5xl font-black text-[#A57C00] font-mono leading-none mb-1">
+                    {Math.abs(countdown)}
+                  </div>
+                  <p className="text-white text-xs font-bold uppercase tracking-widest">{Math.abs(countdown) === 1 ? 'Day' : 'Days'} {countdown < 0 ? 'Ago' : 'To Go'}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Venue</p>
-                  <p className="font-bold text-[#A57C00] text-base mb-0.5">璟瓏軒 King Lung Heen</p>
-                  <p className="font-bold text-slate-800 text-sm mb-1.5">{eventData.venueLocation}</p>
-                  <div className="mt-1.5 space-y-0.5">
-                    <p className="text-xs text-slate-600 font-medium">尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
-                    <p className="text-[10px] text-slate-400">4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 space-y-4">
+                <div className={`${STYLES.gridBox} flex items-center justify-between`}>
+                  <div className="flex items-center">
+                    <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
+                      <MapPin size={20} className="text-[#A57C00]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Venue</p>
+                      <p className="font-bold text-[#A57C00] text-base mb-0.5">璟瓏軒 King Lung Heen</p>
+                      <p className="font-bold text-slate-800 text-sm mb-1.5">{eventData.venueLocation}</p>
+                      <div className="mt-1.5 space-y-0.5">
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed">尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-tight">4/F, Palace Museum, West Kowloon</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                <div className={`${STYLES.gridBox} flex items-center justify-between`}>
+                  <div className="flex items-center">
+                    <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
+                      <Clock size={20} className="text-[#A57C00]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Time</p>
+                      <p className="font-bold text-slate-800 text-lg">{eventData.startTime} — {eventData.endTime}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={eventData.selectedLocations || [eventData.venueLocation]} />
               </div>
 
-              <div className={`${STYLES.gridBox} flex items-center justify-between`}>
-              <div className="flex items-center">
-                <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
-                  <Clock size={20} className="text-[#A57C00]" />
+              {/* 2. SIDEBAR - CONTACT SALES */}
+              <div className="space-y-6">
+                <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl">
+                  {/* Decorative Sparkle */}
+                  <Sparkles className="absolute -top-4 -right-4 text-[#A57C00] opacity-20" size={100} />
+                  
+                  <div className="relative z-10 text-center">
+                    <div className="w-20 h-20 bg-[#A57C00] rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg border-4 border-white/10">
+                      <Phone size={32} className="text-white" />
+                    </div>
+                    <h4 className="text-xl font-black mb-2 uppercase tracking-tight">Need Help?</h4>
+                    <p className="text-slate-400 text-sm mb-8 leading-relaxed">Your dedicated consultant is ready to assist with any questions.</p>
+                    
+                    <a 
+                      href={`https://wa.me/852${(eventData.salesRepPhone || '52226066').replace(/[^0-9]/g, '')}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center w-full bg-white text-slate-900 px-6 py-4 rounded-2xl font-black text-sm hover:bg-[#A57C00] hover:text-white transition-all shadow-lg"
+                    >
+                      <MessageCircle size={18} className="mr-3" /> WhatsApp Specialist
+                    </a>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Time</p>
-                  <p className="font-bold text-slate-800 text-sm">{eventData.startTime} - {eventData.endTime}</p>
+
+                {/* Quick Info Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
+                      <Users size={20} className="mx-auto text-[#A57C00] mb-2" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Guests</p>
+                      <p className="text-lg font-black text-slate-800">{eventData.guestCount || '--'}</p>
+                   </div>
+                   <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
+                      <Utensils size={20} className="mx-auto text-[#A57C00] mb-2" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Tables</p>
+                      <p className="text-lg font-black text-slate-800">{eventData.tableCount || '--'}</p>
+                   </div>
                 </div>
               </div>
             </div>
-            </div>
-            
-            <FloorplanViewer floorplan={eventData.floorplan} selectedLocations={eventData.selectedLocations || [eventData.venueLocation]} />
           </div>
         )}
 
         {/* TAB 2: BILLING */}
         {activeTab === 'billing' && billingMetrics && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="md:col-span-5 space-y-6">
-              <div className={`${STYLES.gridBox} text-center h-max`}>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
-                <h3 className="text-4xl font-black text-[#A57C00] font-mono tracking-tight">
-                  ${billingMetrics.remaining.toLocaleString()}
-                </h3>
-                <p className="text-xs text-slate-400 mt-2">Total: ${billingMetrics.total.toLocaleString()}</p>
-                
-                {/* --- PROGRESS BAR --- */}
-                <div className="mt-6 pt-5 border-t border-slate-100 text-left">
-                  <div className="flex justify-between text-[10px] font-bold mb-2">
-                    <span className="text-emerald-600 uppercase tracking-widest">Paid: ${billingMetrics.paid.toLocaleString()}</span>
-                    <span className="text-slate-400 uppercase tracking-widest">{billingMetrics.progressPercent}% Settled</span>
+              <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#A57C00] opacity-10 rounded-full -mr-16 -mt-16"></div>
+                <div className="relative z-10">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">Current Outstanding</p>
+                  <h3 className="text-5xl font-black text-[#A57C00] font-mono tracking-tighter mb-2">
+                    ${billingMetrics.remaining.toLocaleString()}
+                  </h3>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs font-medium border-t border-white/10 pt-4 mt-4">
+                    <span>Total Contract Value:</span>
+                    <span className="text-white">${billingMetrics.total.toLocaleString()}</span>
                   </div>
-                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-1000 ease-out" 
-                      style={{ width: `${billingMetrics.progressPercent}%` }}
-                    ></div>
+                  
+                  {/* --- PROGRESS BAR --- */}
+                  <div className="mt-8 text-left">
+                    <div className="flex justify-between text-[10px] font-black mb-3">
+                      <span className="text-[#C5A059] uppercase tracking-widest">Settled: ${billingMetrics.paid.toLocaleString()}</span>
+                      <span className="text-white/60 uppercase tracking-widest">{billingMetrics.progressPercent}%</span>
+                    </div>
+                    <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden shadow-inner border border-white/10 p-0.5">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${billingMetrics.progressPercent}%` }}
+                        transition={{ duration: 1.5, ease: "easeOut" }}
+                        className="h-full bg-gradient-to-r from-[#A57C00] to-[#C5A059] rounded-full shadow-[0_0_15px_rgba(165,124,0,0.4)]" 
+                      ></motion.div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                  <AlertCircle size={14} className="text-[#A57C00]" /> Payment Policy
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                  All payments are processed within 2-3 business days after upload. Official receipts will be generated automatically once verified by our finance team.
+                </p>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
+                  <div className="p-2 bg-white rounded-lg shadow-sm"><Phone size={14} className="text-[#A57C00]" /></div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-800 uppercase tracking-tight">Billing Inquiry</p>
+                    <p className="text-[10px] text-slate-400">+852 2788 3939 (Ext. 401)</p>
                   </div>
                 </div>
               </div>
@@ -626,7 +719,7 @@ export default function ClientPortal() {
                       {(() => {
                         const addedDishSet = new Set(editedRundown.map(item => item.activity.startsWith('上菜: ') ? item.activity.substring(4) : null).filter(Boolean));
                         
-                        const availableDishButtons = eventData.menus?.flatMap((m, mIdx) => {
+                        const availableDishButtons = eventData.menus?.flatMap((m) => {
                            const dishes = m.content ? m.content.split('\n').map(d => d.trim()).filter(d => d.length > 0) : [];
                            return dishes
                              .filter(dish => !addedDishSet.has(dish))
@@ -712,6 +805,7 @@ export default function ClientPortal() {
         <NavButton icon={Download} label="Docs" active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} />
       </div>
     </div>
+    </React.Suspense>
   );
 }
 

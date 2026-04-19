@@ -114,7 +114,7 @@ exports.enqueuePdfJob = onCall(
     });
 
     // Enqueue the background task
-    const queue = getFunctions().taskQueue("generatePdfTask");
+    const queue = getFunctions().taskQueue("generatePdfTask", "asia-east2");
     await queue.enqueue({ jobId }, { dispatchDeadlineSeconds: 60 * 5 }); // 5 minute timeout
 
     return { jobId };
@@ -178,7 +178,7 @@ exports.generatePdfTask = onTaskDispatched(
       await page.close();
 
       // Save to Firebase Storage instead of returning Base64 payload
-      const bucket = admin.storage().bucket("event-management-system-9f764.firebasestorage.app");
+      const bucket = admin.storage().bucket();
       const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : "document.pdf";
       const uniquePath = `generated_pdfs/${Date.now()}_${safeFileName}`;
       const file = bucket.file(uniquePath);
@@ -217,8 +217,8 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
 
   const appId = "my-venue-crm"; 
   const db = admin.firestore();
-  // Explicitly set the bucket to prevent "No default bucket found" errors
-  const bucket = admin.storage().bucket("event-management-system-9f764.firebasestorage.app");
+  // Use default bucket
+  const bucket = admin.storage().bucket();
   
   try {
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
@@ -274,7 +274,7 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
 // 9. AUTOMATIC CLEANUP OF OLD PDFS
 // ==========================================
 exports.cleanupOldPdfs = onSchedule("every day 00:00", async (event) => {
-  const bucket = admin.storage().bucket("event-management-system-9f764.firebasestorage.app");
+  const bucket = admin.storage().bucket();
   
   try {
     const [files] = await bucket.getFiles({ prefix: 'generated_pdfs/' });

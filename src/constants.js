@@ -1,4 +1,5 @@
-export const appId = typeof __app_id !== 'undefined' ? __app_id : "my-venue-crm";
+import { APP_ID } from './env';
+export const APP_ID_CONST = APP_ID;
 
 export const STATUS_COLORS = {
   confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',

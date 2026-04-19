@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 // Added 'Star' to the import list below
-import { Users, Maximize, Mic, Wifi, Monitor, Download, ChevronLeft, ChevronRight, Quote, LayoutTemplate, Coffee, Star } from 'lucide-react';
+import { Users, Maximize, Mic, Wifi, Monitor, Download, ChevronLeft, ChevronRight, LayoutTemplate, Coffee, Star } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 
 // --- FIREBASE IMPORTS ---
@@ -184,19 +184,19 @@ const Corporate = () => {
       setLoadingMenus(false);
     });
     return () => unsub();
-  }, []);
+  }, [t.venueShowcase.images.length]);
 
   return (
     <div className="bg-[#FFFFFF] text-[#2C2C2C]"> 
       
-      {/* 1. HERO SECTION (Blue/Cooler Tone Overlay for Corporate) */}
+      {/* 1. HERO SECTION */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <motion.img 
           initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={{ duration: 20, ease: "easeOut" }}
           src="https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069" 
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/40 via-slate-900/20 to-slate-900/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/60 via-slate-900/20 to-slate-900/80" />
         <div className="relative z-10 text-center text-white px-6">
           <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 1.2 }}>
             <p className="text-[#C5A059] text-sm font-bold tracking-[0.3em] uppercase mb-4 drop-shadow-sm">{t.heroSub}</p>
@@ -217,103 +217,114 @@ const Corporate = () => {
         </div>
       </section>
 
-      {/* 3. VENUE SHOWCASE (Same component structure, different content) */}
+      {/* 3. VENUE SHOWCASE (Editorial Style) */}
       <section className="py-24 bg-[#FDFBF7]">
-        <div className="max-w-7xl mx-auto px-6 mb-12 flex flex-col md:flex-row items-end justify-between gap-6">
-          <div className="max-w-2xl"><span className="text-[#C5A059] font-bold text-xs uppercase tracking-[0.2em] mb-2 block">{t.venueShowcase.title}</span><h2 className="text-4xl md:text-5xl font-serif text-[#1a1a1a] mb-6 italic">{t.venueShowcase.subtitle}</h2><p className="text-stone-600 leading-relaxed font-light">{t.venueShowcase.desc}</p></div>
-          <div className="hidden md:block h-px w-32 bg-[#C5A059]/50 mb-4"></div>
+        <div className="max-w-7xl mx-auto px-6 mb-16 flex flex-col md:flex-row items-end justify-between gap-6">
+          <div className="max-w-2xl">
+            <span className="text-[#C5A059] font-bold text-xs uppercase tracking-[0.2em] mb-2 block">{t.venueShowcase.title}</span>
+            <h2 className="text-4xl md:text-5xl font-serif text-[#1a1a1a] italic">{t.venueShowcase.subtitle}</h2>
+          </div>
         </div>
-        <div className="relative w-full h-[60vh] md:h-[700px] overflow-hidden bg-stone-200">
-          <AnimatePresence mode='wait'>
-            <motion.img key={venueIndex} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8, ease: "easeInOut" }} src={t.venueShowcase.images[venueIndex].url} alt={t.venueShowcase.images[venueIndex].label} className="absolute inset-0 w-full h-full object-cover" />
-          </AnimatePresence>
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent pointer-events-none" />
-          <div className="absolute inset-0 flex items-center justify-between px-4 md:px-12 pointer-events-none">
-            <button onClick={prevVenue} className="pointer-events-auto p-3 rounded-full border border-white/30 text-white hover:bg-white hover:text-black transition-all backdrop-blur-sm"><ChevronLeft size={24} /></button>
-            <button onClick={nextVenue} className="pointer-events-auto p-3 rounded-full border border-white/30 text-white hover:bg-white hover:text-black transition-all backdrop-blur-sm"><ChevronRight size={24} /></button>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 min-h-screen">
+          <div className="relative h-[60vh] md:h-auto overflow-hidden">
+            <AnimatePresence mode='wait'>
+              <motion.img 
+                key={venueIndex} 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                transition={{ duration: 0.8 }} 
+                src={t.venueShowcase.images[venueIndex].url} 
+                className="absolute inset-0 w-full h-full object-cover" 
+              />
+            </AnimatePresence>
+            <div className="absolute inset-0 flex items-center justify-between px-6">
+              <button onClick={prevVenue} className="p-3 rounded-full border border-white/30 text-white hover:bg-white hover:text-black transition-all backdrop-blur-sm"><ChevronLeft size={24} /></button>
+              <button onClick={nextVenue} className="p-3 rounded-full border border-white/30 text-white hover:bg-white hover:text-black transition-all backdrop-blur-sm"><ChevronRight size={24} /></button>
+            </div>
           </div>
-          <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12 text-white pointer-events-none z-10">
-            <motion.div key={venueIndex} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}><h3 className="text-3xl md:text-5xl font-serif italic">{t.venueShowcase.images[venueIndex].label}</h3></motion.div>
-          </div>
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 pointer-events-auto z-10">
-            {t.venueShowcase.images.map((_, i) => (<button key={i} onClick={() => setVenueIndex(i)} className={`h-2 rounded-full transition-all duration-300 ${i === venueIndex ? 'bg-white w-8' : 'bg-white/40 w-2 hover:bg-white'}`} aria-label={`Go to slide ${i + 1}`} />))}
+          
+          <div className="bg-white flex items-center justify-center p-12 md:p-24">
+            <motion.div 
+              key={venueIndex}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="max-w-md"
+            >
+              <h3 className="text-3xl font-serif mb-6 italic text-[#1a1a1a]">{t.venueShowcase.images[venueIndex].label}</h3>
+              <p className="text-stone-600 leading-loose font-light mb-8">{t.venueShowcase.desc}</p>
+              <div className="flex gap-2">
+                {t.venueShowcase.images.map((_, i) => (
+                  <button key={i} onClick={() => setVenueIndex(i)} className={`h-1 transition-all duration-300 ${i === venueIndex ? 'bg-[#C5A059] w-8' : 'bg-stone-200 w-4'}`} />
+                ))}
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      {/* 4. FLOOR PLAN */}
-      <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-16">
-          <div className="md:w-1/2">
-            <span className="text-[#C5A059] font-bold text-xs uppercase tracking-[0.2em] mb-4 block"><LayoutTemplate size={16} className="inline mr-2"/> {t.floorPlan.title}</span>
-            <h2 className="text-4xl font-serif text-[#1a1a1a] mb-6 italic">{t.floorPlan.title}</h2>
-            <p className="text-stone-600 leading-relaxed font-light mb-8">{t.floorPlan.desc}</p>
-            <ul className="space-y-4 mb-10">{t.floorPlan.highlights.map((h, i) => (<li key={i} className="flex items-center text-sm font-medium text-[#1a1a1a]"><div className="w-1.5 h-1.5 bg-[#C5A059] rounded-full mr-3"/>{h}</li>))}</ul>
-            <button className="flex items-center gap-2 bg-[#1a1a1a] text-white px-8 py-4 rounded-full font-bold hover:bg-[#C5A059] transition-colors shadow-lg text-sm"><Download size={16}/> {t.floorPlan.cta}</button>
-          </div>
-          <div className="md:w-1/2 relative p-8 bg-stone-50 rounded-3xl border border-stone-100">
-            <div className="absolute top-0 right-0 p-4 opacity-20"><Maximize size={64} className="text-[#C5A059]" /></div>
-            <img src={t.floorPlan.img} alt="Floor Plan" className="w-full h-auto rounded-xl shadow-sm mix-blend-multiply opacity-80" />
-          </div>
-        </div>
-      </section>
-
-      {/* 5. TECH SPECS (Grid) */}
-      <section className="py-24 bg-stone-900 text-white relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 relative z-10 flex flex-col md:flex-row gap-16 items-center">
-          <div className="md:w-1/2">
-            <img src="https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=2012" className="rounded-3xl shadow-2xl border border-white/10" alt="Tech" />
-          </div>
-          <div className="md:w-1/2">
-            <span className="text-[#C5A059] font-bold text-xs uppercase tracking-[0.2em] mb-4 block">{t.techSpecs.tag}</span>
-            <h2 className="text-4xl font-serif mb-6">{t.techSpecs.title}</h2>
-            <p className="text-stone-400 leading-loose font-light mb-10">{t.techSpecs.desc}</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 4. TECH SPECS (Modern Grid) */}
+      <section className="py-32 bg-stone-900 text-white">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-24 items-center">
+          <div>
+            <span className="text-[#C5A059] font-bold text-xs uppercase tracking-[0.2em] mb-6 block">{t.techSpecs.tag}</span>
+            <h2 className="text-4xl md:text-5xl font-serif mb-8">{t.techSpecs.title}</h2>
+            <p className="text-stone-400 leading-loose font-light mb-12 text-lg">{t.techSpecs.desc}</p>
+            <div className="grid grid-cols-1 gap-6">
               {t.techSpecs.features.map((feat, i) => (
-                <div key={i} className="flex items-center p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
-                  <div className="text-[#C5A059] mr-4">{feat.icon}</div>
-                  <span className="text-sm font-medium">{feat.text}</span>
+                <div key={i} className="flex items-center gap-6 p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group">
+                  <div className="w-12 h-12 rounded-full bg-[#C5A059]/10 flex items-center justify-center text-[#C5A059] group-hover:bg-[#C5A059] group-hover:text-white transition-all">
+                    {React.cloneElement(feat.icon, { size: 20 })}
+                  </div>
+                  <span className="text-sm font-medium tracking-wide uppercase">{feat.text}</span>
                 </div>
               ))}
             </div>
           </div>
+          <div className="relative">
+            <div className="absolute -inset-4 border border-[#C5A059]/20 rounded-3xl translate-x-8 translate-y-8 -z-10"></div>
+            <img src="https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=2012" className="rounded-3xl shadow-2xl" alt="Tech" />
+          </div>
         </div>
       </section>
 
-      {/* 6. EVENT TYPES (Masonry/Grid) */}
-      <section className="py-24 bg-white">
+      {/* 5. EVENT TYPES (Editorial Grid) */}
+      <section className="py-32 bg-white">
         <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-4xl font-serif text-center mb-12 italic text-[#1a1a1a]">{t.eventTypes.title}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="text-center mb-20">
+            <h2 className="text-4xl md:text-6xl font-serif italic text-[#1a1a1a] mb-6">{t.eventTypes.title}</h2>
+            <div className="w-24 h-px bg-[#C5A059] mx-auto"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {t.eventTypes.types.map((type, i) => (
-              <motion.div key={i} whileHover={{ y: -10 }} className="relative h-80 rounded-2xl overflow-hidden cursor-pointer group">
-                <img src={type.img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={type.title} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-6">
-                  <h3 className="text-white font-serif text-xl">{type.title}</h3>
+              <motion.div 
+                key={i} 
+                whileHover={{ y: -12 }} 
+                className="group relative h-[500px] rounded-[40px] overflow-hidden cursor-pointer"
+              >
+                <img src={type.img} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt={type.title} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-10">
+                  <h3 className="text-white font-serif text-2xl mb-2">{type.title}</h3>
+                  <div className="w-0 group-hover:w-12 h-px bg-[#C5A059] transition-all duration-500"></div>
                 </div>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
-      
-      {/* 7. Successful case */}
-      <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-4xl font-serif text-center mb-12 italic text-[#1a1a1a]">{t.Cases.title}</h2>
-          <div className="grid grid-cols-3 md:grid-cols-6 md:grid-rows-6 gap-6 ">
-            {t.Cases.types.map((type, i) => (
-              <div key={i} className="relative sq rounded-2xl overflow-hidden cursor-pointer group">
-                <img src={type.img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={type.title} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-6">
-                  <h3 className="text-white font-serif text-s">{type.title}</h3>
-                </div>
-              </div>
+
+      {/* 6. TRUSTED BY SECTION */}
+      <section className="py-24 bg-stone-50 border-y border-stone-100">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <span className="text-stone-400 font-bold text-[10px] uppercase tracking-[0.3em] mb-12 block">{t.clients.title}</span>
+          <div className="flex flex-wrap justify-center gap-12 md:gap-24 opacity-40 grayscale transition-all">
+            {t.clients.list.map((client, i) => (
+              <span key={i} className="text-2xl md:text-3xl font-serif text-stone-800 italic">{client}</span>
             ))}
           </div>
         </div>
       </section>
-
 
       {/* 8. MENU PACKAGES */}
       <section className="py-24 bg-[#FDFBF7] relative overflow-hidden">

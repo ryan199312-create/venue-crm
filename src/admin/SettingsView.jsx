@@ -548,8 +548,8 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof }) => {
                           width: localSettings.defaultFloorplan.bgImage && isFullscreenMap ? 'max-content' : '100%',
                           height: localSettings.defaultFloorplan.bgImage && isFullscreenMap ? 'max-content' : '100%',
                           backgroundImage: `linear-gradient(to right, rgba(96, 165, 250, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(96, 165, 250, 0.4) 1px, transparent 1px), url("${localSettings.defaultFloorplan.bgImage}")`,
-                          backgroundSize: `${localSettings.defaultFloorplan?.itemScale || 40}px ${localSettings.defaultFloorplan?.itemScale || 40}px, ${localSettings.defaultFloorplan?.itemScale || 40}px ${localSettings.defaultFloorplan?.itemScale || 40}px, ${isFullscreenMap ? 'auto' : 'contain'}`,
-                          backgroundPosition: `top left, top left, ${isFullscreenMap ? 'top left' : 'center'}`,
+                          backgroundSize: `${localSettings.defaultFloorplan?.itemScale || 40}px ${localSettings.defaultFloorplan?.itemScale || 40}px, ${localSettings.defaultFloorplan?.itemScale || 40}px ${localSettings.defaultFloorplan?.itemScale || 40}px, auto`,
+                          backgroundPosition: `top left, top left, top left`,
                           backgroundRepeat: 'repeat, repeat, no-repeat'
                         }}
                         onClick={handleMapClick}

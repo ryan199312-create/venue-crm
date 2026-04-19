@@ -26,23 +26,10 @@ const FnBTab = ({
             <p className="text-xs text-slate-500 mt-1">Corporate Mode: Save versions before major edits.</p>
           </div>
           <div className="flex space-x-2">
-            <button type="button" onClick={() => saveMenuSnapshot()} className="text-sm bg-violet-50 text-violet-600 px-3 py-1.5 rounded-lg hover:bg-violet-100 font-bold flex items-center transition-colors border border-violet-200"><Save size={16} className="mr-1" /> 儲存版本</button>
             <button type="button" onClick={addMenu} className="text-sm bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-bold flex items-center transition-colors border border-blue-200"><Plus size={16} className="mr-1" /> 新增菜單</button>
           </div>
         </div>
-        {formData.menuVersions && formData.menuVersions.length > 0 && (
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 animate-in fade-in">
-            <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-slate-500 uppercase flex items-center"><History size={14} className="mr-1" /> 版本紀錄 (Version History)</span><span className="text-[10px] text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200">{formData.menuVersions.length} Saved</span></div>
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
-              {formData.menuVersions.map(v => (
-                <div key={v.id} className="flex-shrink-0 bg-white border border-slate-300 rounded-lg p-3 text-xs flex flex-col gap-2 shadow-sm min-w-[140px] group hover:border-blue-400 transition-colors">
-                  <div><div className="font-bold text-slate-800 text-sm truncate" title={v.name}>{v.name}</div><div className="text-[10px] text-slate-400 mt-0.5">{new Date(v.id).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {v.data.length} Items</div></div>
-                  <div className="flex gap-2 mt-auto pt-2 border-t border-slate-100"><button type="button" onClick={() => setPreviewVersion(v)} className="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded py-1.5 font-bold border border-blue-100 transition-colors flex items-center justify-center"><Eye size={12} className="mr-1" /> 查看</button><button type="button" onClick={(e) => { e.stopPropagation(); if (window.confirm('確定刪除此版本?')) deleteMenuSnapshot(v.id); }} className="px-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={12} /></button></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        
         <div className="space-y-4">
           {formData.menus && formData.menus.map((menu, index) => {
             const price = parseFloat(menu.price) || 0;
@@ -64,8 +51,21 @@ const FnBTab = ({
                     {formData.menus.length > 1 && <button type="button" onClick={() => removeMenu(menu.id)} className="text-slate-400 hover:text-red-500 p-1 rounded ml-2"><Trash2 size={16} /></button>}
                   </div>
                 </div>
-                <div className="flex justify-between items-end mb-1"><label className="text-xs font-bold text-slate-500">菜單內容 (一行一項)</label><button type="button" onClick={() => handleTranslateMenu(menu.id, menu.content)} disabled={translatingMenuId === menu.id || !menu.content} className="flex items-center text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 disabled:opacity-50 transition-colors">{translatingMenuId === menu.id ? <><Loader2 size={12} className="animate-spin mr-1" /> 翻譯中...</> : <><Languages size={12} className="mr-1" /> AI 中英對照翻譯</>}</button></div>
+                <div className="flex justify-between items-end mb-1"><label className="text-xs font-bold text-slate-500">菜單內容 (一行一項)</label><div className="flex gap-2"><button type="button" onClick={() => saveMenuSnapshot(menu.id)} className="flex items-center text-[10px] bg-violet-50 text-violet-600 px-2 py-1 rounded hover:bg-violet-100 transition-colors border border-violet-200"><Save size={12} className="mr-1" /> 儲存版本</button><button type="button" onClick={() => handleTranslateMenu(menu.id, menu.content)} disabled={translatingMenuId === menu.id || !menu.content} className="flex items-center text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 disabled:opacity-50 transition-colors">{translatingMenuId === menu.id ? <><Loader2 size={12} className="animate-spin mr-1" /> 翻譯中...</> : <><Languages size={12} className="mr-1" /> AI 中英對照翻譯</>}</button></div></div>
                 <textarea rows={8} placeholder="輸入詳細菜色..." value={menu.content} onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3 font-mono leading-relaxed" />
+                {menu.versions && menu.versions.length > 0 && (
+                  <div className="bg-slate-100/50 p-2 rounded border border-slate-200 mb-3">
+                    <div className="text-[10px] font-bold text-slate-500 mb-2 flex items-center"><History size={12} className="mr-1" /> 版本紀錄 ({menu.versions.length})</div>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200">
+                      {menu.versions.map(v => (
+                        <div key={v.id} className="flex-shrink-0 bg-white border border-slate-200 rounded p-2 text-[10px] flex flex-col gap-1.5 shadow-sm min-w-[120px] group hover:border-blue-300 transition-colors">
+                          <div><div className="font-bold text-slate-700 truncate" title={v.name}>{v.name}</div><div className="text-[9px] text-slate-400 mt-0.5">{new Date(v.id).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>
+                          <div className="flex gap-1 mt-auto pt-1.5 border-t border-slate-100"><button type="button" onClick={() => setPreviewVersion({ menuId: menu.id, ...v })} className="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded py-1 font-bold transition-colors flex items-center justify-center"><Eye size={10} className="mr-1" /> 查看</button><button type="button" onClick={(e) => { e.stopPropagation(); if (window.confirm('確定刪除此版本?')) deleteMenuSnapshot(menu.id, v.id); }} className="px-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={10} /></button></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="border-t border-slate-200 pt-2 flex justify-between items-center"><button type="button" onClick={() => toggleMenuAllocation(menu.id)} className={`flex items-center text-xs font-bold px-3 py-1.5 rounded transition-colors ${menu.showAllocation ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:text-blue-600 hover:bg-blue-50'}`}><PieChart size={14} className="mr-1.5" />{menu.showAllocation ? "隱藏拆帳 (Hide)" : "設定拆帳 (Allocation)"}{!menu.showAllocation && statusBadge}</button><div className="text-xs text-slate-400 flex items-center"><span className="mr-2">{menu.priceType === 'perTable' ? '每席' : menu.priceType === 'perPerson' ? '每位' : '固定'}價:</span><span className="font-mono text-slate-700 font-bold text-sm bg-slate-100 px-2 py-0.5 rounded border border-slate-200">${formatMoney(menu.price)}</span>{menu.showAllocation && statusBadge}</div></div>
                 {menu.showAllocation && (
                   <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2 shadow-sm">

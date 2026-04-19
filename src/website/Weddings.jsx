@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Users, Maximize, Star, Download, ChefHat, Heart, ChevronLeft, ChevronRight, Quote, Plus, Minus, LayoutTemplate } from 'lucide-react';
+import { Maximize, Star, Download, Heart, ChevronLeft, ChevronRight, Plus, Minus, LayoutTemplate, Quote } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { formatMoney } from '../utils/vmsUtils';
 
@@ -220,7 +220,6 @@ const Weddings = () => {
   const { openBooking, lang } = useOutletContext();
   const t = content[lang];
   const [presetMenus, setPresetMenus] = useState([]);
-  const [loadingMenus, setLoadingMenus] = useState(true);
   
   // Carousel State
   const [venueIndex, setVenueIndex] = useState(0);
@@ -238,10 +237,8 @@ const Weddings = () => {
         const foodMenus = allMenus.filter(m => m.type === 'food');
         setPresetMenus(foodMenus);
       }
-      setLoadingMenus(false);
     }, (error) => {
       console.error("Error fetching menus:", error);
-      setLoadingMenus(false);
     });
     return () => unsub();
   }, []);
@@ -398,8 +395,8 @@ const Weddings = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 h-[600px]">
             <div className="col-span-2 row-span-2 overflow-hidden relative group"><img src="https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2Fweddings%2Fbrides%20room.JPEG?alt=media&token=5ce56b07-4082-48c5-b0bc-f67e68a6dc3a" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" alt="Decor" /></div>
             <div className="col-span-1 row-span-1 overflow-hidden relative group"><img src="https://firebasestorage.googleapis.com/v0/b/event-management-system-9f764.firebasestorage.app/o/website-assets%2Fweddings%2F00017.JPEG?alt=media&token=5a6d64db-1d4c-4e87-a89b-b8b2f0156d0b" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" alt="Decor" /></div>
-            <div className="col-span-1 row-span-2 overflow-hidden relative group"><img src="" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" alt="Decor" /></div>
-            <div className="col-span-1 row-span-1 overflow-hidden relative group"><img src="https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?q=80&w=2070" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" alt="Decor" /></div>
+            <div className="col-span-1 row-span-2 overflow-hidden relative group"><img src="https://images.unsplash.com/photo-1522673607200-164881eeca48?q=80&w=2070" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" alt="Decor" /></div>
+            <div className="col-span-1 row-span-1 overflow-hidden relative group"><img src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=2069" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" alt="Decor" /></div>
           </div>
         </div>
       </section>

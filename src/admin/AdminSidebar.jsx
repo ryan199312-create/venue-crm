@@ -6,11 +6,14 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
 
   useEffect(() => {
     const lastViewed = localStorage.getItem('lastViewedVersion');
-    const currentVersion = '1.1.0'; // Should match DocsView.jsx
+    const currentVersion = '1.2.0'; // Should match DocsView.jsx
     if (lastViewed !== currentVersion) {
       setHasNewUpdate(true);
+    } else {
+      setHasNewUpdate(false);
     }
   }, [activeTab]);
+
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all">
       <div className="p-6 border-b border-slate-800 flex items-center space-x-3 text-white">
@@ -27,13 +30,17 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
           { id: 'docs', label: '指南與更新 (Docs)', icon: BookOpen, badge: hasNewUpdate },
           { id: 'settings', label: '設定 (Settings)', icon: Settings },
         ].map(item => (
-          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}>
+          <button 
+            key={item.id} 
+            onClick={() => setActiveTab(item.id)} 
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}
+          >
             <div className="flex items-center space-x-3">
               <item.icon size={20} />
               <span>{item.label}</span>
             </div>
             {item.badge && activeTab !== item.id && (
-              <span className="flex h-2 w-2 rounded-full bg-amber-400 ring-2 ring-slate-900" />
+              <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 ring-4 ring-slate-900 animate-pulse" />
             )}
           </button>
         ))}

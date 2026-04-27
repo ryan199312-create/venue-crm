@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Coffee } from 'lucide-react';
+import { AlertTriangle, Coffee, Plus } from 'lucide-react';
 import {
   DEPARTMENTS,
   equipmentMap,
@@ -9,7 +9,7 @@ import {
   safeFloat,
   generateBillingSummary
 } from '../utils/vmsUtils';
-import { TOOL_GROUPS } from '../components/FloorplanEditor';
+import { TOOL_GROUPS } from '../components/FloorplanTools';
 
 // ==========================================
 // SHARED UTILITIES & FORMATTERS
@@ -73,6 +73,14 @@ const getBalanceDueDate = (data) => {
   return balanceDueDateDisplay;
 };
 
+const getIssueDate = (data) => {
+  if (data.printSettings?.general?.issueDateOverride) {
+    const overrideDate = new Date(data.printSettings.general.issueDateOverride);
+    if (!isNaN(overrideDate.getTime())) return overrideDate;
+  }
+  return new Date();
+};
+
 const getPackageStrings = (data, isEn = false) => {
   const setupStrArr = Object.entries(data.equipment || {}).filter(([k, v]) => v === true && equipmentMap?.[k]).map(([k]) => {
     const fullStr = equipmentMap[k];
@@ -115,7 +123,9 @@ const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {
   const itemScale = fp.itemScale || appSettings?.defaultFloorplan?.itemScale || 40;
   const zones = fp.zones || appSettings?.defaultFloorplan?.zones || [];
   
-  const visibleZones = zones; // Always show all zones
+  const selectedLocs = data.selectedLocations || (data.venueLocation ? [data.venueLocation] : []);
+  const isWholeVenue = selectedLocs.includes('全場');
+  const visibleZones = zones.filter(z => isWholeVenue || selectedLocs.includes(z.name));
 
   // --- DYNAMIC SCALING & CENTERING LOGIC ---
   const allElements = [...(fp.elements || []), ...visibleZones.flatMap(z => z.points.map(p => ({ x: p.x_m * itemScale, y: p.y_m * itemScale, w_m: 0, h_m: 0 })))];
@@ -222,7 +232,7 @@ const DocumentHeader = ({ data, typeEn, typeZh }) => (
       {typeZh && <h2 className="text-sm font-bold text-[#A57C00] uppercase tracking-widest mb-3">{typeZh}</h2>}
       <div className="text-right space-y-1 mt-2">
         <p className="text-xs"><span className="font-bold text-slate-400 uppercase tracking-wider mr-2">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></p>
-        <p className="text-xs"><span className="font-bold text-slate-400 uppercase tracking-wider mr-2">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(new Date())}</span></p>
+        <p className="text-xs"><span className="font-bold text-slate-400 uppercase tracking-wider mr-2">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></p>
       </div>
     </div>
   </div>
@@ -397,14 +407,18 @@ const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, dateStr, 
       )}
     </div>
     <p className="font-bold text-xs text-slate-800 tracking-wide mt-2">
-      {titleEn}<br />
+      {titleEn && <>{titleEn}<br /></>}
       <span className="text-sm font-black text-slate-900 uppercase">{labelEn}</span>
     </p>
     {labelZh && (
       <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">{labelZh}</p>
     )}
-    {dateStr && (
+    {dateStr ? (
       <p className="text-[9px] text-slate-400 mt-0.5">Signed: {new Date(dateStr).toLocaleDateString()}</p>
+    ) : (
+      <p className={`text-[9px] text-slate-400 mt-2 flex items-end ${alignRight ? 'justify-end' : 'justify-start'}`}>
+        Date: <span className="inline-block border-b border-slate-400 w-24 ml-2 h-3"></span>
+      </p>
     )}
   </div>
 );
@@ -414,7 +428,7 @@ const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, dateStr, 
 // ==========================================
 
 const FloorplanView = ({ data, appSettings }) => (
-  <div className="font-sans text-slate-900 w-full bg-white p-6 relative">
+  <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 relative">
     <style>{`@media print { @page { margin: 5mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
     <FloorplanAppendix data={data} appSettings={appSettings} isStandalone={true} />
   </div>
@@ -422,8 +436,8 @@ const FloorplanView = ({ data, appSettings }) => (
 
 const BriefingView = ({ data, printMode, appSettings }) => {
   return (
-    <div className="font-sans text-slate-900 w-full max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col">
-      <style>{`@media print { @page { margin: 5mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
+      <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
       <div className="border-b-2 border-slate-800 pb-4 mb-6">
         <div className="flex justify-between items-end">
           <div className="w-[70%]">
@@ -483,7 +497,7 @@ const BriefingView = ({ data, printMode, appSettings }) => {
           </div>
         </div>
       </div>
-      <div className="mt-auto pt-4 border-t-2 border-slate-100 text-[10px] text-slate-400 flex justify-between"><span>Generated: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span><span>Ref: {data.orderId}</span></div>
+      <div className="mt-auto pt-4 border-t-2 border-slate-100 text-[10px] text-slate-400 flex justify-between"><span>Generated: {getIssueDate(data).toLocaleDateString()} {data.printSettings?.general?.issueDateOverride ? '' : new Date().toLocaleTimeString()}</span><span>Ref: {data.orderId}</span></div>
       <div className="page-break"></div>
       <FloorplanAppendix data={data} appSettings={appSettings} />
     </div>
@@ -498,7 +512,7 @@ const QuotationView = ({ data, printMode, onClientSign }) => {
   const balanceDueDateDisplay = getBalanceDueDate(data);
 
   return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col">
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
       <style>{`@media print { @page { margin: 10mm; size: A4; @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; } @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; } } body { -webkit-print-color-adjust: exact; } }`}</style>
       
       <DocumentHeader data={data} typeEn="Quotation" />
@@ -611,7 +625,7 @@ const ContractView = ({ data, printMode, appSettings, onClientSign, onAdminSign 
   );
 
   return (
-    <div className="font-sans text-slate-800 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col text-sm leading-relaxed">
+    <div className="font-sans text-slate-800 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[12mm] sm:px-[15mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-sm leading-relaxed">
       <style>{`@media print { @page { margin: 12mm 15mm; size: A4; @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; } @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; } } body { -webkit-print-color-adjust: exact; } .page-break { page-break-before: always; } .legal-text { font-size: 11px; text-align: justify; line-height: 1.6; color: #334155; } .legal-header { font-weight: 800; margin-bottom: 4px; margin-top: 12px; font-size: 12px; color: #0f172a; } }`}</style>
       
       <DocumentHeader data={data} typeEn="CONTRACT" typeZh={isEn ? 'Banquet Agreement' : '宴會服務合約'} />
@@ -940,6 +954,7 @@ const ContractView = ({ data, printMode, appSettings, onClientSign, onAdminSign 
               labelZh={isEn ? 'Authorized Signature & Chop' : '授權簽署及蓋章'} 
               sigDataUrl={adminSig} 
               onSign={onAdminSign} 
+              dateStr={sigData.adminDate}
               isAdmin={true} 
             />
           </div>
@@ -967,7 +982,7 @@ const InvoiceView = ({ data, printMode }) => {
   const { setupStr, avStr, decorStr } = getPackageStrings(data, true);
 
   return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col text-xs leading-tight">
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-xs leading-tight">
       <style>{`@media print { @page { margin: 10mm; size: A4; @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; } } body { -webkit-print-color-adjust: exact; } }`}</style>
       <DocumentHeader data={data} typeEn="INVOICE" typeZh="發票" />
       <ClientInfoGrid data={data} />
@@ -1007,12 +1022,12 @@ const ReceiptView = ({ data, printMode }) => {
   if (data.deposit3Received && safeFloat(data.deposit3) > 0) { totalPaid += safeFloat(data.deposit3); paidItems.push({ label: '第三期付款 (3rd Payment)', amount: safeFloat(data.deposit3), date: data.deposit3Date }); }
   if (data.balanceReceived) {
     const remainder = billing.grandTotal - totalPaid;
-    if (remainder > 0) { totalPaid += remainder; paidItems.push({ label: '尾數結算 (Balance Payment)', amount: remainder, date: data.balanceDate || formatDateEn(new Date()) }); }
+    if (remainder > 0) { totalPaid += remainder; paidItems.push({ label: '尾數結算 (Balance Payment)', amount: remainder, date: data.balanceDate || formatDateEn(getIssueDate(data)) }); }
   }
   const isFullyPaid = data.balanceReceived || (totalPaid > 0 && totalPaid >= billing.grandTotal);
 
   return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col text-xs leading-tight print-page">
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-xs leading-tight print-page">
       <style>{`@media print { 
         @page { margin: 10mm; size: A4; @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; } } 
         body { -webkit-print-color-adjust: exact; } 
@@ -1054,39 +1069,43 @@ const MenuConfirmView = ({ data, printMode, onClientSign }) => {
   const BRAND_COLOR = '#A57C00';
   const verNum = (data.menus || []).reduce((max, m) => Math.max(max, m.versions?.length || 0), 0) + 1;
   const fontSizePx = data.printSettings?.menu?.fontSizeOverride || 18;
-  const defaultExpiry = new Date(new Date().setDate(new Date().getDate() + 14)).toLocaleDateString('zh-HK');
+  const issueDate = getIssueDate(data);
+  const defaultExpiry = new Date(new Date(issueDate).setDate(issueDate.getDate() + 14)).toLocaleDateString('zh-HK');
   const { clientSig, sigData } = getSignatures(data, printMode);
 
   return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col">
-      <style>{`@media print { @page { margin: 5mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
+      <style>{`@media print { @page { margin: 10mm; size: A4; @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; font-family: sans-serif; } } body { -webkit-print-color-adjust: exact; } }`}</style>
       <DocumentHeader data={data} typeEn="MENU CONFIRMATION" typeZh="菜譜確認單" />
-      <div className="w-full py-12">
+      <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg mb-4 text-xs border border-slate-100">
+        <div><span className="text-slate-500 font-bold mr-2">活動 Event:</span><span className="text-slate-900 font-bold">{data.eventName || '-'}</span></div>
+        <div><span className="text-slate-500 font-bold mr-2">日期 Date:</span><span className="text-slate-900 font-bold font-mono">{formatDateEn(data.date)}</span></div>
+        <div><span className="text-slate-500 font-bold mr-2">席數/人數 Pax:</span><span className="text-slate-900 font-bold">{data.tableCount || 0} 席 / {data.guestCount || 0} 人</span></div>
+      </div>
+      <div className="w-full py-8">
         {(data.menus || []).map((menu, i) => (<div key={i} className="w-full text-center flex flex-col h-full justify-center"><div className="flex-shrink-0 mb-3"><div className="flex items-baseline justify-center gap-2"><h3 className="text-2xl font-black text-slate-900 uppercase tracking-widest">{menu.title}</h3><span className="text-xs font-bold text-slate-400 border border-slate-200 px-1 rounded">v{verNum}</span></div><div className="h-0.5 w-10 bg-slate-900 mx-auto rounded-full mt-2"></div></div><div className="px-4 flex-1 flex flex-col justify-center"><p className="font-medium text-slate-800 whitespace-pre-wrap leading-relaxed font-serif" style={{ fontSize: `${fontSizePx}px` }}>{menu.content || '(暫無菜單內容)'}</p></div></div>))}
         <div className="flex-shrink-0 mt-12 text-center"><p className="text-[8px] font-bold text-slate-500 italic">食物可能有微量致敏原，如對食物有過敏反應，請通知服務員。</p><p className="text-[8px] font-bold text-slate-500 mb-2 italic">Food may contain trace amounts of allergens. If you have an allergic reaction, please inform the server.</p><p className="text-sm font-black text-[#A57C00] tracking-[0.3em] border-b border-slate-300 pb-1 inline-block">**敬候賜覆 RSVP**</p></div>
       </div>
       <div className="flex-shrink-0 mt-4 pt-4 border-t-2 border-slate-900">
-        <div className="grid grid-cols-2 gap-8 items-stretch">
-          <div className="flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="bg-slate-50 p-2 rounded border border-slate-100"><p className="font-black text-slate-900 text-[11px] mb-2 uppercase">上菜方式 Serving Style</p>{data.servingStyle ? (<div className="flex items-center gap-2"><div className="w-4 h-4 bg-slate-900 rounded-sm flex items-center justify-center"><div className="w-1.5 h-2.5 border-r-2 border-b-2 border-white rotate-45 mb-0.5"></div></div><span className="font-black text-slate-900 text-sm underline decoration-2 underline-offset-4">{data.servingStyle}</span></div>) : (<div className="flex flex-wrap gap-x-4 gap-y-2">{['位上', '圍餐', '分菜', '自助餐'].map(style => (<div key={style} className="flex items-center gap-1.5"><div className="w-4 h-4 border-2 border-slate-900 rounded-sm"></div><span className="text-[11px] font-black text-slate-800">{style}</span></div>))}</div>)}</div>
-              <div className="text-[9px] text-slate-600 leading-tight space-y-1 pl-1"><p className="flex items-start gap-1"><span className="font-bold">•</span><span>上列內容有效期至: <span className="font-bold underline text-slate-900">{data.printSettings?.menu?.validityDateOverride || defaultExpiry}</span></span></p><p className="flex items-start gap-1"><span className="font-bold">•</span><span>同桌個別特別餐膳需另收費用及加一服務費；菜單如有更改，費用只加不減。</span></p>{!data.servingStyle && (<div className="bg-amber-50 border-l-4 border-amber-400 p-1.5 mt-2"><p className="font-bold text-slate-900">如需分菜位上, 每桌需額外收取 HKD800 及加一服務費</p></div>)}</div>
-            </div>
+        <div className="grid grid-cols-2 gap-8 items-end mb-4 break-inside-avoid">
+          <div className="space-y-3">
+            <div className="bg-slate-50 p-2 rounded border border-slate-100"><p className="font-black text-slate-900 text-[11px] mb-2 uppercase">上菜方式 Serving Style</p>{data.servingStyle ? (<div className="flex items-center gap-2"><div className="w-4 h-4 bg-slate-900 rounded-sm flex items-center justify-center"><div className="w-1.5 h-2.5 border-r-2 border-b-2 border-white rotate-45 mb-0.5"></div></div><span className="font-black text-slate-900 text-sm underline decoration-2 underline-offset-4">{data.servingStyle}</span></div>) : (<div className="flex flex-wrap gap-x-4 gap-y-2">{['位上', '圍餐', '分菜', '自助餐'].map(style => (<div key={style} className="flex items-center gap-1.5"><div className="w-4 h-4 border-2 border-slate-900 rounded-sm"></div><span className="text-[11px] font-black text-slate-800">{style}</span></div>))}</div>)}</div>
+            <div className="text-[9px] text-slate-600 leading-tight space-y-1 pl-1"><p className="flex items-start gap-1"><span className="font-bold">•</span><span>上列內容有效期至: <span className="font-bold underline text-slate-900">{data.printSettings?.menu?.validityDateOverride || defaultExpiry}</span></span></p><p className="flex items-start gap-1"><span className="font-bold">•</span><span>同桌個別特別餐膳需另收費用及加一服務費；菜單如有更改，費用只加不減。</span></p>{!data.servingStyle && (<div className="bg-amber-50 border-l-4 border-amber-400 p-1.5 mt-2"><p className="font-bold text-slate-900">如需分菜位上, 每桌需額外收取 HKD800 及加一服務費</p></div>)}</div>
           </div>
-          <div className="border-2 border-slate-900 p-4 rounded-xl flex flex-col justify-between bg-slate-50">
-            <div className="text-center"><p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">客戶確認 Confirmation</p><p className="text-[9px] text-slate-400 mt-1 italic">I confirm the above menu and arrangements.</p></div>
-            <div className="flex justify-center items-end gap-4 mt-8">
-              <SignatureBox 
-                titleEn="" 
-                labelEn="客戶 Client" 
-                sigDataUrl={clientSig} 
-                onSign={onClientSign} 
-                dateStr={sigData.clientDate || data.clientSignatureDate} 
-              />
-            </div>
+          <div className="flex justify-end">
+            <SignatureBox 
+              titleEn="Confirmed & Accepted by" 
+              labelEn={data.clientName} 
+              labelZh="客戶簽署 Client Signature" 
+              sigDataUrl={clientSig} 
+              onSign={onClientSign} 
+              dateStr={sigData.clientDate || data.clientSignatureDate} 
+              alignRight={true}
+            />
           </div>
         </div>
-        <div className="mt-6 pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] font-bold text-slate-400">
+        
+        <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] font-bold text-slate-400">
           <div className="flex gap-6 uppercase tracking-widest">{data.drinksPackage && <span><span className="text-slate-300 mr-1">Beverage:</span> {data.drinksPackage}</span>}{data.venueLocation && <span><span className="text-slate-300 mr-1">Venue:</span> {data.venueLocation}</span>}</div><div className="font-mono">{data.orderId}</div>
         </div>
       </div>
@@ -1210,13 +1229,9 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
   const totalAllocation = Object.values(displayAlloc).reduce((acc, dept) => acc + dept.total, 0);
 
   return (
-    <div className="font-sans text-slate-900 mx-auto bg-white text-sm max-w-[210mm] min-h-[297mm]">
+    <div className="font-sans text-slate-900 mx-auto bg-white text-sm w-full max-w-[210mm] print:max-w-none min-h-[297mm] print:min-h-0">
       <style>{`
         @media print { 
-          body, html { height: auto !important; overflow: visible !important; background: white !important; } 
-          .no-print, aside, nav, button, .modal-overlay { display: none !important; } 
-          .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; z-index: 9999; background: white; } 
-          
           @page { 
             margin: 10mm; 
             size: A4; 
@@ -1224,8 +1239,9 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
             @bottom-center { content: "${data.orderId}"; font-size: 10px; font-weight: bold; color: #000; font-family: monospace; }
             @bottom-left { content: "${data.eventName || ''}"; font-size: 9px; font-weight: bold; color: #64748b; font-family: sans-serif; text-transform: uppercase; }
           }
-          .page-break { page-break-after: always !important; display: block; height: 1px; width: 100%; clear: both; }
-          .print-page { position: relative; width: 100%; background: white; margin-bottom: 20px; } 
+          body { -webkit-print-color-adjust: exact; }
+          .page-break { page-break-after: always !important; display: block; height: 0; width: 100%; clear: both; }
+          .print-page { position: relative; width: 100%; background: white; } 
           .break-inside-avoid { break-inside: avoid; }
           .compact-table th, .compact-table td { padding: 3px 6px; border-bottom: 1px solid #e2e8f0; }
           .compact-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; color: #64748b; }
@@ -1234,14 +1250,15 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
 
       {/* --- LOOP THROUGH COPIES --- */}
       {COPIES.map((copy, idx) => (
-        <div key={idx} className={idx > 0 ? "page-break" : ""}>
+        <React.Fragment key={idx}>
+          {idx > 0 && <div className="page-break"></div>}
           <div className="print-page">
 
             {/* ========================================================
                 LAYOUT TYPE 1: BANQUET COPY (Briefing Style)
                 ======================================================== */}
             {copy.type === 'BQT' ? (
-              <div className="relative p-8 md:p-10 print:p-0">
+              <div className="relative p-[10mm] print:p-0">
                 <div className="border-b-2 border-slate-800 pb-4 mb-6">
                   <div className="flex justify-between items-end">
                     <div className="w-[70%]">
@@ -1367,14 +1384,14 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
               /* ========================================================
                  LAYOUT TYPE 2: MANAGER & FINANCE (Standard Table Style)
                  ======================================================== */
-              <div className="p-8 md:p-10 print:p-0">
+              <div className="p-[10mm] print:p-0">
                 <div className="flex justify-between items-end border-b-2 border-slate-800 pb-4 mb-6">
                   <div className="flex-1">
                     <h1 className="text-3xl font-black uppercase tracking-tight leading-none mb-2">{data.eventName}</h1>
                     <div className="flex gap-4 mt-1 text-sm font-bold text-slate-600 font-mono">
                       <span>REF: {data.orderId}</span>
                       <span className="text-slate-300">|</span>
-                      <span>DATE: {formatDateEn(new Date())}</span>
+                      <span>DATE: {formatDateEn(getIssueDate(data))}</span>
                     </div>
                   </div>
                   <div className="text-right flex flex-col items-end">
@@ -1569,14 +1586,13 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
               </div>
             )}
           </div>
-          <div className="page-break"></div>
-        </div>
+        </React.Fragment>
       ))}
 
       {/* --- APPENDIX (Photos) --- */}
       {((data.stageDecorPhotos && data.stageDecorPhotos.length > 0) || (data.venueDecorPhotos && data.venueDecorPhotos.length > 0) || data.stageDecorPhoto || data.venueDecorPhoto) && (
         <>
-          <div className="print-page">
+          <div className="print-page p-[10mm] print:p-0">
             <div className="flex justify-between items-end border-b-4 border-slate-900 pb-2 mb-6">
               <div><h1 className="text-2xl font-extrabold tracking-tight leading-none uppercase">附錄 (Appendix)</h1><p className="text-slate-500 text-xs mt-1">Order ID: {data.orderId}</p></div>
               <div className="text-right"><div className="inline-block bg-slate-500 text-white px-3 py-1 text-sm font-bold rounded mb-1 uppercase">參考圖片</div><div className="text-sm font-bold text-slate-800">{formatDateWithDay(data.date)}</div></div>
@@ -1603,7 +1619,7 @@ const InternalEOView = ({ data, printMode, appSettings }) => {
 
       {/* --- KITCHEN COPY --- */}
       <div className="page-break"></div>
-      <div className="print-page">
+      <div className="print-page p-[10mm] print:p-0">
         <div className="flex justify-between items-end border-b-4 border-black pb-2 mb-4">
           <div>
             <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">廚房出品單</h1>
@@ -1676,7 +1692,7 @@ const AddendumView = ({ data, printMode, onClientSign, onAdminSign }) => {
   const originalGrandTotal = billing.grandTotal - finalAddendumTotal;
 
   return (
-    <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col text-sm leading-relaxed">
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[12mm] sm:px-[15mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-sm leading-relaxed">
       <style>{`@media print { @page { margin: 12mm 15mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
       <DocumentHeader data={data} typeEn="ADDENDUM" typeZh="合約附加條款" />
       <ClientInfoGrid data={data} />
@@ -1759,7 +1775,7 @@ const AddendumView = ({ data, printMode, onClientSign, onAdminSign }) => {
       </div>
 
       <div className="mt-auto pt-12 flex justify-between items-end break-inside-avoid">
-        <SignatureBox titleEn="For and on behalf of" labelEn="KING LUNG HEEN" labelZh="Authorized Signature & Chop" sigDataUrl={adminSig} onSign={onAdminSign} isAdmin={true} />
+        <SignatureBox titleEn="For and on behalf of" labelEn="KING LUNG HEEN" labelZh="Authorized Signature & Chop" sigDataUrl={adminSig} onSign={onAdminSign} isAdmin={true} dateStr={sigData.adminDate} />
         <SignatureBox titleEn="Confirmed & Accepted by" labelEn={data.clientName} labelZh="Client Signature / Company Chop" sigDataUrl={clientSig} onSign={onClientSign} dateStr={sigData.clientDate} alignRight={true} />
       </div>
     </div>
@@ -1767,7 +1783,7 @@ const AddendumView = ({ data, printMode, onClientSign, onAdminSign }) => {
 };
 
 const InternalNotesView = ({ data }) => (
-  <div className="font-sans text-slate-900 max-w-[210mm] mx-auto bg-white p-8 md:p-10 min-h-[297mm] shadow-sm print:shadow-none print:p-0 relative flex flex-col">
+  <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
     <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
     <DocumentHeader data={data} typeEn="INTERNAL NOTES" typeZh="內部備註" />
     <ClientInfoGrid data={data} />

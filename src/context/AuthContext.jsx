@@ -8,7 +8,8 @@ import {
   signOut as firebaseSignOut
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { APP_ID, INITIAL_AUTH_TOKEN } from '../env';
+import { APP_ID } from '../env';
+
 
 const AuthContext = createContext();
 
@@ -29,17 +30,6 @@ export const AuthProvider = ({ children }) => {
   const appId = APP_ID;
 
   useEffect(() => {
-    const initAuth = async () => {
-      if (INITIAL_AUTH_TOKEN) {
-        try {
-          await signInWithCustomToken(auth, INITIAL_AUTH_TOKEN);
-        } catch (e) {
-          console.error("Auth token failed", e);
-        }
-      }
-    };
-    initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -57,6 +47,7 @@ export const AuthProvider = ({ children }) => {
         if (userSnap.exists()) {
           const existingData = userSnap.data();
           profileData = { ...profileData, role: existingData.role };
+          await setDoc(userRef, profileData, { merge: true });
         } else {
           await setDoc(userRef, profileData);
         }

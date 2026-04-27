@@ -1,19 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen } from 'lucide-react';
 
 export default function AdminSidebar({ activeTab, setActiveTab, userProfile, user, handleSignOut }) {
-  const [hasNewUpdate, setHasNewUpdate] = useState(false);
-
-  useEffect(() => {
-    const lastViewed = localStorage.getItem('lastViewedVersion');
-    const currentVersion = '1.2.0'; // Should match DocsView.jsx
-    if (lastViewed !== currentVersion) {
-      setHasNewUpdate(true);
-    } else {
-      setHasNewUpdate(false);
-    }
-  }, [activeTab]);
-
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all">
       <div className="p-6 border-b border-slate-800 flex items-center space-x-3 text-white">
@@ -27,7 +15,7 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
         {[
           { id: 'dashboard', label: '儀表板 (Dashboard)', icon: LayoutDashboard },
           { id: 'events', label: '訂單管理 (EOs)', icon: FileText },
-          { id: 'docs', label: '指南與更新 (Docs)', icon: BookOpen, badge: hasNewUpdate },
+          { id: 'docs', label: '使用指南 (Docs)', icon: BookOpen },
           { id: 'settings', label: '設定 (Settings)', icon: Settings },
         ].map(item => (
           <button 
@@ -39,9 +27,6 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
               <item.icon size={20} />
               <span>{item.label}</span>
             </div>
-            {item.badge && activeTab !== item.id && (
-              <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 ring-4 ring-slate-900 animate-pulse" />
-            )}
           </button>
         ))}
       </nav>

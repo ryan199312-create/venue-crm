@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout, ZoomIn, ZoomOut } from 'lucide-react';
-import { TOOL_GROUPS } from './FloorplanEditor';
+import { TOOL_GROUPS } from './FloorplanTools';
 
 const STYLES = {
   gridBox: "bg-white p-6 rounded-2xl shadow-sm border border-slate-200",
@@ -18,7 +18,7 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   const elements = floorplan?.elements || [];
   
   const isWholeVenue = selectedLocations.includes('全場');
-  const visibleZones = zones; // Always show all zones
+  const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.includes(z.name));
   const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

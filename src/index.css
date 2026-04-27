@@ -6,9 +6,21 @@ html {
   scroll-behavior: smooth;
 }
 
+/* 確保螢幕預覽與列印使用完全相同的字體，解決 Chrome 列印中文字元遺失及字體不一致的問題 */
+html, body, #root, .font-sans {
+  font-family: "Noto Sans TC", "PingFang HK", "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+}
+
 /* 列印專用樣式 */
 @media print {
   @page { size: A4; margin: 10mm; }
+  html, body, #root {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    display: block !important;
+  }
   body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
   .print-only { display: block !important; position: static !important; }

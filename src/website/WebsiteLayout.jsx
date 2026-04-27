@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, MessageCircle, ChevronDown, Star } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { APP_ID } from '../env';
 
 // --- 1. SEPARATED NAVBAR & DROPDOWN ---
 const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
@@ -19,7 +20,6 @@ const FloatingNav = ({ onOpenBooking, lang, setLang }) => {
   useEffect(() => {
     const handleScroll = () => {
       setScrollCompact(window.scrollY > 50);
-      if (window.scrollY > 50) setIsMobileMenuOpen(false); // Close menu on scroll
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
@@ -260,10 +260,11 @@ const GlassModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await addDoc(collection(db, 'artifacts', 'my-venue-crm', 'public', 'data', 'events'), {
+      await addDoc(collection(db, 'artifacts', APP_ID, 'private', 'data', 'events'), {
         eventName: `${formData.type} - ${formData.name}`,
         clientName: formData.name,
         clientPhone: formData.phone,
+        clientPhoneClean: String(formData.phone).replace(/[^0-9]/g, '').slice(-8),
         clientEmail: formData.email,
         date: formData.date,
         eventType: formData.type,
@@ -346,6 +347,15 @@ const GlassModal = ({ isOpen, onClose }) => {
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" size={16} />
                 </div>
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Email</label>
+                <input type="email" placeholder="Email address" className="w-full bg-stone-50/50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/50 transition-all" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Message</label>
+                <textarea rows={3} placeholder="Any special requests or details..." className="w-full bg-stone-50/50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/50 transition-all appearance-none resize-none" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} />
               </div>
 
               <motion.button 

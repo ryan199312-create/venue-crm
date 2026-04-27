@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { DollarSign, AlertTriangle, X, History, Printer, Loader2, Upload, Image as ImageIcon, Download, Clock, Sparkles, AlertCircle, CheckCircle, PenTool } from 'lucide-react';
-import { formatMoney, parseMoney, LOCATION_CHECKBOXES, INDIVIDUAL_ZONES } from '../utils/vmsUtils';
+import { LOCATION_CHECKBOXES, INDIVIDUAL_ZONES } from '../utils/vmsUtils';
+import { formatMoney, parseMoney } from '../utils/formatters';
 
 export const STATUS_COLORS = {
   confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -141,7 +142,7 @@ export const Toast = ({ message, type, onClose }) => {
   const bg = type === 'error' ? 'bg-red-500' : 'bg-slate-800';
 
   return (
-    <div className={`fixed bottom-4 right-4 ${bg} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 z-[100] animate-in slide-in-from-right-10 fade-in print:hidden no-print`}>
+    <div className={`fixed bottom-4 right-4 ${bg} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 z-[100] animate-in slide-in-from-right-10 fade-in print:hidden`}>
       <span>{message}</span>
       <button onClick={onClose} className="hover:opacity-75"><X size={14} /></button>
     </div>
@@ -408,7 +409,7 @@ export const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 no-print">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 print:hidden">
         <div className="flex justify-between items-center p-6 border-b border-slate-100 flex-shrink-0">
           <h3 className="text-xl font-bold text-slate-800">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">

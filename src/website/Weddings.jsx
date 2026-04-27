@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Maximize, Star, Download, Heart, ChevronLeft, ChevronRight, Plus, Minus, LayoutTemplate, Quote } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
-import { formatMoney } from '../utils/vmsUtils';
+import { formatMoney } from '../utils/formatters';
 
 // --- FIREBASE IMPORTS ---
 import { db } from '../firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
+import { APP_ID } from '../env';
 
 // --- STATIC CONTENT ---
 const content = {
@@ -230,9 +231,9 @@ const Weddings = () => {
   const prevVenue = () => setVenueIndex((prev) => (prev - 1 + t.venueShowcase.images.length) % t.venueShowcase.images.length);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "artifacts", "my-venue-crm", "public", "data", "settings", "config"), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+    const unsub = onSnapshot(doc(db, "artifacts", APP_ID, "public", "data", "settings", "config"), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
         const allMenus = data.defaultMenus || [];
         const foodMenus = allMenus.filter(m => m.type === 'food');
         setPresetMenus(foodMenus);

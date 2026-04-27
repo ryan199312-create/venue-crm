@@ -89,7 +89,7 @@ export const useEventForm = (formData, setFormData, appSettings, editingEvent, a
         const newMenus = prev.menus.map(m => m.id === menuId ? { ...m, title: preset.title, content: preset.content, price: finalPrice || 0, priceType: m.priceType || 'perTable', qty: m.qty || prev.tableCount || 1, allocation: preset.allocation || {} } : m);
         return updateFinanceState({ ...prev, menus: newMenus });
       });
-      addToast(`已載入: ${preset.title}`, \"success\");
+      addToast(`已載入: ${preset.title}`, "success");
     }
   }, [appSettings.defaultMenus, setFormData, updateFinanceState, addToast]);
 
@@ -102,32 +102,32 @@ export const useEventForm = (formData, setFormData, appSettings, editingEvent, a
   }, [setFormData, updateFinanceState]);
 
   const handleTranslateMenu = async (menuId, content) => {
-    if (!content) return addToast(\"請先輸入菜單內容\", \"error\");
+    if (!content) return addToast("請先輸入菜單內容", "error");
     setTranslatingMenuId(menuId);
     try {
       const systemPrompt = `You are a professional banquet menu translator. Task: Translate from Chinese to English line by line. STRICT RULES: 1. Brand Names: ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'. 2. Format: Output the original Chinese line, followed immediately by the English translation on the next line. 3. Spacing: Remove ALL empty lines between items. 4. Punctuation: Do NOT add full stops. 5. Cleanliness: Do not add bullet points.`;
       let translatedText = await generate(content, systemPrompt);
-      if (!translatedText) throw new Error(\"Translation API Failed\");
+      if (!translatedText) throw new Error("Translation API Failed");
       handleMenuChange(menuId, 'content', translatedText.replace(/\n\s*\n/g, '\n').trim());
-      addToast(\"菜單翻譯完成！\", \"success\");
+      addToast("菜單翻譯完成！", "success");
     } catch (error) {
-      addToast(\"翻譯失敗，請稍後再試\", \"error\");
+      addToast("翻譯失敗，請稍後再試", "error");
     } finally {
       setTranslatingMenuId(null);
     }
   };
 
   const handleTranslateDrinks = async () => {
-    if (!formData.drinksPackage) return addToast(\"請先輸入酒水內容\", \"error\");
+    if (!formData.drinksPackage) return addToast("請先輸入酒水內容", "error");
     setIsTranslatingDrinks(true);
     try {
       const systemPrompt = `You are a professional banquet translator. Task: Translate the beverage list from Chinese to English line by line. STRICT RULES: 1. Format: Output original Chinese line, followed immediately by English translation on the next line. 2. Spacing: Remove ALL empty lines. 3. Punctuation: Do NOT add full stops.`;
       let translatedText = await generate(formData.drinksPackage, systemPrompt);
-      if (!translatedText) throw new Error(\"Translation API Failed\");
+      if (!translatedText) throw new Error("Translation API Failed");
       setFormData(prev => ({ ...prev, drinksPackage: translatedText.replace(/\n\s*\n/g, '\n').trim() }));
-      addToast(\"酒水翻譯完成！\", \"success\");
+      addToast("酒水翻譯完成！", "success");
     } catch (error) {
-      addToast(\"翻譯失敗，請稍後再試\", \"error\");
+      addToast("翻譯失敗，請稍後再試", "error");
     } finally {
       setIsTranslatingDrinks(false);
     }

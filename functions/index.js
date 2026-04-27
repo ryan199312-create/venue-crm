@@ -21,6 +21,7 @@ setGlobalOptions({ region: "asia-east2" });
 
 // Define Secrets
 const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
+const adminPhone = defineSecret("ADMIN_PHONE");
 
 // 3. SECURE SLEEKFLOW FUNCTION
 exports.sendSleekFlow = onCall(
@@ -229,8 +230,8 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
     }
 
     const eventData = docSnap.data();
-    const cleanInputPhone = phone.replace(/[^0-9]/g, '').slice(-8);
-    const cleanDbPhone = (eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
+    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
+    const cleanDbPhone = String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
 
     if (cleanInputPhone !== cleanDbPhone) {
       throw new HttpsError('permission-denied', 'Invalid phone number.');
@@ -322,8 +323,8 @@ exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
     }
 
     const eventData = docSnap.data();
-    const cleanInputPhone = phone.replace(/[^0-9]/g, '').slice(-8);
-    const cleanDbPhone = (eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
+    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
+    const cleanDbPhone = String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
 
     if (cleanInputPhone !== cleanDbPhone) {
       throw new HttpsError('permission-denied', 'Invalid phone number.');
@@ -379,10 +380,17 @@ exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
       }
     } else {
       // General Login Access (Indexed Query)
-      const snapshot = await eventsRef.where('clientPhoneClean', '==', cleanInputPhone).get();
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        matchedEvents.push({ id: doc.id, ...data });
+      const cleanSnap = await eventsRef.where('clientPhoneClean', '==', cleanInputPhone).get();
+      cleanSnap.forEach(doc => {
+        matchedEvents.push({ id: doc.id, ...doc.data() });
+      });
+      
+      // Fallback for legacy records that don't have clientPhoneClean yet
+      const legacySnap = await eventsRef.where('clientPhone', '==', phone).get();
+      legacySnap.forEach(doc => {
+        if (!matchedEvents.some(e => e.id === doc.id)) {
+          matchedEvents.push({ id: doc.id, ...doc.data() });
+        }
       });
     }
 
@@ -456,7 +464,7 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
     
     const eventData = docSnap.data();
-    if ((eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== phone.replace(/[^0-9]/g, '').slice(-8)) {
+    if (String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) {
       throw new HttpsError('permission-denied', 'Invalid phone number.');
     }
 
@@ -470,7 +478,7 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
 
 // 8. UPDATE CLIENT DIETARY REQUIREMENTS
 // Add { secrets: [sleekflowKey] } to allow this function to access your SleekFlow API Key
-exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey], invoker: "public" }, async (request) => {
+exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies } = request.data;
 
   if (!eventId || !phone) {
@@ -480,8 +488,7 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey], invoker: "pub
   const appId = "my-venue-crm";
   const db = admin.firestore();
   
-  // IMPORTANT: Replace this with the actual WhatsApp number of your Sales Rep or Admin Team
-  const adminNotificationPhone = "85261231231"; 
+  const adminNotificationPhone = adminPhone.value(); 
 
   try {
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
@@ -492,8 +499,8 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey], invoker: "pub
     }
 
     const eventData = docSnap.data();
-    const cleanInputPhone = phone.replace(/[^0-9]/g, '').slice(-8);
-    const cleanDbPhone = (eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
+    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
+    const cleanDbPhone = String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
 
     if (cleanInputPhone !== cleanDbPhone) {
       throw new HttpsError('permission-denied', 'Invalid phone number.');

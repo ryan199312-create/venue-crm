@@ -9,6 +9,16 @@ const PrintConfigTab = ({ formData, setFormData }) => {
           <Printer size={18} className="text-blue-600" />
           <h4 className="font-bold text-slate-800">列印自訂 (Print Customization)</h4>
         </div>
+        
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+          <h5 className="font-bold text-blue-800 text-sm mb-3">通用設定 (General Settings)</h5>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">文件發出日期 (Issue Date Override)</label>
+            <input type="date" value={formData.printSettings?.general?.issueDateOverride || ''} onChange={(e) => setFormData(prev => ({ ...prev, printSettings: { ...prev.printSettings, general: { ...prev.printSettings?.general, issueDateOverride: e.target.value } } }))} className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+            <p className="text-[10px] text-slate-500 mt-1">留空則預設顯示今天日期 (Leave blank to use today's date)</p>
+          </div>
+        </div>
+
         <div className="bg-violet-50 p-4 rounded-lg border border-violet-100">
           <h5 className="font-bold text-violet-800 text-sm mb-3">菜譜確認書 (Menu Confirmation)</h5>
           <div className="space-y-4">

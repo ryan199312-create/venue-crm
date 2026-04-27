@@ -1804,30 +1804,37 @@ const InternalNotesView = ({ data }) => (
 export default function DocumentRenderer({ data, printMode, appSettings, onClientSign, onAdminSign }) {
   if (!data) return null;
   
+  // Filter data for specific menu printing if printMode specifies a menuId
+  let renderData = data;
+  if (printMode && printMode.startsWith('MENU_CONFIRM_')) {
+    const menuId = printMode.replace('MENU_CONFIRM_', '');
+    renderData = { ...data, menus: (data.menus || []).filter(m => String(m.id) === String(menuId)) };
+  }
+
   switch (printMode) {
     case 'FLOORPLAN':
-      return <FloorplanView data={data} appSettings={appSettings} />;
+      return <FloorplanView data={renderData} appSettings={appSettings} />;
     case 'BRIEFING':
-      return <BriefingView data={data} printMode={printMode} appSettings={appSettings} />;
+      return <BriefingView data={renderData} printMode={printMode} appSettings={appSettings} />;
     case 'QUOTATION':
-      return <QuotationView data={data} printMode={printMode} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
+      return <QuotationView data={renderData} printMode={printMode} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
     case 'CONTRACT':
     case 'CONTRACT_CN':
-      return <ContractView data={data} printMode={printMode} appSettings={appSettings} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
+      return <ContractView data={renderData} printMode={printMode} appSettings={appSettings} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
     case 'INVOICE':
-      return <InvoiceView data={data} printMode={printMode} />;
+      return <InvoiceView data={renderData} printMode={printMode} />;
     case 'RECEIPT':
-      return <ReceiptView data={data} printMode={printMode} />;
+      return <ReceiptView data={renderData} printMode={printMode} />;
     case 'MENU_CONFIRM':
-      return <MenuConfirmView data={data} printMode={printMode} onClientSign={onClientSign} />;
-    case (printMode.startsWith('MENU_CONFIRM_') ? printMode : null):
-      return <MenuConfirmView data={data} printMode={printMode} onClientSign={onClientSign} />;
+      return <MenuConfirmView data={renderData} printMode={printMode} onClientSign={onClientSign} />;
+    case (printMode && printMode.startsWith('MENU_CONFIRM_') ? printMode : null):
+      return <MenuConfirmView data={renderData} printMode={printMode} onClientSign={onClientSign} />;
     case 'ADDENDUM':
-      return <AddendumView data={data} printMode={printMode} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
+      return <AddendumView data={renderData} printMode={printMode} onClientSign={onClientSign} onAdminSign={onAdminSign} />;
     case 'INTERNAL_NOTES':
-      return <InternalNotesView data={data} />;
+      return <InternalNotesView data={renderData} />;
     case 'EO':
     default:
-      return <InternalEOView data={data} printMode={printMode} appSettings={appSettings} />;
+      return <InternalEOView data={renderData} printMode={printMode} appSettings={appSettings} />;
   }
 }

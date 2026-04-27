@@ -413,7 +413,7 @@ const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, dateStr, 
     {labelZh && (
       <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">{labelZh}</p>
     )}
-    {dateStr ? (
+    {sigDataUrl && dateStr ? (
       <p className="text-[9px] text-slate-400 mt-0.5">Signed: {new Date(dateStr).toLocaleDateString()}</p>
     ) : (
       <p className={`text-[9px] text-slate-400 mt-2 flex items-end ${alignRight ? 'justify-end' : 'justify-start'}`}>

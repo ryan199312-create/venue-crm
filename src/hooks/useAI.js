@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase'; 
+import { functions } from '../core/firebase'; 
 
 export const useAI = () => {
   const [loading, setLoading] = useState(false);

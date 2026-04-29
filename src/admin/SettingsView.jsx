@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon } from 'lucide-react';
 import {
-  LOCATION_CHECKBOXES, DAYS_OF_WEEK, DEPARTMENTS,
-  formatMoney
-} from '../utils/vmsUtils';
+  LOCATION_CHECKBOXES, DAYS_OF_WEEK, DEPARTMENTS
+} from '../core/constants';
+import { formatMoney } from '../services/formatters';
 import { Card, FormInput, MoneyInput, FormTextArea } from '../components/ui';
 
 const SettingsView = ({ settings, onSave, addToast, onUploadProof }) => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, MessageCircle, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { functions } from '../firebase';
+import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 const DocumentManager = React.lazy(() => import('../components/DocumentManager'));
 const FloorplanViewer = React.lazy(() => import('../components/FloorplanViewer'));

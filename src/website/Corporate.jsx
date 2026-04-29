@@ -5,7 +5,7 @@ import { Users, Maximize, Mic, Wifi, Monitor, Download, ChevronLeft, ChevronRigh
 import { useOutletContext } from 'react-router-dom';
 
 // --- FIREBASE IMPORTS ---
-import { db } from '../firebase'; 
+import { db } from '../core/firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
 
 // ... keep the rest of the file exactly as it was ...

@@ -18,7 +18,12 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   const elements = floorplan?.elements || [];
   
   const isWholeVenue = selectedLocations.includes('全場');
-  const visibleZones = zones.filter(z => isWholeVenue || selectedLocations.includes(z.name));
+  const visibleZones = zones.filter(z => {
+    if (isWholeVenue) return true;
+    return selectedLocations.includes(z.name) || 
+           (z.nameZh && selectedLocations.includes(z.nameZh)) ||
+           (z.nameZh && z.nameEn && selectedLocations.includes(`${z.nameZh} (${z.nameEn})`));
+  });
   const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

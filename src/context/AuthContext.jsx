@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth, db } from '../firebase';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { auth, db } from '../core/firebase';
 import {
   signInAnonymously,
   signInWithEmailAndPassword,
@@ -7,8 +7,9 @@ import {
   onAuthStateChanged,
   signOut as firebaseSignOut
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { APP_ID } from '../env';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { APP_ID } from '../core/env';
+import { DEFAULT_ROLE_PERMISSIONS } from '../core/constants';
 
 
 const AuthContext = createContext();
@@ -24,31 +25,50 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [appSettings, setAppSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const appId = APP_ID;
 
+  // --- FETCH APP SETTINGS (FOR RBAC) ---
+  useEffect(() => {
+    const settingsRef = doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config');
+    const unsubscribe = onSnapshot(settingsRef, (doc) => {
+      if (doc.exists()) {
+        setAppSettings(doc.data());
+      }
+    });
+    return () => unsubscribe();
+  }, [appId]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
+        // 🌟 GET SECURE CUSTOM CLAIMS
+        const idTokenResult = await u.getIdTokenResult(true);
+        const claimRole = idTokenResult.claims.role;
+
         const userRef = doc(db, 'artifacts', appId, 'private', 'data', 'users', u.uid);
         const userSnap = await getDoc(userRef);
 
         let profileData = {
           uid: u.uid,
           lastLogin: serverTimestamp(),
-          role: 'staff',
+          role: 'staff', // Default
           displayName: u.displayName || u.email || `User ${u.uid.slice(0, 4)}`,
           email: u.email || 'anonymous'
         };
 
         if (userSnap.exists()) {
           const existingData = userSnap.data();
-          profileData = { ...profileData, role: existingData.role };
-          await setDoc(userRef, profileData, { merge: true });
+          // 🌟 TRUST FIRESTORE ROLE (Best for your current situation)
+          profileData = { ...profileData, ...existingData, role: existingData.role || claimRole || 'staff' };
+          await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
         } else {
+          // If Firestore doesn't exist, use Claim or default
+          profileData.role = claimRole || 'staff';
           await setDoc(userRef, profileData);
         }
         setUserProfile(profileData);
@@ -60,6 +80,37 @@ export const AuthProvider = ({ children }) => {
     });
     return () => unsubscribe();
   }, [appId]);
+
+  // --- REFRESH CLAIMS HELPER ---
+  const refreshUserClaims = async () => {
+    if (!user) return;
+    const idTokenResult = await user.getIdTokenResult(true);
+    const claimRole = idTokenResult.claims.role;
+    if (claimRole) {
+      setUserProfile(prev => ({ ...prev, role: claimRole }));
+    }
+  };
+
+  // --- PERMISSION HELPER ---
+  const hasPermission = useCallback((permissionId) => {
+    if (!userProfile) return false;
+    const role = userProfile.role || 'staff';
+    if (role === 'admin') return true;
+
+    // Check custom permissions from settings, fallback to defaults
+    const permissionsMatrix = (appSettings?.rolePermissions && Object.keys(appSettings.rolePermissions).length > 0)
+      ? appSettings.rolePermissions
+      : DEFAULT_ROLE_PERMISSIONS;
+      
+    const roleConfig = permissionsMatrix[role];
+    
+    if (!roleConfig) {
+      // Fallback to staff if role not found
+      return DEFAULT_ROLE_PERMISSIONS.staff.permissions[permissionId] || false;
+    }
+
+    return roleConfig.permissions?.[permissionId] || false;
+  }, [userProfile, appSettings]);
 
   const login = async (email, password) => {
     try {
@@ -91,12 +142,16 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     userProfile,
+    appSettings,
     loading,
     error,
     login,
     loginGuest,
-    signOut
+    signOut,
+    hasPermission,
+    refreshUserClaims
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../firebase';
+import { db, auth, functions } from '../core/firebase';
 import {
   collection,
   doc,
@@ -12,6 +12,7 @@ import {
   setDoc,
   getDoc
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 export const INITIAL_FORM_STATE = {
   // 1. Basic Info & Contact
@@ -183,6 +184,8 @@ export const INITIAL_FORM_STATE = {
 
 export function useAdminData(appId) {
   const [events, setEvents] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [appSettings, setAppSettings] = useState({ minSpendRules: [], defaultMenus: [], paymentRules: [], rolePermissions: {} });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -191,42 +194,121 @@ export function useAdminData(appId) {
       const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => new Date(a.date) - new Date(b.date));
       setEvents(data);
-      setLoading(false);
     }, (err) => {
       console.error("Firestore Error:", err);
+    });
+    return () => unsubscribe();
+  }, [appId]);
+
+  // --- FETCH USERS ---
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'private', 'data', 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUsers(data);
+      setLoading(false);
+    }, (err) => {
+      console.error("Users Firestore Error:", err);
       setLoading(false);
     });
     return () => unsubscribe();
   }, [appId]);
 
-  const saveEvent = async (formData, editingEventId) => {
-    const privateRef = collection(db, 'artifacts', appId, 'private', 'data', 'events');
-    const publicCalendarRef = collection(db, 'artifacts', appId, 'public_calendar');
-
-    const cleanPhone = formData.clientPhone ? formData.clientPhone.replace(/[^0-9]/g, '').slice(-8) : '';
-    const dataToSave = { ...formData, clientPhoneClean: cleanPhone };
-
-    let docId = editingEventId;
-    if (editingEventId) {
-      await updateDoc(doc(privateRef, docId), dataToSave);
-    } else {
-      const newDoc = await addDoc(privateRef, { ...dataToSave, createdAt: serverTimestamp() });
-      docId = newDoc.id;
-    }
-
-    await setDoc(doc(publicCalendarRef, docId), {
-      date: formData.date,
-      venue: formData.venueLocation || "Main Hall",
-      isAvailable: formData.status === 'cancelled',
-      status: formData.status
+  // --- FETCH APP SETTINGS ---
+  useEffect(() => {
+    const settingsRef = doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config');
+    const unsubscribe = onSnapshot(settingsRef, (doc) => {
+      if (doc.exists()) {
+        setAppSettings(prev => ({ ...prev, ...doc.data() }));
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Settings Firestore Error:", err);
+      setLoading(false);
     });
+    return () => unsubscribe();
+  }, [appId]);
 
-    return docId;
+  const saveEvent = async (formData, existingId = null) => {
+    const eventData = {
+      ...formData,
+      updatedAt: serverTimestamp(),
+      createdAt: existingId ? (formData.createdAt || serverTimestamp()) : serverTimestamp()
+    };
+
+    if (existingId) {
+      const docRef = doc(db, 'artifacts', appId, 'private', 'data', 'events', existingId);
+      await updateDoc(docRef, eventData);
+      
+      // Update public calendar if needed
+      const publicRef = doc(db, 'artifacts', appId, 'public_calendar', existingId);
+      await setDoc(publicRef, {
+        eventName: eventData.eventName,
+        date: eventData.date,
+        startTime: eventData.startTime,
+        endTime: eventData.endTime,
+        venueLocation: eventData.venueLocation,
+        status: eventData.status,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      return existingId;
+    } else {
+      const colRef = collection(db, 'artifacts', appId, 'private', 'data', 'events');
+      const docRef = await addDoc(colRef, eventData);
+      
+      // Create public calendar entry
+      const publicRef = doc(db, 'artifacts', appId, 'public_calendar', docRef.id);
+      await setDoc(publicRef, {
+        eventName: eventData.eventName,
+        date: eventData.date,
+        startTime: eventData.startTime,
+        endTime: eventData.endTime,
+        venueLocation: eventData.venueLocation,
+        status: eventData.status,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      return docRef.id;
+    }
   };
 
   const deleteEvent = async (id) => {
     await deleteDoc(doc(db, 'artifacts', appId, 'private', 'data', 'events', id));
+    await deleteDoc(doc(db, 'artifacts', appId, 'public_calendar', id));
   };
 
-  return { events, loading, saveEvent, deleteEvent };
+  const updateUserRole = async (userId, newRole) => {
+    await updateUserProfile(userId, { role: newRole });
+  };
+
+  const updateUserProfile = async (userId, updates) => {
+    try {
+      // 🌟 Try Secure Cloud Function first
+      const updateUserProfileSecure = httpsCallable(functions, 'updateUserProfileSecure');
+      await updateUserProfileSecure({ uid: userId, ...updates });
+    } catch (err) {
+      console.warn("Cloud Function failed or missing, falling back to direct Firestore update:", err.message);
+      // 🌟 FALLBACK: Direct Firestore update
+      const userRef = doc(db, 'artifacts', appId, 'private', 'data', 'users', userId);
+      await updateDoc(userRef, { ...updates, updatedAt: serverTimestamp() });
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'private', 'data', 'users', userId));
+  };
+
+  const createUser = async (userData) => {
+    // 🌟 SECURE: Use Cloud Function to create Auth user and set Role
+    const inviteUser = httpsCallable(functions, 'inviteUser');
+    await inviteUser({ 
+      email: userData.email, 
+      displayName: userData.displayName, 
+      role: userData.role 
+    });
+  };
+
+  return { events, users, loading, saveEvent, deleteEvent, appSettings, updateUserRole, updateUserProfile, deleteUser, createUser };
 }

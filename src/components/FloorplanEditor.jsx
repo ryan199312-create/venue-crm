@@ -26,7 +26,12 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
   // Determine which zones are active based on the Event's Selected Locations
   const selectedLocs = formData.selectedLocations || [];
   const isWholeVenue = selectedLocs.includes('全場');
-  const visibleZones = zones.filter(z => isWholeVenue || selectedLocs.includes(z.name));
+  const visibleZones = zones.filter(z => {
+    if (isWholeVenue) return true;
+    return selectedLocs.includes(z.name) || 
+           (z.nameZh && selectedLocs.includes(z.nameZh)) ||
+           (z.nameZh && z.nameEn && selectedLocs.includes(`${z.nameZh} (${z.nameEn})`));
+  });
 
   // Keep a stable ref of elements for the drag-box mouseup closure
   const elementsRef = useRef(floorplan.elements);

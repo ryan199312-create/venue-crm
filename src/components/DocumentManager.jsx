@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Plus } from 'lucide-react';
- import DocumentRenderer from '../admin/DocumentRenderer';
+ import DocumentRouter from "../features/documents/components/DocumentRouter";
 import { SignaturePad } from './ui';
-import { usePdfGenerator } from '../hooks/usePdfGenerator';
+import { usePdfGenerator } from "../features/documents/hooks/usePdfGenerator";
+import { useAuth } from '../context/AuthContext';
 
 export default function DocumentManager({ eventData, appSettings, onSign, onPrint, isClientPortal = false }) {
+  const { hasPermission } = useAuth();
   const [isDownloading, setIsDownloading] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [selectedMenuId, setSelectedMenuId] = useState(null);
@@ -69,7 +71,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       // Ensure signatures object exists and is a new reference to avoid mutating props
       data.signatures = { ...(data.signatures || {}) };
 
-      // Copy specific menu signature to the generic previewDoc key so DocumentRenderer finds it
+      // Copy specific menu signature to the generic previewDoc key so DocumentRouter finds it
       const existingSig = data.signatures[sigKey];
       if (existingSig && sigKey !== previewDoc) {
         data.signatures[previewDoc] = { 
@@ -102,9 +104,9 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   };
 
   const docs = [
-    { id: 'EO', label: '內部行政單', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true },
-    { id: 'BRIEFING', label: '樓面工作單', sub: 'Briefing', clientSignable: false, adminSignable: false, internalOnly: true },
-    { id: 'INTERNAL_NOTES', label: '內部備註', sub: 'Internal Notes', clientSignable: false, adminSignable: false, internalOnly: true, icon: PenTool }
+    { id: 'EO', label: '內部行政單', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
+    { id: 'BRIEFING', label: '樓面工作單', sub: 'Briefing', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
+    { id: 'INTERNAL_NOTES', label: '內部備註', sub: 'Internal Notes', clientSignable: false, adminSignable: false, internalOnly: true, icon: PenTool, permission: 'doc_eo' }
   ];
 
   const externalDocsList = [
@@ -115,20 +117,21 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       sub: `Menu Confirmation - ${m.title || 'Unnamed'}`,
       clientSignable: true,
       adminSignable: false,
-      icon: Utensils
+      icon: Utensils,
+      permission: 'doc_menu'
     })),
-    { id: 'QUOTATION', label: '報價單', sub: 'Quotation', clientSignable: true, adminSignable: false },
-    { id: 'CONTRACT', label: '英文合約', sub: 'Contract (EN)', clientSignable: true, adminSignable: true },
-    { id: 'CONTRACT_CN', label: '中文合約', sub: 'Contract (CN)', clientSignable: true, adminSignable: true },
-    { id: 'INVOICE', label: '發票', sub: 'Invoice', clientSignable: false, adminSignable: false },
-    { id: 'RECEIPT', label: '收據', sub: 'Receipt', clientSignable: false, adminSignable: false },
-    { id: 'ADDENDUM', label: '附加條款', sub: 'Addendum', clientSignable: true, adminSignable: true, icon: Plus },
-    { id: 'FLOORPLAN', label: '平面圖', sub: 'Floorplan', clientSignable: false, adminSignable: false, icon: Layout }
+    { id: 'QUOTATION', label: '報價單', sub: 'Quotation', clientSignable: true, adminSignable: false, permission: 'doc_quotation' },
+    { id: 'CONTRACT', label: '英文合約', sub: 'Contract (EN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
+    { id: 'CONTRACT_CN', label: '中文合約', sub: 'Contract (CN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
+    { id: 'INVOICE', label: '發票', sub: 'Invoice', clientSignable: false, adminSignable: false, permission: 'doc_invoice' },
+    { id: 'RECEIPT', label: '收據', sub: 'Receipt', clientSignable: false, adminSignable: false, permission: 'doc_receipt' },
+    { id: 'ADDENDUM', label: '附加條款', sub: 'Addendum', clientSignable: true, adminSignable: true, icon: Plus, permission: 'doc_contract' },
+    { id: 'FLOORPLAN', label: '平面圖', sub: 'Floorplan', clientSignable: false, adminSignable: false, icon: Layout, permission: 'doc_floorplan' }
   ];
 
   const allDocs = [...docs, ...externalDocsList];
-  const internalDocs = docs.filter(d => (d.condition === undefined || d.condition));
-  const externalDocs = externalDocsList.filter(d => (d.condition === undefined || d.condition));
+  const internalDocs = docs.filter(d => (d.condition === undefined || d.condition) && (isClientPortal || hasPermission(d.permission)));
+  const externalDocs = externalDocsList.filter(d => (d.condition === undefined || d.condition) && (isClientPortal || hasPermission(d.permission)));
 
   const renderDocRow = (doc) => {
     const sigKey = doc.menuId ? `MENU_CONFIRM_${doc.menuId}` : doc.id;
@@ -241,15 +244,14 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 )}
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center relative">
-              <div className="bg-white shadow-xl max-w-[210mm] w-full shrink-0 h-max overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">
                 {(() => {
                   const activeDocDef = allDocs.find(d => d.id === previewDoc && (selectedMenuId ? d.menuId === selectedMenuId : true));
                   const sigKey = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
                   const hasStagedOrRealClientSig = !!(dataToRender.signatures?.[sigKey]?.client || dataToRender.clientSignature);
                   const hasStagedOrRealAdminSig = !!dataToRender.signatures?.[sigKey]?.admin;
                   return (
-                    <DocumentRenderer 
+                    <DocumentRouter 
                       data={dataToRender} 
                       printMode={previewDoc} 
                       appSettings={appSettings} 
@@ -258,7 +260,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                     />
                   );
                 })()}
-              </div>
             </div>
           </div>
         </div>,

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Mail, MessageCircle, Sparkles, Copy, Check, Loader2, Send, Settings2 } from 'lucide-react';
 import { useAI } from '../hooks/useAI'; 
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase'; 
+import { functions } from '../core/firebase'; 
 
 export default function AiAssistant({ formData, setFormData, onClose }) {
   

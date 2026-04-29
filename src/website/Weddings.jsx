@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Maximize, Star, Download, Heart, ChevronLeft, ChevronRight, Plus, Minus, LayoutTemplate, Quote } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
-import { formatMoney } from '../utils/formatters';
+import { formatMoney } from '../services/formatters';
 
 // --- FIREBASE IMPORTS ---
-import { db } from '../firebase'; 
+import { db } from '../core/firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
-import { APP_ID } from '../env';
+import { APP_ID } from '../core/env';
 
 // --- STATIC CONTENT ---
 const content = {

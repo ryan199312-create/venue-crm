@@ -4,7 +4,7 @@ import { Utensils, Clock, Users, Download, ChevronLeft, ChevronRight, Star, MapP
 import { useOutletContext } from 'react-router-dom';
 
 // --- FIREBASE IMPORTS ---
-import { db } from '../firebase'; 
+import { db } from '../core/firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
 
 // --- STATIC CONTENT ---

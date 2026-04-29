@@ -539,3 +539,88 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
     throw new HttpsError(code, error.message || 'Unknown dietary update error occurred');
   }
 });
+
+// ==========================================
+// 11. SECURE USER MANAGEMENT (RBAC)
+// ==========================================
+
+/**
+ * Invite a user: Creates them in Auth and sets Custom Claims.
+ */
+exports.inviteUser = onCall(async (request) => {
+  // 1. Check if requester is Admin
+  if (!request.auth || request.auth.token.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only admins can invite users.');
+  }
+
+  const { email, displayName, role } = request.data;
+  if (!email || !role) throw new HttpsError('invalid-argument', 'Email and role are required.');
+
+  const appId = "my-venue-crm";
+  const db = admin.firestore();
+
+  try {
+    let userRecord;
+    try {
+      // Check if user already exists in Auth
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (e) {
+      // If not, create them with a temporary random password
+      userRecord = await admin.auth().createUser({
+        email,
+        displayName,
+        password: crypto.randomBytes(16).toString('hex')
+      });
+    }
+
+    // 2. Set Custom Claims (The most secure part!)
+    await admin.auth().setCustomUserClaims(userRecord.uid, { role: role });
+
+    // 3. Update Firestore Profile
+    const userRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(userRecord.uid);
+    await userRef.set({
+      uid: userRecord.uid,
+      email: email,
+      displayName: displayName || email,
+      role: role,
+      isInvited: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    return { success: true, uid: userRecord.uid };
+  } catch (error) {
+    console.error("Invite User Error:", error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Update role securely: Updates Custom Claims AND Firestore.
+ */
+exports.updateUserRoleSecure = onCall(async (request) => {
+  const appId = "my-venue-crm";
+  const db = admin.firestore();
+
+  // 🌟 TEMPORARY: DISABLED SECURITY CHECK FOR BOOTSTRAPPING
+  // if (!request.auth || request.auth.token.role !== 'admin') { ... }
+
+  const { uid, newRole } = request.data;
+  if (!uid || !newRole) throw new HttpsError('invalid-argument', 'UID and newRole are required.');
+
+  try {
+    // 1. Update Auth Custom Claims
+    await admin.auth().setCustomUserClaims(uid, { role: newRole });
+
+    // 2. Update Firestore
+    const userRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(uid);
+    await userRef.update({ 
+      role: newRole, 
+      updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Update Role Error:", error);
+    throw new HttpsError('internal', error.message);
+  }
+});

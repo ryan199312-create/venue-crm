@@ -1,7 +1,17 @@
 import React from 'react';
 import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminSidebar({ activeTab, setActiveTab, userProfile, user, handleSignOut }) {
+  const { hasPermission } = useAuth();
+
+  const menuItems = [
+    { id: 'dashboard', label: '儀表板 (Dashboard)', icon: LayoutDashboard, permission: 'dashboard' },
+    { id: 'events', label: '訂單管理 (EOs)', icon: FileText, permission: 'events' },
+    { id: 'docs', label: '使用指南 (Docs)', icon: BookOpen, permission: 'docs' },
+    { id: 'settings', label: '設定 (Settings)', icon: Settings, permission: 'settings' },
+  ].filter(item => hasPermission(item.permission));
+
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all">
       <div className="p-6 border-b border-slate-800 flex items-center space-x-3 text-white">
@@ -12,12 +22,7 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
       </div>
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {[
-          { id: 'dashboard', label: '儀表板 (Dashboard)', icon: LayoutDashboard },
-          { id: 'events', label: '訂單管理 (EOs)', icon: FileText },
-          { id: 'docs', label: '使用指南 (Docs)', icon: BookOpen },
-          { id: 'settings', label: '設定 (Settings)', icon: Settings },
-        ].map(item => (
+        {menuItems.map(item => (
           <button 
             key={item.id} 
             onClick={() => setActiveTab(item.id)} 

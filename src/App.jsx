@@ -13,7 +13,7 @@ import Corporate from './website/Corporate';
 import Dining from './website/Dining';
 
 // Lazy Loaded Routes (These will only download when the user visits them!)
-const AdminApp = lazy(() => import('./admin/AdminApp'));
+const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const ClientPortal = lazy(() => import('./admin/ClientPortal'));
 
 // Error Boundary to catch Chunk Load errors or React UI crashes
@@ -66,7 +66,7 @@ export default function App() {
             </Route>
     
             {/* ADMIN ROUTE */}
-            <Route path="/admin" element={<AdminApp />} />
+            <Route path="/admin" element={<AdminLayout />} />
     
             {/* CLIENT PORTAL ROUTES */}
             <Route path="/portal" element={<ClientPortal />} />

@@ -1,98 +1,200 @@
-import React, { useState } from 'react';
-import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard } from 'lucide-react';
 import {
-  LOCATION_CHECKBOXES, DAYS_OF_WEEK, DEPARTMENTS,
-  formatMoney, isZoneSelected, getPreferredZoneLabel
+  formatMoney, isZoneSelected, getPreferredZoneLabel, DAYS_OF_WEEK, DEPARTMENTS
 } from '../../services/billingService';
-import { Card, FormInput, MoneyInput, FormTextArea } from '../../components/ui';
+import { Card, FormInput, MoneyInput, FormTextArea, FormSelect, ConfirmationModal, Modal } from '../../components/ui';
 import RolePermissionsTab from './RolePermissionsTab';
 import UsersTab from './UsersTab';
+import FloorplanEditor from '../../components/FloorplanEditor';
+import { ContractRenderer } from '../documents/components/renderers/ContractRenderer';
+import { useAuth } from '../../context/AuthContext';
+import { getScopedSettings } from '../../services/helpers';
+import { useConfirm } from '../../hooks/useConfirm';
 
-const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, updateUserRole, updateUserProfile, deleteUser }) => {
-  const [localSettings, setLocalSettings] = useState({ 
-    minSpendRules: [], 
-    defaultMenus: [], 
-    paymentRules: [], 
-    rolePermissions: settings.rolePermissions || {},
-    defaultFloorplan: settings.defaultFloorplan || { bgImage: '', itemScale: 40 }, 
-    zonesConfig: settings.zonesConfig || [
-      { id: 'red', nameZh: '紅區', nameEn: 'Red Zone', color: 'rgba(248, 113, 113, 0.3)' },
-      { id: 'yellow', nameZh: '黃區', nameEn: 'Yellow Zone', color: 'rgba(250, 204, 21, 0.3)' },
-      { id: 'green', nameZh: '綠區', nameEn: 'Green Zone', color: 'rgba(52, 211, 153, 0.3)' },
-      { id: 'blue', nameZh: '藍區', nameEn: 'Blue Zone', color: 'rgba(96, 165, 250, 0.3)' },
-    ],
-    ...settings 
-  });
-  const [activeSubTab, setActiveSubTab] = useState('companyInfo');
+const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, updateUserRole, updateUserProfile, deleteUser, events }) => {
+  const { selectedVenueId, outlets } = useAuth();
+  const { confirmConfig, confirm, closeConfirm } = useConfirm();
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calibrationData, setCalibrationData] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewLang, setPreviewLang] = useState('en');
+  
+  // Mock data for preview
+  const previewMockData = {
+    orderId: 'PREVIEW-001',
+    date: new Date().toISOString().split('T')[0],
+    startTime: '18:00',
+    endTime: '22:00',
+    clientName: previewLang === 'zh' ? '張小明 (Sample Client)' : 'Mr. John Doe (Sample Client)',
+    venueId: selectedVenueId,
+    venueLocation: previewLang === 'zh' ? '全場' : 'Whole Venue',
+    eventType: '婚宴 (Wedding Banquet)',
+    items: [],
+    signatures: {}
+  };
+
+  // Scoped Data Logic
+  const getInitialSettings = () => {
+    return getScopedSettings(settings, selectedVenueId);
+  };
+
+  const [localSettings, setLocalSettings] = useState(getInitialSettings());
+
+  // Sync state when venue context or master settings change
+  useEffect(() => {
+    setLocalSettings(getInitialSettings());
+    // Auto-switch tab if incompatible with new view
+    if (selectedVenueId === 'all' && ['minSpend', 'menus', 'payment', 'floorplan', 'venueProfile'].includes(activeSubTab)) {
+        setActiveSubTab('outlets');
+    } else if (selectedVenueId !== 'all' && ['outlets', 'companyInfo', 'users', 'roles'].includes(activeSubTab)) {
+        setActiveSubTab('venueProfile');
+    }
+  }, [selectedVenueId, settings]);
+
+  const [activeSubTab, setActiveSubTab] = useState(selectedVenueId === 'all' ? 'outlets' : 'venueProfile');
+
+  // Handle saving based on scope
+  const handleSaveScoped = (updatedData) => {
+    let finalSettings;
+    if (selectedVenueId === 'all') {
+      finalSettings = { ...settings, ...updatedData };
+    } else {
+      const venues = { ...(settings.venues || {}) };
+      venues[selectedVenueId] = {
+        ...(venues[selectedVenueId] || {}),
+        ...updatedData
+      };
+      finalSettings = { ...settings, venues };
+    }
+    onSave(finalSettings);
+  };
+
+  const handleStartCalibration = () => {
+    if (!localSettings.defaultFloorplan?.bgImage) {
+      addToast("請先上傳背景圖再進行校準 (Please upload a map first).", "error");
+      return;
+    }
+    setCalibrationData({
+      floorplan: {
+        bgImage: localSettings.defaultFloorplan?.bgImage || '',
+        itemScale: localSettings.defaultFloorplan?.itemScale || 40,
+        zones: localSettings.zonesConfig || [],
+        elements: []
+      }
+    });
+    setIsCalibrating(true);
+  };
+
+  const handleFinishCalibration = () => {
+    if (!calibrationData) return;
+    const newScale = calibrationData.floorplan?.itemScale || 40;
+    const newZones = calibrationData.floorplan?.zones || localSettings.zonesConfig;
+    
+    handleSaveScoped({
+      defaultFloorplan: { ...localSettings.defaultFloorplan, itemScale: newScale, zones: newZones },
+      zonesConfig: newZones // Also update the master zones list for this venue
+    });
+    setIsCalibrating(false);
+    setCalibrationData(null);
+    addToast("校準數據已儲存 (Calibration data saved successfully)!", "success");
+  };
+
+  // Editing States
   const [isUploadingBg, setIsUploadingBg] = useState(false);
-  const [isFullscreenMap, setIsFullscreenMap] = useState(false);
-  const [isDrawingZone, setIsDrawingZone] = useState(false);
-  const [currentZonePoints, setCurrentZonePoints] = useState([]);
-  const [drawingColor, setDrawingColor] = useState(localSettings.zonesConfig?.[0]?.color || 'rgba(250, 204, 21, 0.3)');
-
+  const [editingOutlet, setEditingOutlet] = useState({ id: null, name: '', color: 'blue' });
   const [editingZone, setEditingZone] = useState({ id: null, nameZh: '', nameEn: '', color: 'rgba(96, 165, 250, 0.3)' });
+  const [editingRule, setEditingRule] = useState({ id: null, locations: [], prices: { Mon: { lunch: '', dinner: '' }, Tue: { lunch: '', dinner: '' }, Wed: { lunch: '', dinner: '' }, Thu: { lunch: '', dinner: '' }, Fri: { lunch: '', dinner: '' }, Sat: { lunch: '', dinner: '' }, Sun: { lunch: '', dinner: '' } } });
+  const [editingMenu, setEditingMenu] = useState({ id: null, title: '', content: '', type: 'food', priceWeekday: '', priceWeekend: '', allocation: {} });
 
-  // ... (rest of state)
+  // --- Handlers ---
+  const handleSaveOutlet = () => {
+    if (!editingOutlet.name) return addToast("請輸入分店名稱", "error");
+    const newOutlets = [...(settings.outlets || [])];
+    if (editingOutlet.id) {
+      const idx = newOutlets.findIndex(o => o.id === editingOutlet.id);
+      if (idx !== -1) newOutlets[idx] = editingOutlet;
+    } else {
+      newOutlets.push({ ...editingOutlet, id: `outlet_${Date.now()}` });
+    }
+    onSave({ ...settings, outlets: newOutlets });
+    setEditingOutlet({ id: null, name: '', color: 'blue' });
+    addToast("分店清單已更新", "success");
+  };
 
-  // Derived constants
-  const ZONES = localSettings.zonesConfig || [];
-  const ZONE_LABELS = ZONES.map(z => `${z.nameZh}${z.nameEn ? ` (${z.nameEn})` : ''}`);
-  const LOCATION_LABELS = [...ZONE_LABELS, '全場'];
+  const handleDeleteOutlet = (id) => {
+    if (!window.confirm("確定要刪除此分店嗎？這不會刪除該店的訂單數據。")) return;
+    onSave({ ...settings, outlets: (settings.outlets || []).filter(o => o.id !== id) });
+    addToast("分店已移除", "info");
+  };
 
-  // Handlers
   const handleSaveZone = () => {
     if (!editingZone.nameZh) return addToast("請輸入區域中文名稱", "error");
     const newZones = [...(localSettings.zonesConfig || [])];
+    const zoneToSave = { 
+      ...editingZone, 
+      id: editingZone.id || Date.now().toString(),
+      venueId: selectedVenueId // Link to current venue
+    };
+
     if (editingZone.id) {
       const idx = newZones.findIndex(z => z.id === editingZone.id);
-      if (idx !== -1) newZones[idx] = editingZone;
+      if (idx !== -1) newZones[idx] = zoneToSave;
     } else {
-      newZones.push({ ...editingZone, id: Date.now().toString() });
+      newZones.push(zoneToSave);
     }
-    const updatedSettings = { ...localSettings, zonesConfig: newZones };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings);
+    handleSaveScoped({ zonesConfig: newZones });
     setEditingZone({ id: null, nameZh: '', nameEn: '', color: 'rgba(96, 165, 250, 0.3)' });
     addToast("區域設定已儲存", "success");
   };
 
   const handleDeleteZone = (id) => {
-    const updatedSettings = { ...localSettings, zonesConfig: localSettings.zonesConfig.filter(z => z.id !== id) };
-    setLocalSettings(updatedSettings);
-    onSave(updatedSettings);
+    handleSaveScoped({ zonesConfig: localSettings.zonesConfig.filter(z => z.id !== id) });
   };
 
   const handleSaveRule = () => {
     if (editingRule.locations.length === 0) return addToast("請至少選擇一個區域", "error");
     const newRules = [...(localSettings.minSpendRules || [])];
-    if (editingRule.id) { const idx = newRules.findIndex(r => r.id === editingRule.id); if (idx !== -1) newRules[idx] = editingRule; } else { newRules.push({ ...editingRule, id: Date.now() }); }
-    const updatedSettings = { ...localSettings, minSpendRules: newRules }; setLocalSettings(updatedSettings); onSave(updatedSettings);
-    // Reset
+    if (editingRule.id) {
+      const idx = newRules.findIndex(r => r.id === editingRule.id);
+      if (idx !== -1) newRules[idx] = editingRule;
+    } else {
+      newRules.push({ ...editingRule, id: Date.now() });
+    }
+    handleSaveScoped({ minSpendRules: newRules });
     setEditingRule({ id: null, locations: [], prices: { Mon: { lunch: '', dinner: '' }, Tue: { lunch: '', dinner: '' }, Wed: { lunch: '', dinner: '' }, Thu: { lunch: '', dinner: '' }, Fri: { lunch: '', dinner: '' }, Sat: { lunch: '', dinner: '' }, Sun: { lunch: '', dinner: '' } } });
     addToast("規則已儲存", "success");
   };
-  const handleDeleteRule = (id) => { const updatedSettings = { ...localSettings, minSpendRules: localSettings.minSpendRules.filter(r => r.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
+
+  const handleDeleteRule = (id) => {
+    handleSaveScoped({ minSpendRules: localSettings.minSpendRules.filter(r => r.id !== id) });
+  };
 
   const handleSaveMenu = () => {
     if (!editingMenu.title) return addToast("請輸入標題", "error");
     const newMenus = [...(localSettings.defaultMenus || [])];
-    if (editingMenu.id) { const idx = newMenus.findIndex(m => m.id === editingMenu.id); if (idx !== -1) newMenus[idx] = editingMenu; } else { newMenus.push({ ...editingMenu, id: Date.now() }); }
-    const updatedSettings = { ...localSettings, defaultMenus: newMenus }; setLocalSettings(updatedSettings); onSave(updatedSettings);
+    if (editingMenu.id) {
+      const idx = newMenus.findIndex(m => m.id === editingMenu.id);
+      if (idx !== -1) newMenus[idx] = editingMenu;
+    } else {
+      newMenus.push({ ...editingMenu, id: Date.now() });
+    }
+    handleSaveScoped({ defaultMenus: newMenus });
     setEditingMenu({ id: null, title: '', content: '', type: 'food', priceWeekday: '', priceWeekend: '', allocation: {} });
     addToast("菜單已儲存", "success");
   };
-  const handleDeleteMenu = (id) => { const updatedSettings = { ...localSettings, defaultMenus: localSettings.defaultMenus.filter(m => m.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
-  const handleSavePaymentRule = () => { /* (Keep existing logic) */ if (!editingPaymentRule.name) return addToast("請輸入規則名稱", "error"); const totalPercent = editingPaymentRule.deposit1 + editingPaymentRule.deposit2 + editingPaymentRule.deposit3; if (totalPercent > 100) return addToast("錯誤：付款總比例不能超過 100%", "error"); const newRules = [...(localSettings.paymentRules || [])]; if (editingPaymentRule.id) { const idx = newRules.findIndex(r => r.id === editingPaymentRule.id); if (idx !== -1) newRules[idx] = editingPaymentRule; } else { newRules.push({ ...editingPaymentRule, id: Date.now() }); } newRules.sort((a, b) => b.minMonthsInAdvance - a.minMonthsInAdvance); const updatedSettings = { ...localSettings, paymentRules: newRules }; setLocalSettings(updatedSettings); onSave(updatedSettings); setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 }); addToast("付款規則已儲存", "success"); };
-  const handleDeletePaymentRule = (id) => { const updatedSettings = { ...localSettings, paymentRules: localSettings.paymentRules.filter(r => r.id !== id) }; setLocalSettings(updatedSettings); onSave(updatedSettings); };
+
+  const handleDeleteMenu = (id) => {
+    handleSaveScoped({ defaultMenus: localSettings.defaultMenus.filter(m => m.id !== id) });
+  };
 
   const handleBgUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!onUploadProof) return addToast("Upload function missing", "error");
     setIsUploadingBg(true);
     try {
       const url = await onUploadProof(file);
-      setLocalSettings(prev => ({ ...prev, defaultFloorplan: { ...(prev.defaultFloorplan || {}), bgImage: url } }));
+      handleSaveScoped({ defaultFloorplan: { ...(localSettings.defaultFloorplan || {}), bgImage: url } });
       addToast("預設平面圖上傳成功", "success");
     } catch (err) {
       addToast("上傳失敗", "error");
@@ -101,694 +203,693 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
     }
   };
 
-  const handleSaveFloorplan = () => {
-    onSave(localSettings);
-    addToast("平面圖預設已儲存", "success");
+  const handleSaveVenueProfile = () => {
+    const venueProfiles = { ...(settings.venueProfiles || {}) };
+    venueProfiles[selectedVenueId] = localSettings.venueProfile;
+    onSave({ ...settings, venueProfiles });
+    addToast("分店資料已更新", "success");
   };
 
-  // --- ZONE DRAWING LOGIC ---
-  const handleMapClick = (e) => {
-    if (isDrawingZone) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const scale = localSettings.defaultFloorplan?.itemScale || 40;
-      setCurrentZonePoints(prev => [...prev, { x_m: x / scale, y_m: y / scale }]);
-    } else if (!isFullscreenMap) {
-      setIsFullscreenMap(true);
-    }
+  // Helper for static Tailwind classes to ensure JIT compiler includes them
+  const getOutletColorClasses = (color) => {
+    const map = {
+      blue: { bg: 'bg-blue-500', bgLight: 'bg-blue-100', text: 'text-blue-600' },
+      emerald: { bg: 'bg-emerald-500', bgLight: 'bg-emerald-100', text: 'text-emerald-600' },
+      purple: { bg: 'bg-purple-500', bgLight: 'bg-purple-100', text: 'text-purple-600' },
+      indigo: { bg: 'bg-indigo-500', bgLight: 'bg-indigo-100', text: 'text-indigo-600' },
+      rose: { bg: 'bg-rose-500', bgLight: 'bg-rose-100', text: 'text-rose-600' },
+      amber: { bg: 'bg-amber-500', bgLight: 'bg-amber-100', text: 'text-amber-600' },
+      slate: { bg: 'bg-slate-500', bgLight: 'bg-slate-100', text: 'text-slate-600' },
+    };
+    return map[color] || map.blue;
   };
 
-  const finishZone = () => {
-    if (currentZonePoints.length < 3) return addToast("區域至少需要 3 個點 (Minimum 3 points required)", "error");
-    
-    const selectedZone = ZONES.find(z => z.color === drawingColor);
-    let defaultName = selectedZone ? `${selectedZone.nameZh}${selectedZone.nameEn ? ` (${selectedZone.nameEn})` : ''}` : "New Zone";
-    
-    const name = window.prompt("請輸入區域名稱 (Enter Zone Name):", defaultName);
-    if (!name) return;
-    const newZone = { id: Date.now(), name, color: drawingColor, points: currentZonePoints };
-    setLocalSettings(p => ({ ...p, defaultFloorplan: { ...p.defaultFloorplan, zones: [...(p.defaultFloorplan.zones || []), newZone] } }));
-    setCurrentZonePoints([]);
-    setIsDrawingZone(false);
-  };
-
-  // Helper to safely get nested price
+  // Helper for rendering
   const getPriceVal = (rule, day, type) => {
     if (typeof rule.prices[day] === 'object') return rule.prices[day][type];
-    return type === 'dinner' ? rule.prices[day] : ''; // Fallback for old data
+    return type === 'dinner' ? rule.prices[day] : '';
   };
+
+  const ZONES = localSettings.zonesConfig || [];
+  const LOCATION_LABELS = [...ZONES.map(z => getPreferredZoneLabel(z)), '全場'];
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20">
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div><h2 className="text-2xl font-bold text-slate-800">系統設定 (Settings)</h2><p className="text-slate-500">管理場地規則、預設餐單與付款條款</p></div></div>
-      <div className="flex space-x-1 border-b border-slate-200">
-        <button onClick={() => setActiveSubTab('companyInfo')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>公司資料 (Company Info)</button>
-        <button onClick={() => setActiveSubTab('minSpend')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>場地低消 (Min Spend)</button>
-        <button onClick={() => setActiveSubTab('menus')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>餐飲預設 (Presets)</button>
-        <button onClick={() => setActiveSubTab('payment')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'payment' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>付款規則 (Payment Rules)</button>
-        <button onClick={() => setActiveSubTab('floorplan')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'floorplan' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>場地平面圖 (Floorplan)</button>
-        <button onClick={() => setActiveSubTab('users')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'users' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>用戶管理 (Users)</button>
-        <button onClick={() => setActiveSubTab('roles')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeSubTab === 'roles' ? 'bg-white border-x border-t border-slate-200 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>角色權限 (Permissions)</button>
+      {/* Header */}
+      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            {selectedVenueId === 'all' ? <Globe className="text-blue-600" /> : <Building2 className="text-emerald-600" />}
+            {selectedVenueId === 'all' ? '集團全域設定 (Global)' : `分店專屬設定: ${outlets.find(o => o.id === selectedVenueId)?.name || '---'}`}
+          </h2>
+          <p className="text-slate-500">
+            {selectedVenueId === 'all' ? '管理分店列表、品牌、角色與全域權限' : '設定該分店的專屬低消、菜單與場地圖'}
+          </p>
+        </div>
       </div>
 
-      {/* Company Info Tab */}
-      {activeSubTab === 'companyInfo' && (
-        <div className="space-y-6 animate-in fade-in">
-          {/* Company Logo Upload */}
-          <Card className="p-5 border-l-4 border-l-blue-500 max-w-2xl">
-            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-              <ImageIcon size={18} className="mr-2" /> 公司標誌設定 (Company Logo)
-            </h3>
-            <div className="flex gap-6 items-center">
-              <div className="w-32 h-24 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center bg-slate-50 relative overflow-hidden shrink-0 p-2">
-                {localSettings.companyLogoUrl ? (
-                  <>
-                    <img src={localSettings.companyLogoUrl} alt="Logo" className="w-full h-full object-contain" />
-                    <button onClick={() => { setLocalSettings(p => ({...p, companyLogoUrl: ''})); onSave({...localSettings, companyLogoUrl: ''}); }} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><Trash2 size={12}/></button>
-                  </>
-                ) : (
-                  <span className="text-xs text-slate-400 font-bold text-center">No Logo<br/>Uploaded</span>
-                )}
-              </div>
-              <div className="flex-1 space-y-3">
-                <p className="text-sm text-slate-500">上傳 PNG 或 JPG 標誌，將會自動顯示於對外文件 (如報價單、合約等) 的左上角。</p>
-                <label className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm">
-                  {isUploadingBg ? <span className="animate-pulse">上傳中...</span> : '上傳標誌 (Upload Logo)'}
-                  <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={async (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    setIsUploadingBg(true);
-                    try { const url = await onUploadProof(file); const newSettings = { ...localSettings, companyLogoUrl: url }; setLocalSettings(newSettings); onSave(newSettings); addToast("公司標誌上傳成功", "success"); } catch(err) { addToast("上傳失敗", "error"); }
-                    setIsUploadingBg(false);
-                  }} disabled={isUploadingBg} />
-                </label>
-              </div>
-            </div>
-          </Card>
+      {/* Tabs Switcher */}
+      <div className="flex space-x-1 border-b border-slate-200 overflow-x-auto scrollbar-hide">
+        {selectedVenueId === 'all' ? (
+          <>
+            <button onClick={() => setActiveSubTab('outlets')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'outlets' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店管理</button>
+            <button onClick={() => setActiveSubTab('companyInfo')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>品牌與標誌</button>
+            <button onClick={() => setActiveSubTab('users')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>用戶管理</button>
+            <button onClick={() => setActiveSubTab('roles')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'roles' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>角色權限</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setActiveSubTab('venueProfile')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'venueProfile' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店資料</button>
+            <button onClick={() => setActiveSubTab('minSpend')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>低消規則</button>
+            <button onClick={() => setActiveSubTab('menus')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>菜單預設</button>
+            <button onClick={() => setActiveSubTab('floorplan')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'floorplan' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>平面圖預設</button>
+          </>
+        )}
+      </div>
 
-          <Card className="p-5 border-l-4 border-l-pink-500 max-w-2xl">
-            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-              <ImageIcon size={18} className="mr-2" /> 公司蓋章設定 (Company Chop)
-            </h3>
-            <div className="flex gap-6 items-center">
-              <div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center bg-slate-50 relative overflow-hidden shrink-0">
-                {localSettings.companyChopUrl ? (
-                  <>
-                    <img src={localSettings.companyChopUrl} alt="Chop" className="w-full h-full object-contain mix-blend-multiply" />
-                    <button onClick={() => { setLocalSettings(p => ({...p, companyChopUrl: ''})); onSave({...localSettings, companyChopUrl: ''}); }} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><Trash2 size={12}/></button>
-                  </>
-                ) : (
-                  <span className="text-xs text-slate-400 font-bold text-center">No Chop<br/>Uploaded</span>
-                )}
-              </div>
-              <div className="flex-1 space-y-3">
-                <p className="text-sm text-slate-500">上傳透明背景的 PNG 圖章，將會自動疊加在合約的授權簽名位置上。</p>
-                <label className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm">
-                  {isUploadingBg ? <span className="animate-pulse">上傳中...</span> : '上傳圖章 (Upload PNG)'}
-                  <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={async (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    setIsUploadingBg(true);
-                    try { const url = await onUploadProof(file); const newSettings = { ...localSettings, companyChopUrl: url }; setLocalSettings(newSettings); onSave(newSettings); addToast("公司圖章上傳成功", "success"); } catch(err) { addToast("上傳失敗", "error"); }
-                    setIsUploadingBg(false);
-                  }} disabled={isUploadingBg} />
-                </label>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
+      {/* --- Tab Content --- */}
 
-      {/* Min Spend Tab - UPDATED with Dual Inputs */}
-      {activeSubTab === 'minSpend' && (
-        <div className="space-y-6 animate-in fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 space-y-4">
-              <Card className="p-5 border-l-4 border-l-blue-500">
-                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">{editingRule.id ? <Edit2 size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}{editingRule.id ? "編輯規則" : "新增規則"}</h3>
-                <div className="mb-4">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">1. 選擇區域組合</label>
+      {activeSubTab === 'outlets' && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in">
+          <div className="md:col-span-5">
+            <Card className="p-6 border-l-4 border-l-blue-600">
+              <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Building2 size={20} className="text-blue-600" /> {editingOutlet.id ? '編輯分店' : '新增分店'}</h3>
+              <div className="space-y-4">
+                <FormInput label="分店名稱" placeholder="例如: 璟瓏軒 (故宮)" value={editingOutlet.name} onChange={e => setEditingOutlet(p => ({ ...p, name: e.target.value }))} />
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">主題顏色</label>
                   <div className="flex flex-wrap gap-2">
-                    {LOCATION_LABELS.map(loc => {
-                      const zone = ZONES.find(z => getPreferredZoneLabel(z) === loc);
-                      const isSelected = zone 
-                        ? isZoneSelected(zone, editingRule.locations) 
-                        : editingRule.locations.includes(loc);
-
-                      const toggleLoc = () => {
-                        setEditingRule(p => {
-                          let newLocs = [...p.locations];
-                          if (isSelected) {
-                            if (zone) {
-                              newLocs = newLocs.filter(l => l !== getPreferredZoneLabel(zone) && l !== zone.nameZh);
-                            } else {
-                              newLocs = newLocs.filter(l => l !== loc);
-                            }
-                          } else {
-                            newLocs.push(loc);
-                          }
-                          return { ...p, locations: newLocs };
-                        });
-                      };
-
+                    {['blue', 'emerald', 'purple', 'indigo', 'rose', 'amber', 'slate'].map(color => {
+                      const colors = getOutletColorClasses(color);
                       return (
-                        <button 
-                          key={loc} 
-                          onClick={toggleLoc} 
-                          className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${isSelected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300'}`}
-                        >
-                          {loc}
+                        <button key={color} onClick={() => setEditingOutlet(p => ({ ...p, color }))} className={`w-10 h-10 rounded-xl border-2 transition-all flex items-center justify-center ${editingOutlet.color === color ? 'border-slate-900 scale-110 shadow-lg' : 'border-transparent hover:scale-105 opacity-60'}`}>
+                          <div className={`w-6 h-6 rounded-lg ${colors.bg} shadow-inner`}></div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
-                <div className="mb-6">
-                  <div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>2. 設定每日低消</span><span className="flex gap-8 mr-4"><span>午市 (Lunch)</span><span>晚市 (Dinner)</span></span></div>
-                  <div className="space-y-2">
-                    {DAYS_OF_WEEK.map(day => (
-                      <div key={day} className="flex items-center gap-2">
-                        <span className="w-8 text-xs font-bold text-slate-500 uppercase">{day}</span>
-                        {/* Lunch Input */}
-                        <div className="relative flex-1">
-                          <input type="number"
-                            value={editingRule.prices[day]?.lunch || ''}
-                            onChange={(e) => setEditingRule(p => ({ ...p, prices: { ...p.prices, [day]: { ...p.prices[day], lunch: e.target.value } } }))}
-                            className="w-full px-2 py-1 text-sm border border-slate-300 rounded outline-none focus:border-blue-500 text-center"
-                            placeholder="Lunch"
-                          />
-                        </div>
-                        {/* Dinner Input */}
-                        <div className="relative flex-1">
-                          <input type="number"
-                            value={editingRule.prices[day]?.dinner || ''}
-                            onChange={(e) => setEditingRule(p => ({ ...p, prices: { ...p.prices, [day]: { ...p.prices[day], dinner: e.target.value } } }))}
-                            className="w-full px-2 py-1 text-sm border border-slate-300 rounded outline-none focus:border-blue-500 text-center bg-blue-50/30"
-                            placeholder="Dinner"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="pt-4 flex gap-2">
+                  <button onClick={handleSaveOutlet} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-100 active:scale-95">儲存分店</button>
+                  {editingOutlet.id && <button onClick={() => setEditingOutlet({ id: null, name: '', color: 'blue' })} className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">取消</button>}
                 </div>
-                <div className="flex gap-2"><button onClick={handleSaveRule} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">更新/新增</button>{editingRule.id && <button onClick={() => setEditingRule({ id: null, locations: [], prices: { Mon: { lunch: '', dinner: '' }, Tue: { lunch: '', dinner: '' }, Wed: { lunch: '', dinner: '' }, Thu: { lunch: '', dinner: '' }, Fri: { lunch: '', dinner: '' }, Sat: { lunch: '', dinner: '' }, Sun: { lunch: '', dinner: '' } } })} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-bold">取消</button>}</div>
-              </Card>
-            </div>
-            <div className="md:col-span-7">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">規則列表</h3></div>
-                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                  {localSettings.minSpendRules.map((rule) => (
-                    <div key={rule.id} className="p-4 hover:bg-blue-50/50 transition-colors group">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex flex-wrap gap-1">{rule.locations.map(l => <span key={l} className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded font-bold">{l}</span>)}</div>
-                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setEditingRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14} /></button><button onClick={() => handleDeleteRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14} /></button></div>
+              </div>
+            </Card>
+          </div>
+          <div className="md:col-span-7">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700">現有分店 ({outlets.length})</div>
+              <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+                {outlets.map(o => {
+                  const colors = getOutletColorClasses(o.color);
+                  return (
+                    <div key={o.id} className="p-4 flex items-center justify-between hover:bg-slate-50 group">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl ${colors.bgLight} flex items-center justify-center ${colors.text}`}><Building2 size={20} /></div>
+                        <div><p className="font-bold text-slate-800">{o.name}</p><p className="text-[10px] text-slate-400 font-mono">ID: {o.id}</p></div>
                       </div>
-                      <div className="grid grid-cols-7 gap-1 text-[10px] text-slate-600 text-center">
-                        {DAYS_OF_WEEK.map(day => (
-                          <div key={day} className="flex flex-col border rounded bg-slate-50 p-1">
-                            <span className="font-bold mb-1">{day}</span>
-                            <span className="text-slate-400">L: {getPriceVal(rule, day, 'lunch') ? `$${parseInt(getPriceVal(rule, day, 'lunch') / 1000)}k` : '-'}</span>
-                            <span className="text-blue-600 font-bold">D: {getPriceVal(rule, day, 'dinner') ? `$${parseInt(getPriceVal(rule, day, 'dinner') / 1000)}k` : '-'}</span>
-                          </div>
-                        ))}
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button onClick={() => setEditingOutlet(o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
+                        <button onClick={() => handleDeleteOutlet(o.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Menu Tab - UPDATED with Dual Pricing */}
-      {activeSubTab === 'menus' && (
-        <div className="space-y-6 animate-in fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 space-y-4">
-              <Card className="p-5 border-l-4 border-l-emerald-500">
-                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">{editingMenu.id ? <Edit2 size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}{editingMenu.id ? "編輯預設" : "新增預設"}</h3>
-                <div className="space-y-4">
-                  <div className="flex space-x-2"><button onClick={() => setEditingMenu(p => ({ ...p, type: 'food' }))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'food' ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-white border-slate-300'}`}><Utensils size={14} className="inline mr-1" /> Menu</button><button onClick={() => setEditingMenu(p => ({ ...p, type: 'drink' }))} className={`flex-1 py-2 rounded border text-sm font-bold ${editingMenu.type === 'drink' ? 'bg-blue-100 border-blue-500 text-blue-800' : 'bg-white border-slate-300'}`}><Coffee size={14} className="inline mr-1" /> Drink</button></div>
-                  <FormInput label="標題" value={editingMenu.title} onChange={e => setEditingMenu(p => ({ ...p, title: e.target.value }))} />
+      {activeSubTab === 'companyInfo' && (
+        <Card className="p-6 border-l-4 border-l-blue-500 animate-in fade-in">
+          <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><ImageIcon size={20} /> 集團標誌 (Organization Logo)</h3>
+          <div className="flex gap-8 items-center">
+            <div className="w-40 h-32 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center bg-slate-50 relative overflow-hidden group">
+              {localSettings.companyLogoUrl ? (
+                <>
+                  <img src={localSettings.companyLogoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                  <button 
+                    onClick={() => confirm("刪除標誌", "確定要刪除集團標誌嗎？", () => handleSaveScoped({ companyLogoUrl: '' }))} 
+                    className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-lg transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center backdrop-blur-sm active:scale-95"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  </>
+                  ) : <span className="text-xs text-slate-400 font-bold">No Logo</span>}            </div>
+            <div className="flex-1">
+              <p className="text-sm text-slate-500 mb-4 leading-relaxed font-medium">此標誌將作為集團品牌，預設顯示於所有分店的文件中。</p>
+              <label className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl cursor-pointer hover:bg-blue-700 transition-all font-bold text-sm shadow-lg">
+                <Plus size={18} /> {isUploadingBg ? '上傳中...' : '更換標誌'}
+                <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
+                  const file = e.target.files[0]; if (!file) return;
+                  setIsUploadingBg(true);
+                  try { const url = await onUploadProof(file); handleSaveScoped({ companyLogoUrl: url }); addToast("上傳成功", "success"); }
+                  catch(err) { addToast("失敗", "error"); }
+                  setIsUploadingBg(false);
+                }} />
+              </label>
+            </div>
+          </div>
+        </Card>
+      )}
 
-                  {/* DUAL PRICES */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <MoneyInput label="平日價 (Mon-Thu)" name="priceWeekday" value={editingMenu.priceWeekday} onChange={e => setEditingMenu(p => ({ ...p, priceWeekday: e.target.value }))} />
-                    <MoneyInput label="週末價 (Fri-Sun)" name="priceWeekend" value={editingMenu.priceWeekend} onChange={e => setEditingMenu(p => ({ ...p, priceWeekend: e.target.value }))} />
+      {activeSubTab === 'venueProfile' && (
+        <Card className="p-6 border-l-4 border-l-emerald-500 animate-in fade-in">
+          <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Building2 className="text-emerald-500" /> 分店基本資料</h3>
+          <div className="space-y-5">
+            <FormInput label="分店名稱 (中文)" value={localSettings.venueProfile?.nameZh || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), nameZh: e.target.value } }))} />
+            <FormInput label="Venue Name (English)" value={localSettings.venueProfile?.nameEn || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), nameEn: e.target.value } }))} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <FormInput label="聯絡電話" icon={Phone} value={localSettings.venueProfile?.phone || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), phone: e.target.value } }))} />
+              <FormInput label="官方網站" icon={Globe} value={localSettings.venueProfile?.website || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), website: e.target.value } }))} />
+            </div>
+            <FormTextArea label="詳細地址" icon={MapPin} value={localSettings.venueProfile?.address || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), address: e.target.value } }))} />
+            
+            <div className="border-t border-slate-100 pt-6 mt-6">
+              <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">單據條款設定 (Document Terms)</h4>
+              <div className="space-y-6">
+                <FormTextArea 
+                  label="報價單付款條款 (Quotation Payment Terms) - 使用 **文字** 來粗體" 
+                  placeholder="例如: **50% deposit** required to confirm..."
+                  value={localSettings.venueProfile?.paymentTermsQuotation || ''} 
+                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentTermsQuotation: e.target.value } }))} 
+                />
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-6 mt-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <CreditCard size={18} className="text-blue-600" /> 付款方式設定 (Payment Methods Configuration)
+                    </h4>
                   </div>
-
-                  <div className="mt-4 border-t border-slate-100 pt-4">
-                    <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center"><PieChart size={14} className="mr-1.5" /> 部門拆帳 (金額)</h4>
-                    <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
-                      {DEPARTMENTS.map(dept => (
-                        <div key={dept.key}>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">{dept.label.split(' ')[0]}</label>
-                          <div className="relative">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                            <input type="number" value={editingMenu.allocation?.[dept.key] || ''} onChange={e => setEditingMenu(prev => ({ ...prev, allocation: { ...prev.allocation, [dept.key]: e.target.value } }))} className="w-full pl-5 pr-2 py-1 text-sm border border-slate-300 rounded outline-none" placeholder="0" />
-                          </div>
-                        </div>
-                      ))}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
+                      <input type="checkbox" id="showInQuotation" checked={localSettings.venueProfile?.paymentConfig?.showInQuotation} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInQuotation: e.target.checked } } }))} className="rounded text-blue-600" />
+                      <label htmlFor="showInQuotation" className="text-xs font-bold text-slate-700">顯示於報價單 (Quotation)</label>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
+                      <input type="checkbox" id="showInInvoice" checked={localSettings.venueProfile?.paymentConfig?.showInInvoice} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInInvoice: e.target.checked } } }))} className="rounded text-blue-600" />
+                      <label htmlFor="showInInvoice" className="text-xs font-bold text-slate-700">顯示於發票 (Invoice)</label>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
+                      <input type="checkbox" id="showInContract" checked={localSettings.venueProfile?.paymentConfig?.showInContract} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInContract: e.target.checked } } }))} className="rounded text-blue-600" />
+                      <label htmlFor="showInContract" className="text-xs font-bold text-slate-700">顯示於合約 (Contract)</label>
                     </div>
                   </div>
-                  {editingMenu.type === 'food' ? (<FormTextArea label="內容" value={editingMenu.content} onChange={e => setEditingMenu(p => ({ ...p, content: e.target.value }))} rows={6} placeholder="輸入詳細菜色..." />) : (<FormInput label="酒水內容" value={editingMenu.content} onChange={e => setEditingMenu(p => ({ ...p, content: e.target.value }))} />)}
-                  <div className="flex gap-2"><button onClick={handleSaveMenu} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold">儲存</button>{editingMenu.id && <button onClick={() => setEditingMenu({ id: null, title: '', content: '', type: 'food', priceWeekday: '', priceWeekend: '', allocation: {} })} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold">取消</button>}</div>
-                </div>
-              </Card>
-            </div>
-            <div className="md:col-span-7">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50"><h3 className="font-bold text-slate-700">預設列表</h3></div>
-                {/* PRESETS LIST (Updated with Allocation Status) */}
-                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                  {localSettings.defaultMenus.map(m => {
-                    // --- CALCULATION LOGIC ---
-                    const price = parseFloat(m.priceWeekday) || parseFloat(m.price) || 0;
-                    const allocSum = Object.values(m.allocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
-                    let allocBadge = null;
 
-                    if (m.type === 'food') {
-                      if (allocSum === 0) {
-                        allocBadge = <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold border border-red-200">未分拆</span>;
-                      } else if (Math.abs(price - allocSum) > 1) {
-                        allocBadge = <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200">⚠️ 待分拆 ${Math.round(price - allocSum)}</span>;
+                  <div className="space-y-4">
+                    {/* Bank Transfer */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input type="checkbox" checked={localSettings.venueProfile?.paymentConfig?.bankTransfer?.enabled} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), bankTransfer: { ...(p.venueProfile?.paymentConfig?.bankTransfer || {}), enabled: e.target.checked } } } }))} className="rounded" />
+                        <span className="font-bold text-sm text-slate-800">銀行轉帳 (Bank Transfer)</span>
+                      </div>
+                      {localSettings.venueProfile?.paymentConfig?.bankTransfer?.enabled && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <input type="text" placeholder="銀行名稱 (Bank Name)" className="text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.bankTransfer?.bank || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), bankTransfer: { ...(p.venueProfile?.paymentConfig?.bankTransfer || {}), bank: e.target.value } } } }))} />
+                          <input type="text" placeholder="賬戶名稱 (A/C Name)" className="text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.bankTransfer?.name || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), bankTransfer: { ...(p.venueProfile?.paymentConfig?.bankTransfer || {}), name: e.target.value } } } }))} />
+                          <input type="text" placeholder="賬戶號碼 (A/C No.)" className="text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.bankTransfer?.account || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), bankTransfer: { ...(p.venueProfile?.paymentConfig?.bankTransfer || {}), account: e.target.value } } } }))} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* FPS & Cheque */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white p-4 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <input type="checkbox" checked={localSettings.venueProfile?.paymentConfig?.fps?.enabled} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), fps: { ...(p.venueProfile?.paymentConfig?.fps || {}), enabled: e.target.checked } } } }))} className="rounded" />
+                          <span className="font-bold text-sm text-slate-800">FPS (轉數快)</span>
+                        </div>
+                        {localSettings.venueProfile?.paymentConfig?.fps?.enabled && (
+                          <input type="text" placeholder="FPS ID / Phone / Email" className="w-full text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.fps?.id || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), fps: { ...(p.venueProfile?.paymentConfig?.fps || {}), id: e.target.value } } } }))} />
+                        )}
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <input type="checkbox" checked={localSettings.venueProfile?.paymentConfig?.cheque?.enabled} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), cheque: { ...(p.venueProfile?.paymentConfig?.cheque || {}), enabled: e.target.checked } } } }))} className="rounded" />
+                          <span className="font-bold text-sm text-slate-800">支票 (Cheque)</span>
+                        </div>
+                        {localSettings.venueProfile?.paymentConfig?.cheque?.enabled && (
+                          <input type="text" placeholder="抬頭人 (Payable To)" className="w-full text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.cheque?.payableTo || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), cheque: { ...(p.venueProfile?.paymentConfig?.cheque || {}), payableTo: e.target.value } } } }))} />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* e-Wallet */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white p-4 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <input type="checkbox" checked={localSettings.venueProfile?.paymentConfig?.wechat?.enabled} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), wechat: { ...(p.venueProfile?.paymentConfig?.wechat || {}), enabled: e.target.checked } } } }))} className="rounded" />
+                          <span className="font-bold text-sm text-slate-800">WeChat Pay (微信支付)</span>
+                        </div>
+                        {localSettings.venueProfile?.paymentConfig?.wechat?.enabled && (
+                          <input type="text" placeholder="備註 (Remarks)" className="w-full text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.wechat?.remarks || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), wechat: { ...(p.venueProfile?.paymentConfig?.wechat || {}), remarks: e.target.value } } } }))} />
+                        )}
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <input type="checkbox" checked={localSettings.venueProfile?.paymentConfig?.alipay?.enabled} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), alipay: { ...(p.venueProfile?.paymentConfig?.alipay || {}), enabled: e.target.checked } } } }))} className="rounded" />
+                          <span className="font-bold text-sm text-slate-800">Alipay (支付寶)</span>
+                        </div>
+                        {localSettings.venueProfile?.paymentConfig?.alipay?.enabled && (
+                          <input type="text" placeholder="備註 (Remarks)" className="w-full text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.alipay?.remarks || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), alipay: { ...(p.venueProfile?.paymentConfig?.alipay || {}), remarks: e.target.value } } } }))} />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Credit Card */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input type="checkbox" checked={localSettings.venueProfile?.paymentConfig?.creditCard?.enabled} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), creditCard: { ...(p.venueProfile?.paymentConfig?.creditCard || {}), enabled: e.target.checked } } } }))} className="rounded" />
+                        <span className="font-bold text-sm text-slate-800">信用卡 (Credit Card)</span>
+                      </div>
+                      {localSettings.venueProfile?.paymentConfig?.creditCard?.enabled && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">附加費 (Surcharge %):</span>
+                          <input type="number" step="0.1" className="w-20 text-xs border rounded p-2" value={localSettings.venueProfile?.paymentConfig?.creditCard?.surcharge || 3} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), creditCard: { ...(p.venueProfile?.paymentConfig?.creditCard || {}), surcharge: parseFloat(e.target.value) } } } }))} />
+                          <span className="text-xs text-slate-500">%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <FormTextArea 
+                  label="合約完整條款 - 英文 (Contract Full Terms & Conditions - EN)" 
+                  placeholder="Enter full terms in English..."
+                  rows={8}
+                  value={localSettings.venueProfile?.contractTerms || ''} 
+                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), contractTerms: e.target.value } }))} 
+                />
+                <FormTextArea 
+                  label="合約完整條款 - 中文 (Contract Full Terms & Conditions - ZH)" 
+                  placeholder="請輸入中文完整條款及細則..."
+                  rows={8}
+                  value={localSettings.venueProfile?.contractTermsZh || ''} 
+                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), contractTermsZh: e.target.value } }))} 
+                />
+
+                <div className="border-t border-slate-100 pt-6 mt-2">
+                  <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">合約開首文字範本 (Contract Intro Templates)</h4>
+                  <p className="text-[10px] text-slate-400 mb-4">可用變數: {"{{venue}}"}, {"{{event}}"}, {"{{date}}"}, {"{{start}}"}, {"{{end}}"}</p>
+                  <div className="space-y-4">
+                    <FormTextArea 
+                      label="開首文字 - 英文 (Intro - EN)" 
+                      placeholder="Leave empty for default template..."
+                      rows={4}
+                      value={localSettings.venueProfile?.contractIntroEn || ''} 
+                      onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), contractIntroEn: e.target.value } }))} 
+                    />
+                    <FormTextArea 
+                      label="開首文字 - 中文 (Intro - ZH)" 
+                      placeholder="留空將使用預設範本..."
+                      rows={4}
+                      value={localSettings.venueProfile?.contractIntroZh || ''} 
+                      onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), contractIntroZh: e.target.value } }))} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-end gap-3">
+              <button 
+                onClick={() => { setPreviewLang('en'); setShowPreview(true); }} 
+                className="bg-slate-100 text-slate-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95 flex items-center gap-2"
+              >
+                <ImageIcon size={18} /> Preview (EN)
+              </button>
+              <button 
+                onClick={() => { setPreviewLang('zh'); setShowPreview(true); }} 
+                className="bg-slate-100 text-slate-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95 flex items-center gap-2"
+              >
+                <ImageIcon size={18} /> 預覽效果 (ZH)
+              </button>
+              <button onClick={handleSaveVenueProfile} className="bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all active:scale-95">儲存分店資料</button>
+            </div>
+
+            {showPreview && (
+              <Modal
+                isOpen={showPreview}
+                onClose={() => setShowPreview(false)}
+                title={previewLang === 'en' ? "Contract Preview (English)" : "合約預覽 (中文)"}
+              >
+                <div className="bg-slate-500 p-8 min-h-screen">
+                  <ContractRenderer 
+                    data={previewMockData} 
+                    isCn={previewLang === 'zh'}
+                    appSettings={{
+                      ...settings,
+                      venueProfiles: {
+                        ...settings.venueProfiles,
+                        [selectedVenueId]: localSettings.venueProfile
                       }
-                    }
-                    // -------------------------
-
-                    return (
-                      <div key={m.id} className="p-4 hover:bg-emerald-50/50 transition-colors group">
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="flex items-center flex-wrap gap-2">
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.type === 'food' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                              {m.type === 'food' ? 'MENU' : 'DRINK'}
-                            </span>
-                            <span className="font-bold text-slate-800">{m.title}</span>
-                            {allocBadge} {/* ✅ DISPLAY BADGE HERE */}
-                          </div>
-                          <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditingMenu(m)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14} /></button>
-                            <button onClick={() => handleDeleteMenu(m.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14} /></button>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 items-center text-[10px] text-slate-500 mb-1">
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded">平日 ${formatMoney(m.priceWeekday)}</span>
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded">週末 ${formatMoney(m.priceWeekend)}</span>
-                        </div>
-                        {m.allocation && (
-                          <div className="flex gap-2 text-[10px] text-slate-400 mb-1">
-                            {Object.entries(m.allocation).map(([k, v]) => v > 0 && (
-                              <span key={k} className="border border-slate-200 px-1 rounded">
-                                {DEPARTMENTS.find(d => d.key === k)?.label.split(' ')[0]}:${v}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <p className="text-xs text-slate-500 whitespace-pre-wrap line-clamp-2">{m.content}</p>
-                      </div>
-                    );
-                  })}
+                    }} 
+                  />
                 </div>
-              </div>
-            </div>
+              </Modal>
+            )}
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Payment Rules Tab */}
-      {activeSubTab === 'payment' && (
-        <div className="space-y-6 animate-in fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-
-            {/* Left Column: Editor Form */}
-            <div className="md:col-span-5 space-y-4">
-              <Card className="p-5 border-l-4 border-l-violet-500">
-                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-                  {editingPaymentRule.id ? <Edit2 size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
-                  {editingPaymentRule.id ? "編輯付款規則" : "新增付款規則"}
-                </h3>
-
-                <div className="space-y-4">
-                  <FormInput
-                    label="規則名稱 (Rule Name)"
-                    placeholder="e.g. Standard Wedding, Last Minute"
-                    value={editingPaymentRule.name}
-                    onChange={e => setEditingPaymentRule(p => ({ ...p, name: e.target.value }))}
-                  />
-
-                  <FormInput
-                    label="最少提前月數 (Min Months in Advance)"
-                    type="number"
-                    placeholder="0 = 適用於所有"
-                    value={editingPaymentRule.minMonthsInAdvance}
-                    onChange={e => setEditingPaymentRule(p => ({ ...p, minMonthsInAdvance: parseInt(e.target.value) || 0 }))}
-                  />
-
-                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
-                    <div className="text-xs font-bold text-slate-500 uppercase border-b border-slate-200 pb-1 mb-2">分期設定 (Installments)</div>
-
-                    {/* Deposit 1 */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-bold text-slate-600">付款 1 (%)</label>
-                        <div className="relative">
-                          <input type="number" value={editingPaymentRule.deposit1} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit1: parseFloat(e.target.value) || 0 }))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none" />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-600">付款限期 (Offset)</label>
-                        <select value={editingPaymentRule.deposit1Offset} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit1Offset: parseInt(e.target.value) }))} className="w-full py-1 text-sm border rounded outline-none bg-white">
-                          <option value={0}>即時 (Immediate)</option>
-                          <option value={1}>+1 個月</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Deposit 2 */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-bold text-slate-600">付款 2 (%)</label>
-                        <div className="relative">
-                          <input type="number" value={editingPaymentRule.deposit2} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit2: parseFloat(e.target.value) || 0 }))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none" />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-600">付款限期 (Offset)</label>
-                        <select value={editingPaymentRule.deposit2Offset} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit2Offset: parseInt(e.target.value) }))} className="w-full py-1 text-sm border rounded outline-none bg-white">
-                          <option value={1}>+1 個月</option>
-                          <option value={3}>+3 個月</option>
-                          <option value={6}>+6 個月</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Deposit 3 */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-bold text-slate-600">付款 3 (%)</label>
-                        <div className="relative">
-                          <input type="number" value={editingPaymentRule.deposit3} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit3: parseFloat(e.target.value) || 0 }))} className="w-full pl-2 pr-6 py-1 text-sm border rounded outline-none" />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-600">付款限期 (Offset)</label>
-                        <select value={editingPaymentRule.deposit3Offset} onChange={e => setEditingPaymentRule(p => ({ ...p, deposit3Offset: parseInt(e.target.value) }))} className="w-full py-1 text-sm border rounded outline-none bg-white">
-                          <option value={3}>+3 個月</option>
-                          <option value={6}>+6 個月</option>
-                          <option value={9}>+9 個月</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button onClick={handleSavePaymentRule} className="flex-1 bg-violet-600 text-white py-2 rounded-lg font-bold hover:bg-violet-700 transition-colors">儲存規則</button>
-                    {editingPaymentRule.id && <button onClick={() => setEditingPaymentRule({ id: null, name: '', minMonthsInAdvance: 0, deposit1: 30, deposit1Offset: 0, deposit2: 30, deposit2Offset: 3, deposit3: 30, deposit3Offset: 6 })} className="px-4 bg-slate-100 rounded-lg text-slate-600 font-bold">取消</button>}
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* Right Column: Rules List */}
-            <div className="md:col-span-7">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50">
-                  <h3 className="font-bold text-slate-700">現有規則 (Active Rules)</h3>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                  {localSettings.paymentRules.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-sm">暫無付款規則</div>
-                  ) : (
-                    localSettings.paymentRules.map(rule => (
-                      <div key={rule.id} className="p-4 hover:bg-violet-50/50 transition-colors group">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <span className="font-bold text-slate-800 block">{rule.name}</span>
-                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                              適用於: {rule.minMonthsInAdvance > 0 ? `提前 ${rule.minMonthsInAdvance} 個月或以上` : '所有訂單 (預設)'}
-                            </span>
-                          </div>
-                          <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditingPaymentRule(rule)} className="text-blue-600 hover:bg-blue-100 p-1 rounded"><Edit2 size={14} /></button>
-                            <button onClick={() => handleDeletePaymentRule(rule.id)} className="text-red-600 hover:bg-red-100 p-1 rounded"><Trash2 size={14} /></button>
-                          </div>
-                        </div>
-
-                        {/* Visual Timeline Bar */}
-                        <div className="flex h-2 w-full rounded-full overflow-hidden bg-slate-100 mt-3">
-                          <div style={{ width: `${rule.deposit1}%` }} className="bg-emerald-400" title={`1st Payment: ${rule.deposit1}%`}></div>
-                          <div style={{ width: `${rule.deposit2}%` }} className="bg-emerald-300" title={`2nd Payment: ${rule.deposit2}%`}></div>
-                          <div style={{ width: `${rule.deposit3}%` }} className="bg-emerald-200" title={`3rd Payment: ${rule.deposit3}%`}></div>
-                        </div>
-                        <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-                          <span>Dep 1: {rule.deposit1}%</span>
-                          <span>Dep 2: {rule.deposit2}%</span>
-                          <span>Dep 3: {rule.deposit3}%</span>
-                          <span className="text-red-400 font-bold">Bal: {100 - (rule.deposit1 + rule.deposit2 + rule.deposit3)}%</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floorplan Default Tab */}
-      {activeSubTab === 'floorplan' && (
-        <div className="space-y-6 animate-in fade-in">
-
-          <Card className="p-5 border-l-4 border-l-amber-500 max-w-2xl">
-            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-              <Map size={18} className="mr-2" /> 預設平面圖設定 (Default Map Settings)
-            </h3>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">預設背景圖 (Default Map)</label>
-                {localSettings.defaultFloorplan?.bgImage ? (
-                  <div className={isFullscreenMap ? "fixed inset-0 z-[9999] bg-slate-800 flex flex-col w-screen h-screen animate-in fade-in zoom-in-95 duration-200" : "relative border border-slate-200 rounded-lg overflow-hidden mb-3 h-64 group"}>
-                    {isFullscreenMap && (
-                      <div className="bg-white p-4 shadow-md flex justify-between items-center shrink-0">
-                        <div>
-                          <h3 className="font-bold text-slate-800 text-lg">校準與區域設定 (Calibrate & Zones)</h3>
-                          <p className="text-xs text-slate-500">調整比例尺，或在地圖上繪製分區</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                           {!isDrawingZone && (
-                           <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200">
-                             <span className="text-sm font-bold text-slate-600">物件比例 (Scale):</span>
-                             <input type="range" min="10" max="150" step="1" value={localSettings.defaultFloorplan?.itemScale || 40} onChange={(e) => setLocalSettings(p => ({...p, defaultFloorplan: { ...p.defaultFloorplan, itemScale: Number(e.target.value)}}))} className="w-32 md:w-48 accent-blue-600 cursor-ew-resize" />
-                             <span className="text-sm font-mono font-bold text-blue-600 w-8 text-right">{localSettings.defaultFloorplan?.itemScale || 40}</span>
-                           </div>
-                           )}
-                           <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                             {!isDrawingZone ? (
-                                <button onClick={() => setIsDrawingZone(true)} className="px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors rounded font-bold text-sm shadow-sm">✏️ 繪製區域 (Draw Zone)</button>
-                             ) : (
-                                <>
-                                  <select value={drawingColor} onChange={e => setDrawingColor(e.target.value)} className="px-2 py-1.5 text-sm border border-slate-300 rounded font-bold outline-none">
-                                    {ZONES.map(z => (
-                                      <option key={z.id} value={z.color}>
-                                        {z.nameZh} ({z.nameEn})
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <button onClick={() => setCurrentZonePoints(p => p.slice(0, -1))} className="px-3 py-1.5 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-bold text-xs transition-colors" disabled={currentZonePoints.length===0}>復原點</button>
-                                  <button onClick={() => { setIsDrawingZone(false); setCurrentZonePoints([]); }} className="px-3 py-1.5 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded font-bold text-xs transition-colors">取消</button>
-                                  <button onClick={finishZone} className="px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded font-bold text-sm transition-colors shadow-sm">完成 (Finish)</button>
-                                </>
-                             )}
-                           </div>
-                           <button onClick={() => setIsFullscreenMap(false)} className="flex items-center gap-2 bg-slate-800 text-white hover:bg-slate-700 px-4 py-2 rounded-lg font-bold transition-colors shadow-sm"><Minimize size={16} /> 縮小</button>
-                        </div>
-                      </div>
-                    )}
-                    <div className={isFullscreenMap ? "flex-1 w-full overflow-auto bg-slate-100" : "w-full h-full overflow-hidden bg-slate-50"}>
-                      <div 
-                        className={isFullscreenMap ? "relative min-w-full min-h-full cursor-crosshair" : "relative w-full h-full cursor-pointer"}
-                        style={{
-                          width: localSettings.defaultFloorplan.bgImage && isFullscreenMap ? 'max-content' : '100%',
-                          height: localSettings.defaultFloorplan.bgImage && isFullscreenMap ? 'max-content' : '100%',
-                          backgroundImage: `linear-gradient(to right, rgba(96, 165, 250, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(96, 165, 250, 0.4) 1px, transparent 1px), url("${localSettings.defaultFloorplan.bgImage}")`,
-                          backgroundSize: `${localSettings.defaultFloorplan?.itemScale || 40}px ${localSettings.defaultFloorplan?.itemScale || 40}px, ${localSettings.defaultFloorplan?.itemScale || 40}px ${localSettings.defaultFloorplan?.itemScale || 40}px, auto`,
-                          backgroundPosition: `top left, top left, top left`,
-                          backgroundRepeat: 'repeat, repeat, no-repeat'
-                        }}
-                        onClick={handleMapClick}
-                      >
-                        {localSettings.defaultFloorplan.bgImage && isFullscreenMap && (
-                          <img src={localSettings.defaultFloorplan.bgImage} className="opacity-0 pointer-events-none select-none block" alt="" />
-                        )}
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-                          {(localSettings.defaultFloorplan?.zones || []).map(z => {
-                              const itemScale = localSettings.defaultFloorplan?.itemScale || 40;
-                              const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
-                              const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;
-                              const cy = ((Math.min(...z.points.map(p => p.y_m)) + Math.max(...z.points.map(p => p.y_m))) / 2) * itemScale;
-                              return (
-                                <g key={z.id}>
-                                  <polygon points={points} fill={z.color} stroke={z.color.replace(/0\.\d+\)/, '0.8)')} strokeWidth="2" strokeDasharray="4 4" />
-                                  <text x={cx} y={cy} fill={z.color.replace(/0\.\d+\)/, '1.0)')} fontSize={Math.max(14, itemScale * 0.8)} fontWeight="bold" textAnchor="middle" dominantBaseline="middle" style={{textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff'}} opacity="0.8">{z.name}</text>
-                                </g>
-                              );
-                          })}
-                          {isDrawingZone && currentZonePoints.length > 0 && (
-                              <g>
-                                <polyline 
-                                  points={currentZonePoints.map(p => `${p.x_m * (localSettings.defaultFloorplan?.itemScale || 40)},${p.y_m * (localSettings.defaultFloorplan?.itemScale || 40)}`).join(' ')} 
-                                  fill={currentZonePoints.length > 2 ? drawingColor : 'none'} 
-                                  stroke={drawingColor.replace(/0\.\d+\)/, '0.8)')} strokeWidth="2" strokeDasharray="4 2" 
-                                />
-                                {currentZonePoints.map((p, i) => (
-                                   <circle key={i} cx={p.x_m * (localSettings.defaultFloorplan?.itemScale || 40)} cy={p.y_m * (localSettings.defaultFloorplan?.itemScale || 40)} r="4" fill={drawingColor.replace(/0\.\d+\)/, '0.8)')} />
-                                ))}
-                              </g>
-                           )}
-                        </svg>
-                        {!isFullscreenMap && (
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                             <span className="bg-white px-4 py-2 rounded-lg text-sm font-bold text-slate-800 shadow-lg flex items-center gap-2"><Maximize size={16} className="text-blue-600"/> 全螢幕校準 (Fullscreen Calibrate)</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {!isFullscreenMap && (
-                      <button onClick={() => setLocalSettings(p => ({...p, defaultFloorplan: { ...p.defaultFloorplan, bgImage: ''}}))} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 shadow-sm z-10"><Trash2 size={14}/></button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center bg-slate-50 text-slate-500 mb-3">
-                     <span className="text-sm mb-2">尚未設定預設背景圖 (No default map)</span>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <label className="inline-flex flex-1 items-center justify-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm">
-                    {isUploadingBg ? <span className="animate-pulse">上傳中...</span> : '上傳新地圖 (Upload Map)'}
-                    <input type="file" className="hidden" accept="image/*" onChange={handleBgUpload} disabled={isUploadingBg} />
-                  </label>
-                  {localSettings.defaultFloorplan?.bgImage && !isFullscreenMap && (
-                    <button onClick={() => setIsFullscreenMap(true)} className="inline-flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors text-sm font-bold shadow-sm">
-                      <Maximize size={16} /> 全螢幕校準
-                    </button>
-                  )}
-                </div>
-                
-                {/* Existing Zones List */}
-                {localSettings.defaultFloorplan?.zones?.length > 0 && (
-                   <div className="mt-4 pt-4 border-t border-slate-200">
-                     <h4 className="text-sm font-bold text-slate-700 mb-2">已設定區域 (Defined Zones)</h4>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                       {localSettings.defaultFloorplan.zones.map(z => (
-                         <div key={z.id} className="flex justify-between items-center bg-white border border-slate-200 p-2 rounded shadow-sm">
-                           <div className="flex items-center gap-2">
-                             <div className="w-4 h-4 rounded border border-slate-300" style={{backgroundColor: z.color.replace(/0\.\d+\)/, '0.6)')}}></div>
-                             <span className="text-sm font-bold text-slate-700">{z.name}</span>
-                           </div>
-                           <button onClick={() => setLocalSettings(p => ({...p, defaultFloorplan: {...p.defaultFloorplan, zones: p.defaultFloorplan.zones.filter(zone => zone.id !== z.id)}}))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 size={14}/></button>
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2 flex justify-between"><span>預設物件比例 (Default Scale)</span><span className="text-blue-600">{localSettings.defaultFloorplan?.itemScale || 40}</span></label>
-                <input type="range" min="10" max="150" step="1" value={localSettings.defaultFloorplan?.itemScale || 40} onChange={(e) => setLocalSettings(p => ({...p, defaultFloorplan: { ...p.defaultFloorplan, itemScale: Number(e.target.value)}}))} className="w-full accent-blue-600" />
-                <p className="text-xs text-slate-500 mt-1">此數值決定新訂單載入時，1x1m 的網格基準為多少像素。可使用全螢幕校準對齊。</p>
-              </div>
-              <div className="pt-4 border-t border-slate-100"><button onClick={handleSaveFloorplan} className="w-full bg-amber-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-amber-700 transition-colors shadow-sm">儲存平面圖設定</button></div>
-            </div>
-          </Card>
-
-          {/* New Zone Configuration Card */}
-          <Card className="p-5 border-l-4 border-l-indigo-500 max-w-2xl mt-6">
-            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center">
-              <PieChart size={18} className="mr-2" /> 區域清單管理 (Zone Management)
-            </h3>
+      {activeSubTab === 'minSpend' && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in">
+          <div className="md:col-span-5"><Card className="p-5 border-l-4 border-l-blue-500">
+            <h3 className="font-bold text-lg text-slate-800 mb-4">{editingRule.id ? "編輯" : "新增"}低消規則</h3>
             <div className="space-y-4">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <FormInput label="名稱 (中文)" value={editingZone.nameZh} onChange={e => setEditingZone(p => ({ ...p, nameZh: e.target.value }))} placeholder="e.g. 紅區" />
-                  <FormInput label="Name (English)" value={editingZone.nameEn} onChange={e => setEditingZone(p => ({ ...p, nameEn: e.target.value }))} placeholder="e.g. Red Zone" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-slate-500 mb-1">區域顏色 (Zone Color)</label>
-                    <div className="flex gap-2 flex-wrap">
-                      {[
-                        'rgba(248, 113, 113, 0.3)', 'rgba(250, 204, 21, 0.3)', 'rgba(52, 211, 153, 0.3)', 
-                        'rgba(96, 165, 250, 0.3)', 'rgba(192, 132, 252, 0.3)', 'rgba(244, 114, 182, 0.3)',
-                        'rgba(148, 163, 184, 0.3)', 'rgba(251, 146, 60, 0.3)'
-                      ].map(c => (
-                        <button 
-                          key={c} 
-                          onClick={() => setEditingZone(p => ({ ...p, color: c }))}
-                          className={`w-8 h-8 rounded-full border-2 transition-all ${editingZone.color === c ? 'border-slate-800 scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
-                          style={{ backgroundColor: c.replace('0.3', '0.6') }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="pt-4">
-                    <button onClick={handleSaveZone} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-700 transition-colors">
-                      {editingZone.id ? '更新區域' : '新增區域'}
-                    </button>
-                    {editingZone.id && (
-                      <button onClick={() => setEditingZone({ id: null, nameZh: '', nameEn: '', color: 'rgba(96, 165, 250, 0.3)' })} className="ml-2 text-slate-500 text-xs font-bold">取消</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {ZONES.map(z => (
-                  <div key={z.id} className="flex justify-between items-center bg-white border border-slate-200 p-3 rounded-lg shadow-sm group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded border border-slate-300 shadow-inner" style={{ backgroundColor: z.color.replace('0.3', '0.6') }}></div>
-                      <div>
-                        <span className="font-bold text-slate-800 block">{z.nameZh}</span>
-                        <span className="text-xs text-slate-500 uppercase font-medium">{z.nameEn || 'No English Name'}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setEditingZone(z)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"><Edit2 size={14}/></button>
-                      <button onClick={() => handleDeleteZone(z.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14}/></button>
-                    </div>
+              <label className="block text-sm font-bold text-slate-700">選擇區域</label>
+              <div className="flex flex-wrap gap-2">{LOCATION_LABELS.map(loc => (
+                <button key={loc} onClick={() => setEditingRule(p => ({...p, locations: p.locations.includes(loc) ? p.locations.filter(l=>l!==loc) : [...p.locations, loc]}))} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${editingRule.locations.includes(loc) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>{loc}</button>
+              ))}</div>
+              <div className="grid grid-cols-7 gap-1 pt-2">
+                {DAYS_OF_WEEK.map(day => (
+                  <div key={day} className="flex flex-col gap-1 items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase mb-1">{day}</span>
+                    <input 
+                      type="number" 
+                      placeholder="L" 
+                      value={editingRule.prices[day]?.lunch || ''} 
+                      onChange={e=>setEditingRule(p=>({...p, prices: {...p.prices, [day]: {...p.prices[day], lunch: e.target.value}}}))} 
+                      className="w-full px-1 py-1 text-[10px] border rounded text-center focus:border-blue-500 outline-none transition-colors" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="D" 
+                      value={editingRule.prices[day]?.dinner || ''} 
+                      onChange={e=>setEditingRule(p=>({...p, prices: {...p.prices, [day]: {...p.prices[day], dinner: e.target.value}}}))} 
+                      className="w-full px-1 py-1 text-[10px] border rounded bg-blue-50/30 text-center focus:border-blue-500 outline-none transition-colors" 
+                    />
                   </div>
                 ))}
               </div>
+              <button onClick={handleSaveRule} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold shadow-lg shadow-blue-100">儲存規則</button>
             </div>
-          </Card>
+          </Card></div>
+          <div className="md:col-span-7"><div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">當前分店規則</div>
+            <div className="divide-y max-h-[500px] overflow-y-auto">{localSettings.minSpendRules.map(rule=>(
+              <div key={rule.id} className="p-4 hover:bg-slate-50 transition-all group">
+                <div className="flex justify-between items-start mb-2"><div className="flex flex-wrap gap-1">{rule.locations.map(l=><span key={l} className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold">{l}</span>)}</div>
+                <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-all"><button onClick={()=>setEditingRule(rule)} className="p-1 text-blue-600"><Edit2 size={14}/></button><button onClick={()=>handleDeleteRule(rule.id)} className="p-1 text-red-500"><Trash2 size={14}/></button></div></div>
+                <div className="grid grid-cols-7 gap-1">{DAYS_OF_WEEK.map(day=><div key={day} className="text-[8px] border p-1 rounded text-center"><p className="font-bold">{day}</p><p className="text-blue-600">${parseInt(getPriceVal(rule, day, 'dinner')/1000)}k</p></div>)}</div>
+              </div>
+            ))}</div>
+          </div></div>
         </div>
       )}
-      {/* Role Permissions Tab */}
+
+      {activeSubTab === 'menus' && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in">
+          <div className="md:col-span-5"><Card className="p-5 border-l-4 border-l-emerald-500">
+            <h3 className="font-bold text-lg text-slate-800 mb-4">{editingMenu.id ? "編輯" : "新增"}預設套餐</h3>
+            <div className="space-y-4">
+              <FormSelect 
+                label="類別" 
+                value={editingMenu.type || 'food'} 
+                options={[
+                  { label: '食物套餐 (Food Package)', value: 'food' },
+                  { label: '酒水套餐 (Beverage Package)', value: 'drink' }
+                ]}
+                onChange={e=>setEditingMenu(p=>({...p, type:e.target.value}))} 
+              />
+              <FormInput label="標題" value={editingMenu.title} onChange={e=>setEditingMenu(p=>({...p, title:e.target.value}))} />
+              <div className="grid grid-cols-2 gap-3">
+                <MoneyInput label="平日價" value={editingMenu.priceWeekday} onChange={e=>setEditingMenu(p=>({...p, priceWeekday:e.target.value}))} />
+                <MoneyInput label="週末價" value={editingMenu.priceWeekend} onChange={e=>setEditingMenu(p=>({...p, priceWeekend:e.target.value}))} />
+              </div>
+              <FormTextArea label="套餐內容" rows={8} value={editingMenu.content} onChange={e=>setEditingMenu(p=>({...p, content:e.target.value}))} />
+              <button onClick={handleSaveMenu} className="w-full bg-emerald-600 text-white py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-100 transition-all active:scale-95">儲存套餐設定</button>
+            </div>
+          </Card></div>
+          <div className="md:col-span-7 space-y-6">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                <span className="font-bold text-emerald-800">食物套餐 (Food Packages)</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                  {localSettings.defaultMenus.filter(m => m.type === 'food' || !m.type).length} Items
+                </span>
+              </div>
+              <div className="divide-y max-h-[400px] overflow-y-auto">
+                {localSettings.defaultMenus.filter(m => m.type === 'food' || !m.type).map(m=>(
+                  <div key={m.id} className="p-4 hover:bg-slate-50 group">
+                    <div className="flex justify-between font-bold text-slate-800">
+                      <span>{m.title}</span>
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-all">
+                        <button onClick={()=>setEditingMenu(m)} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit2 size={14}/></button>
+                        <button onClick={()=>handleDeleteMenu(m.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={14}/></button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-[10px] mt-1 text-slate-400 font-bold uppercase">
+                      <span>平日: ${formatMoney(m.priceWeekday)}</span>
+                      <span>週末: ${formatMoney(m.priceWeekend)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-2 italic">{m.content || '(No content)'}</p>
+                  </div>
+                ))}
+                {localSettings.defaultMenus.filter(m => m.type === 'food' || !m.type).length === 0 && (
+                  <div className="p-8 text-center text-slate-400 text-sm italic">尚未設定食物套餐</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                <span className="font-bold text-blue-800">酒水套餐 (Beverage Packages)</span>
+                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                  {localSettings.defaultMenus.filter(m => m.type === 'drink').length} Items
+                </span>
+              </div>
+              <div className="divide-y max-h-[400px] overflow-y-auto">
+                {localSettings.defaultMenus.filter(m => m.type === 'drink').map(m=>(
+                  <div key={m.id} className="p-4 hover:bg-slate-50 group">
+                    <div className="flex justify-between font-bold text-slate-800">
+                      <span>{m.title}</span>
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-all">
+                        <button onClick={()=>setEditingMenu(m)} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit2 size={14}/></button>
+                        <button onClick={()=>handleDeleteMenu(m.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={14}/></button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-[10px] mt-1 text-slate-400 font-bold uppercase">
+                      <span>平日: ${formatMoney(m.priceWeekday)}</span>
+                      <span>週末: ${formatMoney(m.priceWeekend)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-2 italic">{m.content || '(No content)'}</p>
+                  </div>
+                ))}
+                {localSettings.defaultMenus.filter(m => m.type === 'drink').length === 0 && (
+                  <div className="p-8 text-center text-slate-400 text-sm italic">尚未設定酒水套餐</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeSubTab === 'roles' && (
-        <RolePermissionsTab 
-          settings={localSettings} 
-          onSave={onSave} 
-          setLocalSettings={setLocalSettings}
-          addToast={addToast} 
-        />
+        <RolePermissionsTab settings={localSettings} onSave={onSave} setLocalSettings={setLocalSettings} addToast={addToast} />
       )}
-      {/* Users Management Tab */}
+      
       {activeSubTab === 'users' && (
-        <UsersTab 
-          users={users} 
-          appSettings={localSettings} 
-          updateUserRole={updateUserRole}
-          updateUserProfile={updateUserProfile} 
-          deleteUser={deleteUser} 
-          addToast={addToast} 
-        />
+        <UsersTab users={users} appSettings={localSettings} updateUserRole={updateUserRole} updateUserProfile={updateUserProfile} deleteUser={deleteUser} addToast={addToast} />
       )}
+
+      {activeSubTab === 'floorplan' && (
+        <div className="space-y-6 animate-in fade-in">
+          <Card className="p-6 border-l-4 border-l-amber-500">
+            <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
+              <Map className="text-amber-500" /> 預設平面圖背景 (Default Map Background)
+            </h3>
+            <div className="space-y-6">
+              <div className="w-full h-80 border-2 border-dashed border-slate-200 rounded-3xl flex items-center justify-center bg-slate-50 relative overflow-hidden group shadow-inner">
+                {localSettings.defaultFloorplan?.bgImage ? (
+                  <>
+                    <img src={localSettings.defaultFloorplan.bgImage} className="w-full h-full object-contain p-4" alt="Default Floorplan" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
+                      <button 
+                        onClick={() => confirm(
+                          "刪除預設地圖", 
+                          "確定要刪除預設平面圖嗎？刪除後，新訂單將預設為無背景圖的空白網格。", 
+                          () => {
+                            handleSaveScoped({ defaultFloorplan: { ...localSettings.defaultFloorplan, bgImage: '' } });
+                            addToast("預設地圖已清除", "info");
+                          }
+                        )} 
+                        className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl shadow-xl transition-all flex items-center gap-2 font-bold active:scale-95"
+                      >
+                        <Trash2 size={20} /> 刪除地圖 (Delete Map)
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center p-8">
+                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <ImageIcon size={32} className="text-slate-300" />
+                    </div>
+                    <span className="text-slate-400 font-bold block">尚未設定預設背景圖</span>
+                    <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">No Default Map Uploaded</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-4">
+                <label className="flex-1 flex items-center justify-center gap-2 bg-white border-2 border-slate-200 py-3.5 rounded-2xl font-black text-slate-700 hover:border-amber-400 hover:text-amber-600 transition-all cursor-pointer shadow-sm active:scale-95">
+                  <ImageIcon size={20} /> {isUploadingBg ? '正在上傳...' : '上傳預設地圖 (Upload Default)'}
+                  <input type="file" className="hidden" accept="image/*" onChange={handleBgUpload} />
+                </label>
+                <button 
+                  onClick={handleStartCalibration}
+                  className="flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-3.5 rounded-2xl font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
+                >
+                  <Maximize size={20} /> 全螢幕校準 (Fullscreen Calibrate)
+                </button>
+              </div>
+            </div>
+          </Card>
+
+          {isCalibrating && calibrationData && (
+            <FloorplanEditor
+              formData={calibrationData}
+              setFormData={setCalibrationData}
+              onClose={handleFinishCalibration}
+              initialFullscreen={true}
+              defaultZones={localSettings.zonesConfig}
+              events={events}
+            />
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Zone Management */}
+            <Card className="p-6 border-l-4 border-l-indigo-500">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                  <Grid className="text-indigo-500" /> 已設定區域 (Defined Zones)
+                </h3>
+              </div>
+              
+              <div className="space-y-4 mb-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput label="中文名稱" placeholder="紅區" value={editingZone.nameZh} onChange={e => setEditingZone(p => ({ ...p, nameZh: e.target.value }))} />
+                  <FormInput label="English Name" placeholder="Red Zone" value={editingZone.nameEn} onChange={e => setEditingZone(p => ({ ...p, nameEn: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">區域標籤顏色 (Color)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      'rgba(248, 113, 113, 0.3)', // Red
+                      'rgba(250, 204, 21, 0.3)',  // Yellow
+                      'rgba(52, 211, 153, 0.3)',  // Green
+                      'rgba(96, 165, 250, 0.3)',  // Blue
+                      'rgba(167, 139, 250, 0.3)', // Purple
+                      'rgba(251, 146, 60, 0.3)',  // Orange
+                      'rgba(148, 163, 184, 0.3)'  // Slate
+                    ].map(color => (
+                      <button 
+                        key={color} 
+                        onClick={() => setEditingZone(p => ({ ...p, color }))} 
+                        className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${editingZone.color === color ? 'border-slate-900 scale-110' : 'border-transparent hover:scale-105'}`}
+                      >
+                        <div className="w-6 h-6 rounded-full shadow-inner" style={{ backgroundColor: color.replace('0.3', '1') }}></div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={handleSaveZone} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+                  {editingZone.id ? '更新區域' : '新增區域'}
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 border-t border-slate-100 mt-6 pt-4">
+                {(localSettings.zonesConfig || []).map(zone => (
+                  <div key={zone.id} className="py-3 flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: zone.color }}></div>
+                      <div>
+                        <p className="font-bold text-slate-800 text-sm">{zone.nameZh}</p>
+                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{zone.nameEn}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button onClick={() => setEditingZone(zone)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
+                      <button onClick={() => handleDeleteZone(zone.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+                {(!localSettings.zonesConfig || localSettings.zonesConfig.length === 0) && (
+                   <p className="text-center py-6 text-sm text-slate-400 italic">尚未設定自訂區域 (No zones defined)</p>
+                )}
+              </div>
+            </Card>
+
+            {/* Object Scale Settings */}
+            <Card className="p-6 border-l-4 border-l-blue-500 flex flex-col">
+              <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
+                <Maximize size={20} className="text-blue-500" /> 預設物件比例 (Default Scale)
+              </h3>
+              
+              <div className="flex-1 flex flex-col justify-center space-y-8">
+                <div className="text-center">
+                  <div className="inline-flex items-end gap-1 mb-2">
+                    <span className="text-6xl font-black text-slate-900 font-mono tracking-tighter">
+                      {localSettings.defaultFloorplan?.itemScale || 40}
+                    </span>
+                    <span className="text-slate-400 font-bold mb-2">px/m</span>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed max-w-xs mx-auto">
+                    此數值決定新訂單載入時，1x1m 的網格基準為多少像素。可使用全螢幕校準對齊。
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <input 
+                    type="range" 
+                    min="10" 
+                    max="150" 
+                    step="1"
+                    value={localSettings.defaultFloorplan?.itemScale || 40} 
+                    onChange={e => {
+                      const newScale = Number(e.target.value);
+                      setLocalSettings(p => ({
+                        ...p,
+                        defaultFloorplan: { ...(p.defaultFloorplan || {}), itemScale: newScale }
+                      }));
+                    }} 
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" 
+                  />
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>10px (Small)</span>
+                    <span>150px (Large)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-slate-100">
+                <button 
+                  onClick={() => {
+                    handleSaveScoped({ 
+                      defaultFloorplan: { 
+                        ...(localSettings.defaultFloorplan || {}), 
+                        itemScale: localSettings.defaultFloorplan?.itemScale || 40 
+                      } 
+                    });
+                    addToast("物件比例已儲存", "success");
+                  }}
+                  className="w-full bg-slate-900 text-white py-3.5 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95"
+                >
+                  儲存平面圖比例設定
+                </button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      <ConfirmationModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 };

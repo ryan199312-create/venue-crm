@@ -35,21 +35,21 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
       return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
     case 'CONTRACT':
     case 'CONTRACT_CN':
-      return <ContractRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} isCn={printMode === 'CONTRACT_CN'} />;
+      return <ContractRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} onAdminSign={onAdminSign} isCn={printMode === 'CONTRACT_CN'} />;
     case 'INVOICE':
       return <InvoiceRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
     case 'RECEIPT':
       return <ReceiptRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
     case 'MENU_CONFIRM':
-      return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} />;
+      return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} appSettings={appSettings} />;
     case (printMode && printMode.startsWith('MENU_CONFIRM_') ? printMode : null): {
       const menuId = printMode.replace('MENU_CONFIRM_', '');
-      return <MenuConfirmRenderer data={renderData} menuId={menuId} onSign={onClientSign} />;
+      return <MenuConfirmRenderer data={renderData} menuId={menuId} onSign={onClientSign} appSettings={appSettings} />;
     }
     case 'ADDENDUM':
-      return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} />;
+      return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} appSettings={appSettings} />;
     case 'INTERNAL_NOTES':
-      return <InternalNotesRenderer data={renderData} />;
+      return <InternalNotesRenderer data={renderData} appSettings={appSettings} />;
     case 'EO':
     default:
       return <EventOrderRenderer data={renderData} printMode={printMode} appSettings={appSettings} />;

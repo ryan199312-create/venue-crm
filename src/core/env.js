@@ -3,7 +3,8 @@
 
 // APP_ID is a unique identifier for your application instance, used for namespacing data in Firebase.
 // You can set this to any unique string, for example, your company name.
-export const APP_ID = "my-venue-crm";
+export const APP_ID = import.meta.env.VITE_APP_ID || "my-venue-crm";
+export const VENUE_ID = import.meta.env.VITE_VENUE_ID || "default";
 
 // INITIAL_AUTH_TOKEN might be used for an initial authentication mechanism during development.
 export const INITIAL_AUTH_TOKEN = "";

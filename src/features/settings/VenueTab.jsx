@@ -86,10 +86,11 @@ const VenueTab = ({
           setFormData={setFormData} 
           onUploadProof={onUploadProof} 
           addToast={addToast} 
-          defaultBgImage={appSettings?.defaultFloorplan?.bgImage} 
-          defaultItemScale={appSettings?.defaultFloorplan?.itemScale} 
-          defaultZones={appSettings?.defaultFloorplan?.zones}
+          defaultBgImage={formData.venueId ? appSettings?.defaultFloorplan?.bgImage : undefined} 
+          defaultItemScale={formData.venueId ? appSettings?.defaultFloorplan?.itemScale : undefined} 
+          defaultZones={formData.venueId ? appSettings?.zonesConfig : []}
           events={events}
+          liteMode={true}
         />
       </div>
 

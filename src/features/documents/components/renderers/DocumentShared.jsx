@@ -14,6 +14,17 @@ export { formatMoney, generateBillingSummary, DEPARTMENTS };
 // SHARED UTILITIES
 // ==========================================
 
+export const formatBoldText = (text) => {
+  if (!text) return null;
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+};
+
 export const shouldShowField = (data, printMode, field, defaultClient, defaultInternal) => {
   const isInternal = printMode === 'BRIEFING' || !printMode || printMode === 'EO' || printMode === 'KITCHEN';
   const isClient = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT', 'MENU_CONFIRM', 'ADDENDUM', 'FLOORPLAN'].includes(printMode);
@@ -122,28 +133,109 @@ export const getPackageStrings = (data, isEn = false) => {
 // SHARED UI COMPONENTS
 // ==========================================
 
-export const DocumentHeader = ({ data, typeEn, typeZh }) => (
-  <div className="flex justify-between items-start border-b-[3px] pb-6 mb-8" style={{ borderColor: '#A57C00' }}>
-    <div className="max-w-[60%]">
-      <div className="mb-2 flex items-center gap-3" style={{ color: '#A57C00' }}>
-        <span className="text-4xl font-black tracking-tight leading-none">璟瓏軒</span>
-        <span className="text-sm font-bold tracking-[0.2em] uppercase mt-1">King Lung Heen</span>
-      </div>
-      <div className="text-[10px] text-slate-500 mt-3 font-medium leading-relaxed">
-        <p>4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon</p>
-        <p>Tel: +852 2788 3939 | Email: banquet@kinglungheen.com</p>
+export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = false }) => {
+  const profile = appSettings?.venueProfiles?.[venueId] || appSettings?.venueProfile || {};
+  const config = profile.paymentConfig;
+  
+  if (!config) return null;
+
+  // Visibility logic
+  const isInvoice = printMode === 'INVOICE';
+  const isReceipt = printMode === 'RECEIPT';
+  const isContract = printMode === 'CONTRACT' || printMode === 'CONTRACT_CN';
+  const isQuotation = printMode === 'QUOTATION';
+
+  const shouldShow = 
+    (isQuotation && config.showInQuotation) ||
+    (isInvoice && config.showInInvoice) ||
+    (isReceipt && config.showInReceipt) ||
+    (isContract && config.showInContract);
+
+  if (!shouldShow) return null;
+
+  const activeMethods = [];
+  if (config.bankTransfer?.enabled) activeMethods.push({ 
+    label: isCn ? '銀行轉帳' : 'Bank Transfer', 
+    details: `${config.bankTransfer.bank}\n${isCn ? '名稱' : 'Name'}: ${config.bankTransfer.name}\n${isCn ? '賬號' : 'A/C'}: ${config.bankTransfer.account}` 
+  });
+  if (config.fps?.enabled) activeMethods.push({ 
+    label: isCn ? '轉數快' : 'FPS', 
+    details: config.fps.id 
+  });
+  if (config.cheque?.enabled) activeMethods.push({ 
+    label: isCn ? '支票' : 'Cheque', 
+    details: `${isCn ? '抬頭人' : 'Payable to'}: ${config.cheque.payableTo}` 
+  });
+  if (config.wechat?.enabled) activeMethods.push({ 
+    label: isCn ? '微信支付' : 'WeChat Pay', 
+    details: config.wechat.remarks || (isCn ? '接受' : 'Accepted') 
+  });
+  if (config.alipay?.enabled) activeMethods.push({ 
+    label: isCn ? '支付寶' : 'Alipay', 
+    details: config.alipay.remarks || (isCn ? '接受' : 'Accepted') 
+  });
+  if (config.creditCard?.enabled) activeMethods.push({ 
+    label: isCn ? '信用卡' : 'Credit Card', 
+    details: `${isCn ? '附加費' : 'Surcharge'}: ${config.creditCard.surcharge || 3}%` 
+  });
+
+  if (activeMethods.length === 0) return null;
+
+  return (
+    <div className="mt-6 bg-slate-50 p-5 rounded-2xl border border-slate-200 break-inside-avoid">
+      <h4 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-3 flex items-center gap-2">
+        {isCn ? '付款方式及銀行資料' : 'Payment Methods & Bank Details'}
+      </h4>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+        {activeMethods.map((m, idx) => (
+          <div key={idx} className="border-l-2 border-slate-200 pl-3">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mb-1">{m.label}</p>
+            <p className="text-[10px] text-slate-800 font-bold leading-tight whitespace-pre-wrap">{m.details}</p>
+          </div>
+        ))}
       </div>
     </div>
-    <div className="text-right">
-      <h1 className="text-3xl md:text-4xl font-light text-slate-800 uppercase tracking-widest mb-1">{typeEn}</h1>
-      {typeZh && <h2 className="text-sm font-bold text-[#A57C00] uppercase tracking-widest mb-3">{typeZh}</h2>}
-      <div className="text-right space-y-1 mt-2">
-        <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
-        <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></div>
+  );
+};
+
+export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
+  const venueId = data.venueId;
+  const profile = appSettings?.venueProfile || appSettings?.venueProfiles?.[venueId] || {};
+  const logoUrl = appSettings?.companyLogoUrl;
+
+  return (
+    <div className="flex justify-between items-start border-b-[3px] pb-6 mb-8" style={{ borderColor: '#A57C00' }}>
+      <div className="max-w-[60%]">
+        <div className="flex flex-col gap-1">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-12 object-contain self-start mb-2" />
+          ) : (
+            <div className="flex flex-col gap-0" style={{ color: '#A57C00' }}>
+              <span className="text-3xl font-black tracking-tight leading-none">{profile.nameZh || '璟瓏軒'}</span>
+              <span className="text-xs font-bold tracking-[0.2em] uppercase mt-1">{profile.nameEn || 'King Lung Heen'}</span>
+            </div>
+          )}
+          
+          <div className="text-[10px] text-slate-500 font-medium leading-relaxed mt-2">
+            <p className="font-bold text-slate-800 text-xs mb-0.5">{profile.address || '--- (Please set address in Settings)'}</p>
+            <p>
+              Tel: {profile.phone || '---'} 
+              {profile.website && ` | Web: ${profile.website}`}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="text-right">
+        <h1 className="text-3xl md:text-4xl font-light text-slate-800 uppercase tracking-widest mb-1">{typeEn}</h1>
+        {typeZh && <h2 className="text-sm font-bold text-[#A57C00] uppercase tracking-widest mb-3">{typeZh}</h2>}
+        <div className="text-right space-y-1 mt-2">
+          <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
+          <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></div>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings }) => (
   <div className="grid grid-cols-2 gap-12 mb-8 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
@@ -318,7 +410,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           )}
           {billing.ccSurcharge > 0 && (
             <tr className="bg-slate-50/50">
-              <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Credit Card Surcharge (3%)</td>
+              <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Credit Card Surcharge ({billing.ccSurchargePercent}%)</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">+${formatMoney(billing.ccSurcharge)}</td>
             </tr>
           )}

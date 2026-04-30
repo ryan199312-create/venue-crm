@@ -16,6 +16,7 @@ import InternalNotesTab from './RemarksTab';
 import { useEventForm } from '../hooks/useEventForm';
 import { useAI } from '../../../hooks/useAI';
 import { useAuth } from '../../../context/AuthContext';
+import { getScopedSettings } from '../../../services/helpers';
 
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings, users,
@@ -26,6 +27,13 @@ export default function EventFormModal({
 }) {
   const { hasPermission, userProfile } = useAuth();
   const { generate } = useAI();
+
+  // --- RESOLVE SCOPED SETTINGS ---
+  const scopedAppSettings = React.useMemo(() => 
+    getScopedSettings(appSettings, formData.venueId), 
+    [appSettings, formData.venueId]
+  );
+
   const {
     billingSummary,
     updateFinanceState,
@@ -45,7 +53,7 @@ export default function EventFormModal({
     handleTranslateDrinks,
     minSpendInfo,
     calculatePaymentTerms
-  } = useEventForm(formData, setFormData, appSettings, editingEvent, addToast);
+  } = useEventForm(formData, setFormData, scopedAppSettings, editingEvent, addToast);
 
   // Internal UI State
   const [formTab, setFormTab] = useState('basic');
@@ -193,7 +201,7 @@ export default function EventFormModal({
   const handleDrinkTypeChange = (e) => {
     const val = e.target.value;
     setDrinkPackageType(val);
-    const preset = appSettings.defaultMenus.find(m => m.type === 'drink' && m.title === val);
+    const preset = scopedAppSettings.defaultMenus.find(m => m.type === 'drink' && m.title === val);
     setFormData(prev => {
       let newData = { ...prev };
       if (preset) {
@@ -340,7 +348,7 @@ export default function EventFormModal({
               handleInputChange={handleInputChange}
               minSpendInfo={minSpendInfo}
               users={users}
-              appSettings={appSettings}
+              scopedAppSettings={scopedAppSettings}
             />
           )}
 
@@ -348,7 +356,7 @@ export default function EventFormModal({
             <FoodAndBeverageTab
               formData={formData}
               setFormData={setFormData}
-              appSettings={appSettings}
+              appSettings={scopedAppSettings}
               saveMenuSnapshot={saveMenuSnapshot}
               addMenu={addMenu}
               setPreviewVersion={setPreviewVersion}
@@ -388,6 +396,7 @@ export default function EventFormModal({
               addToast={addToast}
               onUploadProof={onUploadProof}
               onRemoveProof={onRemoveProof}
+              appSettings={scopedAppSettings}
             />
           )}
 
@@ -398,7 +407,7 @@ export default function EventFormModal({
               handleInputChange={handleInputChange}
               onUploadProof={onUploadProof}
               addToast={addToast}
-              appSettings={appSettings}
+              appSettings={scopedAppSettings}
               events={events}
               onMultiImageUpload={onMultiImageUpload}
               DocumentVisibilityToggles={DocumentVisibilityToggles}
@@ -454,7 +463,7 @@ export default function EventFormModal({
                     <div className="max-h-[60vh] overflow-y-auto">
                       <DocumentManager
                         eventData={formData}
-                        appSettings={appSettings}
+                        appSettings={scopedAppSettings}
                         isClientPortal={false}
                     onPrint={onPrint}
                         onSign={handleAdminSign}

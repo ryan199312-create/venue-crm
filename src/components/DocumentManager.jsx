@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Download, Loader2, CheckCircle, PenTool, Layout, Utensils, Printer, Eye, X, Plus } from 'lucide-react';
- import DocumentRouter from "../features/documents/components/DocumentRouter";
+import DocumentRouter from "../features/documents/components/DocumentRouter";
 import { SignaturePad } from './ui';
 import { usePdfGenerator } from "../features/documents/hooks/usePdfGenerator";
 import { useAuth } from '../context/AuthContext';

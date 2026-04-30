@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isStaff() {
+      return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin');
+    }
+
+    // Generated PDFs
+    match /generated_pdfs/{allPaths=**} {
+      allow read: if true; // Public access via signed tokens (handled by Cloud Functions)
+      allow write: if isStaff();
+    }
+    
+    // Client Uploads (Receipts)
+    match /receipts/{allPaths=**} {
+      allow read: if isStaff();
+      allow write: if true; // Public upload allowed (Handled/Validated by Cloud Function)
+    }
+
+    // Default: Staff only
+    match /{allPaths=**} {
+      allow read, write: if isStaff();
+    }
+  }
+}

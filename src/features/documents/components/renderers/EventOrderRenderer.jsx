@@ -10,24 +10,28 @@ import {
   shouldShowField,
   getPackageStrings,
   getIssueDate,
-  formatDateEn
+  formatDateEn,
+  DocumentHeader
 } from './DocumentShared';
 import { FloorplanAppendix } from './FloorplanRenderer';
 
 export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
+  const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, false) : { setupStr: '', avStr: '', decorStr: '' };
+
   const COPIES = [
     { name: '行政存檔 (Manager Copy)', type: 'STD', showBilling: false, showOps: true, showAllocation: false, color: 'bg-slate-800' },
     { name: '會計帳務單 (Finance Copy)', type: 'FIN', showBilling: true, showOps: false, showAllocation: true, color: 'bg-emerald-700' },
     { name: '樓面工作單 (Banquet Copy)', type: 'BQT', showBilling: false, showOps: true, showAllocation: false, color: 'bg-indigo-600' }
   ];
 
-  const billing = useMemo(() => generateBillingSummary(data), [data]);
-  const { setupStr, avStr, decorStr } = getPackageStrings(data, false);
-
-  // Allocation Logic (For Finance Copy)
-  const getDetailedAllocation = () => {
+  // Unified Allocation Logic
+  const displayAlloc = useMemo(() => {
+    if (!data || !billing) return {};
     const allocation = {};
-    DEPARTMENTS.forEach(dept => { allocation[dept.key] = { label: dept.label, total: 0, items: [] }; });
+    DEPARTMENTS.forEach(dept => { 
+      allocation[dept.key] = { label: dept.label, total: 0, items: [] }; 
+    });
     allocation['other'] = { label: '其他 (Other)', total: 0, items: [] };
     allocation['unallocated'] = { label: '⚠️ 未分拆 (Unallocated)', total: 0, items: [], isError: true };
 
@@ -38,6 +42,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
       allocation[group].items.push({ name, subLabel, qty: parseFloat(qty), unit: parseFloat(unitPrice), amount: totalAmount });
     };
 
+    // 1. Menu Allocation
     (data.menus || []).forEach(m => {
       const qty = parseFloat(m.qty) || 1;
       const price = parseFloat(m.price) || 0;
@@ -64,12 +69,14 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
       }
     });
 
+    // 2. Plating
     if (data.servingStyle === '位上') {
       const pFee = parseFloat(data.platingFee) || 0;
       const pQty = parseFloat(data.tableCount) || 0;
       if (pFee > 0) addItem('kitchen', '位上服務費', `${pQty}席`, pQty, pFee, pFee * pQty);
     }
 
+    // 3. Drinks
     const dQty = parseFloat(data.drinksQty) || 1;
     const dPrice = parseFloat(data.drinksPrice) || 0;
     const dTotal = dPrice * dQty;
@@ -94,6 +101,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
       addItem('bar', dName, '', dQty, dPrice, dTotal);
     }
 
+    // 4. Custom Items
     (data.customItems || []).forEach(i => {
       const qty = parseFloat(i.qty) || 1;
       const price = parseFloat(i.price) || 0;
@@ -101,33 +109,30 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
       addItem(i.category || 'other', i.name, '', qty, price, total);
     });
 
+    // 5. Package Overrides & Fees (Shared)
+    const addToDept = (key, name, amount) => {
+      if (!allocation[key]) allocation[key] = { label: '其他 (Other)', items: [], total: 0 };
+      allocation[key].items.push({ name, unit: amount, qty: 1, amount: amount });
+      allocation[key].total += amount;
+    };
+
+    if (billing.bus) addToDept('other', '旅遊巴安排', billing.bus.amount);
+    if (billing.setupPackagePrice > 0) addToDept('other', '舞台與接待設備', billing.setupPackagePrice);
+    if (billing.avPackagePrice > 0) addToDept('other', '影音設備', billing.avPackagePrice);
+    if (billing.decorPackagePrice > 0) addToDept('other', '場地佈置', billing.decorPackagePrice);
+    if (billing.serviceChargeVal > 0) addToDept('other', '服務費 (10%)', billing.serviceChargeVal);
+    if (billing.ccSurcharge > 0) addToDept('other', `信用卡附加費 (${billing.ccSurchargePercent}%)`, billing.ccSurcharge);
+    
+    if (billing.discountVal > 0) {
+      allocation['adjustments'] = { label: '調整 (Adjustments)', items: [], total: 0 };
+      allocation['adjustments'].items.push({ name: '折扣優惠 (Discount)', unit: -billing.discountVal, qty: 1, amount: -billing.discountVal });
+      allocation['adjustments'].total -= billing.discountVal;
+    }
+
     return allocation;
-  };
+  }, [data, billing]);
 
-  const detailedAlloc = useMemo(() => getDetailedAllocation(), [data, billing]);
-  let displayAlloc = JSON.parse(JSON.stringify(detailedAlloc || {}));
-  let otherKey = Object.keys(displayAlloc).find(k => k === 'others' || displayAlloc[k].label.includes('其他') || displayAlloc[k].label.toLowerCase().includes('other'));
-  if (!otherKey) { otherKey = 'others'; displayAlloc[otherKey] = { label: '其他 (Others)', items: [], total: 0 }; }
-  else { displayAlloc[otherKey].label = '其他 (Others)'; }
-
-  const addToDept = (key, name, amount) => {
-    if (!displayAlloc[key]) displayAlloc[key] = { label: '其他 (Others)', items: [], total: 0 };
-    displayAlloc[key].items.push({ name, unit: amount, qty: 1, amount: amount });
-    displayAlloc[key].total += amount;
-  };
-
-  if (billing.bus) addToDept(otherKey, '旅遊巴安排', billing.bus.amount);
-  if (billing.setupPackagePrice > 0) addToDept(otherKey, '舞台與接待設備', billing.setupPackagePrice);
-  if (billing.avPackagePrice > 0) addToDept(otherKey, '影音設備', billing.avPackagePrice);
-  if (billing.decorPackagePrice > 0) addToDept(otherKey, '場地佈置', billing.decorPackagePrice);
-  if (billing.serviceChargeVal > 0) addToDept(otherKey, '服務費 (10%)', billing.serviceChargeVal);
-  if (billing.ccSurcharge > 0) addToDept(otherKey, '信用卡附加費 (3%)', billing.ccSurcharge);
-  if (billing.discountVal > 0) {
-    if (!displayAlloc['adjustments']) displayAlloc['adjustments'] = { label: '調整 (Adjustments)', items: [], total: 0 };
-    displayAlloc['adjustments'].items.push({ name: '折扣優惠 (Discount)', unit: -billing.discountVal, qty: 1, amount: -billing.discountVal });
-    displayAlloc['adjustments'].total -= billing.discountVal;
-  }
-  const totalAllocation = Object.values(displayAlloc).reduce((acc, dept) => acc + dept.total, 0);
+  if (!data) return null;
 
   return (
     <div className="font-sans text-slate-900 mx-auto bg-white text-sm w-full max-w-[210mm] print:max-w-none min-h-[297mm] print:min-h-0">
@@ -155,24 +160,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
           <div className="print-page">
             {copy.type === 'BQT' ? (
               <div className="relative p-[10mm] print:p-0">
-                <div className="border-b-2 border-slate-800 pb-4 mb-6">
-                  <div className="flex justify-between items-end">
-                    <div className="w-[70%]">
-                      <h1 className="text-3xl font-black uppercase leading-none tracking-tight mb-2">{data.eventName}</h1>
-                      <div className="text-sm font-bold text-slate-600 flex items-center gap-2 font-mono">
-                        <span>REF: {data.orderId}</span><span className="text-slate-300">|</span>
-                        <span>{cleanLocation(data.venueLocation)}</span>
-                      </div>
-                    </div>
-                    <div className="text-right flex flex-col items-end">
-                      <span className={`text-white px-3 py-1 text-[10px] font-black rounded uppercase tracking-widest mb-3 shadow-sm ${copy.color}`}>
-                        {copy.name}
-                      </span>
-                      <div className="text-lg font-black text-slate-900">{formatDateWithDay(data.date)}</div>
-                      <div className="text-sm font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded mt-1">{data.startTime} - {data.endTime}</div>
-                    </div>
-                  </div>
-                </div>
+                <DocumentHeader data={data} typeEn="Event Order" typeZh={copy.name} appSettings={appSettings} />
 
                 <div className="grid grid-cols-4 gap-3 mb-4 text-center">
                   <div className="bg-slate-100 p-2 rounded border-l-4 border-slate-800"><span className="block text-[10px] font-bold text-slate-500 uppercase">Tables (席數)</span><span className="block text-3xl font-black">{data.tableCount}</span></div>
@@ -233,7 +221,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                             <div className="bg-indigo-50 p-2 rounded border border-indigo-100"><span className="block font-bold text-indigo-800 mb-1">Departure (散席)</span>{data.busInfo.departures && data.busInfo.departures.length > 0 ? data.busInfo.departures.map((b, i) => (<div key={i} className="font-mono font-bold">{b.time} <span className="font-sans font-normal text-[10px]">({b.location})</span></div>)) : <span className="text-slate-400">-</span>}</div>
                           </div>
                         ) : <div className="text-xs text-slate-400 text-center italic">No Bus Arrangement</div>}
-                        <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{data.parkingInfo && data.parkingInfo.ticketQty || 0} 張 x {data.parkingInfo && data.parkingInfo.ticketHours || 0} 小時</span></div>
+                        <div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{(data.parkingInfo?.ticketQty) || 0} 張 x {(data.parkingInfo?.ticketHours) || 0} 小時</span></div>
                       </div>
                     </div>
                     <div className="border-2 border-slate-200 rounded-xl overflow-hidden">
@@ -263,23 +251,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
               </div>
             ) : (
               <div className="p-[10mm] print:p-0">
-                <div className="flex justify-between items-end border-b-2 border-slate-800 pb-4 mb-6">
-                  <div className="flex-1">
-                    <h1 className="text-3xl font-black uppercase tracking-tight leading-none mb-2">{data.eventName}</h1>
-                    <div className="flex gap-4 mt-1 text-sm font-bold text-slate-600 font-mono">
-                      <span>REF: {data.orderId}</span>
-                      <span className="text-slate-300">|</span>
-                      <span>DATE: {formatDateEn(getIssueDate(data))}</span>
-                    </div>
-                  </div>
-                  <div className="text-right flex flex-col items-end">
-                    <span className={`text-white px-3 py-1 text-[10px] font-black rounded uppercase tracking-widest mb-3 shadow-sm ${copy.color}`}>
-                      {copy.name}
-                    </span>
-                    <div className="text-lg font-black text-slate-900">{formatDateWithDay(data.date)}</div>
-                    <div className="text-sm font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded mt-1">{data.startTime} - {data.endTime}</div>
-                  </div>
-                </div>
+                <DocumentHeader data={data} typeEn="Event Order" typeZh="宴會確認單" appSettings={appSettings} />
 
                 {copy.type !== 'FIN' && (
                   <div className="bg-slate-100 border border-slate-200 p-2 rounded mb-4 grid grid-cols-4 gap-4 text-xs">
@@ -358,7 +330,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                               </div>
                             </div>
                           )}
-                          <div className="flex justify-between items-center"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{data.parkingInfo && data.parkingInfo.ticketQty || 0} 張 x {data.parkingInfo && data.parkingInfo.ticketHours || 0} 小時</span></div>
+                          <div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{(data.parkingInfo?.ticketQty) || 0} 張 x {(data.parkingInfo?.ticketHours) || 0} 小時</span></div>
                         </div>
                       </div>
                       {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-red-500 font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}

@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'admin';
+    }
+    
+    function isStaff() {
+      return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin');
+    }
+
+    // --- ARTIFACTS NAMESPACE ---
+    match /artifacts/{appId} {
+      
+      // Public data (for website)
+      match /public/data/settings/config {
+        allow read: if true;
+      }
+      
+      // Private data
+      match /private/data/{document=**} {
+        
+        // Settings (RBAC, etc)
+        match /settings/config {
+          allow read: if isAuthenticated();
+          allow write: if isAdmin();
+        }
+        
+        // Users
+        match /users/{userId} {
+          allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+          allow write: if isAdmin();
+        }
+        
+        // Events
+        match /events/{eventId} {
+          allow read, update, delete: if isStaff();
+          allow create: if isStaff() || (
+            request.resource.data.status == 'tentative' && 
+            request.resource.data.source == 'website_inquiry'
+          );
+        }
+        
+        // PDF Jobs
+        match /pdf_jobs/{jobId} {
+          allow read: if isAuthenticated();
+          allow write: if isStaff();
+        }
+      }
+    }
+    
+    // Default: Deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

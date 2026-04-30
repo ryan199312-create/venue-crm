@@ -28,16 +28,22 @@ export const AuthProvider = ({ children }) => {
   const [appSettings, setAppSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedVenueId, setSelectedVenueId] = useState('all');
+  const [outlets, setOutlets] = useState([]);
 
   const appId = APP_ID;
 
-  // --- FETCH APP SETTINGS (FOR RBAC) ---
+  // --- FETCH APP SETTINGS (FOR RBAC & OUTLETS) ---
   useEffect(() => {
     const settingsRef = doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config');
     const unsubscribe = onSnapshot(settingsRef, (doc) => {
       if (doc.exists()) {
-        setAppSettings(doc.data());
+        const data = doc.data();
+        setAppSettings(data);
+        setOutlets(data.outlets || []);
       }
+    }, (err) => {
+      console.warn("Settings access restricted (expected for guests):", err.message);
     });
     return () => unsubscribe();
   }, [appId]);
@@ -58,7 +64,8 @@ export const AuthProvider = ({ children }) => {
           lastLogin: serverTimestamp(),
           role: 'staff', // Default
           displayName: u.displayName || u.email || `User ${u.uid.slice(0, 4)}`,
-          email: u.email || 'anonymous'
+          email: u.email || 'anonymous',
+          accessibleVenues: [] // Default empty
         };
 
         if (userSnap.exists()) {
@@ -112,6 +119,26 @@ export const AuthProvider = ({ children }) => {
     return roleConfig.permissions?.[permissionId] || false;
   }, [userProfile, appSettings]);
 
+  // --- OUTLET HELPER ---
+  const getVisibleVenues = useCallback((allOutlets) => {
+    if (!userProfile) return [];
+    if (hasPermission('manage_all_outlets')) return allOutlets;
+    
+    return allOutlets.filter(v => userProfile.accessibleVenues?.includes(v.id));
+  }, [userProfile, hasPermission]);
+
+  // --- AUTO-DEFAULT VENUE ---
+  useEffect(() => {
+    if (!loading && userProfile && outlets.length > 0) {
+      if (selectedVenueId === 'all' && !hasPermission('manage_all_outlets')) {
+        const visible = getVisibleVenues(outlets);
+        if (visible.length > 0) {
+          setSelectedVenueId(visible[0].id);
+        }
+      }
+    }
+  }, [loading, userProfile, outlets, hasPermission, getVisibleVenues, selectedVenueId]);
+
   const login = async (email, password) => {
     try {
       setLoading(true);
@@ -149,7 +176,11 @@ export const AuthProvider = ({ children }) => {
     loginGuest,
     signOut,
     hasPermission,
-    refreshUserClaims
+    refreshUserClaims,
+    selectedVenueId,
+    setSelectedVenueId,
+    getVisibleVenues,
+    outlets
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

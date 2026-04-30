@@ -12,11 +12,12 @@ import {
 } from './DocumentShared';
 
 export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => {
+  if (!data) return null;
   const printMode = 'ADDENDUM';
   const { clientSig, adminSig, sigData } = getSignatures(data, printMode);
 
   // Master Calculation
-  const billing = generateBillingSummary(data);
+  const billing = generateBillingSummary(data, appSettings);
 
   // Separate custom items into original vs addendum
   const originalCustomItems = billing.parsedCustomItems.filter(item => !item.isAddendum);
@@ -32,7 +33,7 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
     }
   });
   const addendumTotal = addendumSubtotal + addendumSC;
-  const ccMultiplier = data.paymentMethod === '信用卡' ? 1.03 : 1;
+  const ccMultiplier = data.paymentMethod === '信用卡' ? (1 + (billing.ccSurchargePercent / 100)) : 1;
   const finalAddendumTotal = Math.round(addendumTotal * ccMultiplier);
   
   // Original Total is mathematically derived to ensure it perfectly adds up
@@ -41,7 +42,7 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
   return (
     <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-sm leading-relaxed">
       <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
-      <DocumentHeader data={data} typeEn="ADDENDUM" typeZh="合約附加條款" />
+      <DocumentHeader data={data} typeEn="ADDENDUM" typeZh="合約附加條款" appSettings={appSettings} />
       <ClientInfoGrid data={data} appSettings={appSettings} />
 
       <div className="my-8 space-y-2">
@@ -103,8 +104,8 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
             )}
             {billing.ccSurcharge > 0 && data.paymentMethod === '信用卡' && (
               <tr className="bg-slate-50 text-slate-500">
-                <td colSpan="3" className="py-1 px-4 text-right">Original CC Surcharge (原合約附加費):</td>
-                <td className="py-1 px-4 text-right font-mono font-medium">+${formatMoney(Math.round((billing.subtotal - addendumSubtotal + (billing.serviceChargeVal - addendumSC) - billing.discountVal) * 0.03))}</td>
+                <td colSpan="3" className="py-1 px-4 text-right">Original CC Surcharge ({billing.ccSurchargePercent}%):</td>
+                <td className="py-1 px-4 text-right font-mono font-medium">+${formatMoney(Math.round((billing.subtotal - addendumSubtotal + (billing.serviceChargeVal - addendumSC) - billing.discountVal) * (billing.ccSurchargePercent / 100)))}</td>
               </tr>
             )}
             <tr className="bg-slate-100/80 border-b-4 border-slate-200">
@@ -145,23 +146,27 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
   );
 };
 
-export const InternalNotesRenderer = ({ data }) => (
-  <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
-    <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
-    <DocumentHeader data={data} typeEn="INTERNAL NOTES" typeZh="內部備註" />
-    <ClientInfoGrid data={data} />
-    <div className="mt-8 flex-1">
-      <h3 className="text-sm font-black uppercase tracking-widest pb-2 border-b-2 inline-block border-slate-800 text-slate-800 mb-4">
-        備註內容 (Notes Content)
-      </h3>
-      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-        {data.generalRemarks || '(無內容)'}
+export const InternalNotesRenderer = ({ data, appSettings }) => {
+  if (!data) return null;
+  return (
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
+      <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+      <DocumentHeader data={data} typeEn="INTERNAL NOTES" typeZh="內部備註" appSettings={appSettings} />
+      <ClientInfoGrid data={data} appSettings={appSettings} />
+      <div className="mt-8 flex-1">
+        <h3 className="text-sm font-black uppercase tracking-widest pb-2 border-b-2 inline-block border-slate-800 text-slate-800 mb-4">
+          備註內容 (Notes Content)
+        </h3>
+        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+          {data.generalRemarks || '(無內容)'}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-export const MenuConfirmRenderer = ({ data, menuId, onSign }) => {
+export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings }) => {
+  if (!data) return null;
   const menu = data.menus && data.menus.find(m => String(m.id) === String(menuId)) ? data.menus.find(m => String(m.id) === String(menuId)) : (data.menus?.[0] || null);
   if (!menu) return <div className="p-10 text-center text-red-500 font-bold">Error: Menu Data Not Found</div>;
 
@@ -172,8 +177,8 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign }) => {
     <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative">
       <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
       
-      <DocumentHeader data={data} typeEn="Menu Confirmation" typeZh="菜單確認表" />
-      <ClientInfoGrid data={data} />
+      <DocumentHeader data={data} typeEn="Menu Confirmation" typeZh="菜單確認表" appSettings={appSettings} />
+      <ClientInfoGrid data={data} appSettings={appSettings} />
 
       <div className="flex flex-col items-center bg-slate-50/50 rounded-2xl border border-slate-200 p-8 shadow-inner mb-12">
         <div className="w-full max-w-lg">

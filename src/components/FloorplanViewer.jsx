@@ -18,28 +18,28 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   const elements = floorplan?.elements || [];
   
   const isWholeVenue = selectedLocations.includes('全場');
-  const visibleZones = zones.filter(z => {
+  const highlightedZones = zones.filter(z => {
     if (isWholeVenue) return true;
     return selectedLocations.includes(z.name) || 
            (z.nameZh && selectedLocations.includes(z.nameZh)) ||
            (z.nameZh && z.nameEn && selectedLocations.includes(`${z.nameZh} (${z.nameEn})`));
   });
-  const canZoom = visibleZones.length > 0 && !isWholeVenue && zones.length > 0;
+  const canZoom = highlightedZones.length > 0 && !isWholeVenue && zones.length > 0;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   
-  // If zoomed, focus ONLY on the selected zones
-  const targetZones = (isZoomed && canZoom) ? visibleZones : zones;
+  // If zoomed, focus ONLY on the highlighted zones
+  const targetZones = (isZoomed && canZoom) ? highlightedZones : zones;
 
   targetZones.forEach(z => {
+      if (!z.points || z.points.length === 0) return;
       z.points.forEach(p => {
-         minX = Math.min(minX, p.x_m * itemScale);
-         maxX = Math.max(maxX, p.x_m * itemScale);
-         minY = Math.min(minY, p.y_m * itemScale);
-         maxY = Math.max(maxY, p.y_m * itemScale);
+          minX = Math.min(minX, p.x_m * itemScale);
+          maxX = Math.max(maxX, p.x_m * itemScale);
+          minY = Math.min(minY, p.y_m * itemScale);
+          maxY = Math.max(maxY, p.y_m * itemScale);
       });
-  });
-  
+  });  
   // If NOT zoomed, include all elements to ensure everything fits on screen
   if (!isZoomed || !canZoom) {
     elements.forEach(el => {
@@ -110,22 +110,49 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
           }}
         >
           {/* Render Zones */}
-          {visibleZones.length > 0 && (
+          {zones.length > 0 && (
              <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-               {visibleZones.map(z => {
-                  const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
-                  const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;
-                  const cy = ((Math.min(...z.points.map(p => p.y_m)) + Math.max(...z.points.map(p => p.y_m))) / 2) * itemScale;
-                  return (
-                    <g key={z.id}>
-                      <polygon points={points} fill={z.color} stroke={z.color.replace(/0\.\d+\)/, '0.8)')} strokeWidth="2" strokeDasharray="4 4" />
-                      <text x={cx} y={cy} fill={z.color.replace(/0\.\d+\)/, '1.0)')} fontSize={Math.max(14, itemScale * 0.8)} fontWeight="bold" textAnchor="middle" dominantBaseline="middle" style={{textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff'}} opacity="0.8">{z.name}</text>
-                    </g>
-                  );
+               <defs>
+                 <filter id="zoneGlowViewer" x="-20%" y="-20%" width="140%" height="140%">
+                   <feGaussianBlur stdDeviation="3" result="blur" />
+                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                 </filter>
+               </defs>
+               {zones.map(z => {
+                 if (!z.points || z.points.length === 0) return null;
+                 const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
+                 const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;
+                 const cy = ((Math.min(...z.points.map(p => p.y_m)) + Math.max(...z.points.map(p => p.y_m))) / 2) * itemScale;
+                 const isHighlighted = selectedLocations.includes(z.nameZh || z.name) || (z.nameZh && z.nameEn && selectedLocations.includes(`${z.nameZh} (${z.nameEn})`)) || isWholeVenue;
+
+                 return (
+                   <g key={z.id}>
+                     <polygon 
+                        points={points} 
+                        fill={z.color} 
+                        stroke={z.color.replace(/0\.\d+\)/, '0.8)')} 
+                        strokeWidth={isHighlighted ? "4" : "2"} 
+                        strokeDasharray={isHighlighted ? "" : "4 4"}
+                        filter={isHighlighted ? "url(#zoneGlowViewer)" : ""}
+                        className={isHighlighted ? "animate-pulse" : ""}
+                        style={{ transition: 'all 0.3s ease' }}
+                     />
+                     <text 
+                        x={cx} y={cy} 
+                        fill={z.color.replace(/0\.\d+\)/, '1.0)')} 
+                        fontSize={Math.max(14, itemScale * 0.8)} 
+                        fontWeight="black" 
+                        textAnchor="middle" 
+                        dominantBaseline="middle" 
+                        style={{textShadow: '2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff'}}
+                     >
+                       {z.nameZh || z.name}
+                     </text>
+                   </g>
+                 );
                })}
              </svg>
           )}
-
           {/* Render Elements */}
           {(elements || []).map(el => {
             const w_m = el.w_m || (el.w ? el.w / 40 : 1);

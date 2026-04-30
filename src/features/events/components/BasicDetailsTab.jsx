@@ -1,9 +1,13 @@
 import React from 'react';
-import { FileText, DollarSign, Users } from 'lucide-react';
+import { FileText, DollarSign, Users, Building2 } from 'lucide-react';
 import { FormInput, FormSelect, LocationSelector } from '../../../components/ui';
 import { EVENT_TYPES } from '../../../services/billingService';
+import { useAuth } from '../../../context/AuthContext';
 
-const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInfo, users = [], appSettings }) => {
+const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInfo, users = [], scopedAppSettings }) => {
+  const { getVisibleVenues, hasPermission, outlets } = useAuth();
+  const visibleVenues = getVisibleVenues(outlets);
+
   const handleCheckboxChange = (userName) => {
     const currentReps = formData.salesRep ? formData.salesRep.split(', ') : [];
     let newReps;
@@ -17,10 +21,32 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-6">
         <FormInput label="訂單編號 (Order ID)" name="orderId" required value={formData.orderId} onChange={handleInputChange} />
+
+        <FormSelect 
+          label="預訂分店 (Outlet)" 
+          name="venueId" 
+          value={formData.venueId} 
+          onChange={handleInputChange} 
+          required 
+          options={visibleVenues.map(v => ({ value: v.id, label: v.name }))}
+        />
+
         <FormSelect label="活動狀態 (Status)" name="status" options={[{ value: 'tentative', label: '暫定 (Tentative)' }, { value: 'confirmed', label: '已確認 (Confirmed)' }, { value: 'completed', label: '已完成 (Completed)' }, { value: 'cancelled', label: '已取消 (Cancelled)' }]} value={formData.status} onChange={handleInputChange} />
-        <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
+        <div className="space-y-3">
+          <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
+          {formData.eventType === '其他 (Other)' && (
+            <FormInput 
+              label="自定義活動類型 (Custom Event Type)" 
+              name="customEventType" 
+              value={formData.customEventType || ''} 
+              onChange={handleInputChange} 
+              placeholder="例如: 產品發佈會 / Product Launch"
+              className="animate-in slide-in-from-top-2"
+            />
+          )}
+        </div>
       </div>
       
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
@@ -32,17 +58,25 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
         <div className="grid grid-cols-4 gap-4">
           <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
           <FormInput label="開始時間 (Start)" name="startTime" type="time" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
-          <div className="col-span-1">
-            <label className="block text-sm font-bold text-slate-700 mb-1.5 text-red-600">起菜時間 (Serving)</label>
-            <input type="time" name="servingTime" value={formData.servingTime || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all bg-red-50" />
-          </div>
+          
+          <FormInput 
+            label="起菜時間 (Serving)" 
+            name="servingTime" 
+            type="time" 
+            className="col-span-1" 
+            value={formData.servingTime} 
+            onChange={handleInputChange} 
+            inputClassName="border-red-200 bg-red-50 focus:ring-red-500 focus:border-red-500"
+            labelClassName="text-red-600 font-bold"
+          />
+          
           <FormInput label="結束時間 (End)" name="endTime" type="time" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
         </div>
         <div className="pt-4 border-t border-slate-100 mt-2">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-8 flex flex-col justify-between">
               <div>
-                <LocationSelector formData={formData} setFormData={setFormData} appSettings={appSettings} />
+                <LocationSelector formData={formData} setFormData={setFormData} appSettings={scopedAppSettings} />
                 {minSpendInfo && (
                   <div className="mt-2 p-2 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row justify-between items-center animate-in slide-in-from-top-2">
                     <div className="flex items-center text-indigo-900 mb-1 sm:mb-0"><div className="bg-white p-1 rounded-full shadow-sm mr-2 text-indigo-600"><DollarSign size={14} /></div><div><span className="text-[10px] font-bold text-indigo-600 block">最低消費 (Min Spend)</span><span className="text-base font-black font-mono tracking-tight">${minSpendInfo.amount.toLocaleString()}</span></div></div>

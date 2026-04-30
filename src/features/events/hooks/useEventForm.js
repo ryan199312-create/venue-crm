@@ -7,11 +7,11 @@ export const useEventForm = (formData, setFormData, appSettings, editingEvent, a
   const [translatingMenuId, setTranslatingMenuId] = useState(null);
   const [isTranslatingDrinks, setIsTranslatingDrinks] = useState(false);
 
-  const billingSummary = useMemo(() => generateBillingSummary(formData), [formData]);
+  const billingSummary = useMemo(() => generateBillingSummary(formData, appSettings), [formData, appSettings]);
 
   const updateFinanceState = useCallback((newData) => {
-    return { ...newData, totalAmount: generateBillingSummary(newData).grandTotal };
-  }, []);
+    return { ...newData, totalAmount: generateBillingSummary(newData, appSettings).grandTotal };
+  }, [appSettings]);
 
   const handleInputChange = useCallback((e) => {
     const { name, value, checked } = e.target;

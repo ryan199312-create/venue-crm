@@ -53,7 +53,7 @@ const BillingTab = ({
   updateFinanceState, handlePriceChange, handleInputChange,
   updateCustomItem, removeCustomItem, jumpToAllocation,
   minSpendInfo, billingSummary, calculatePaymentTerms,
-  addToast, onUploadProof, onRemoveProof
+  addToast, onUploadProof, onRemoveProof, appSettings
 }) => {
   const { hasPermission } = useAuth();
   const canEditPrices = hasPermission('edit_prices');
@@ -125,7 +125,7 @@ const BillingTab = ({
         <div className="w-full md:w-80 space-y-3 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center pb-3 border-b border-slate-100"><label className={`flex items-center cursor-pointer text-sm select-none transition-colors ${!canEditPrices ? 'cursor-not-allowed text-slate-400' : 'text-slate-600 hover:text-blue-600'}`}><input type="checkbox" checked={formData.enableServiceCharge !== false} disabled={!canEditPrices} onChange={e => { if (!canEditPrices) return; setFormData(prev => updateFinanceState({ ...prev, enableServiceCharge: e.target.checked })) }} className="mr-2 rounded text-blue-600 focus:ring-blue-500 w-4 h-4" /><span className="font-bold">服務費 (10%)</span></label><div className="text-right"><span className={`font-mono font-bold text-sm ${formData.enableServiceCharge !== false ? 'text-slate-700' : 'text-slate-300 line-through'}`}>+ ${formatMoney(billingSummary.serviceChargeVal)}</span></div></div>
           <div className="flex justify-between items-center pb-3 border-b border-slate-100"><span className="text-sm font-bold text-slate-600">折扣 (Discount)</span><div className="relative w-28"><span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">- $</span><input type="text" value={formData.discount || ''} readOnly={!canEditPrices} onChange={canEditPrices ? handlePriceChange : undefined} name="discount" className={`w-full text-right text-sm border-b border-slate-300 hover:border-red-300 focus:border-red-500 outline-none font-mono font-bold pl-6 pb-1 bg-transparent ${!canEditPrices ? 'cursor-not-allowed text-slate-400' : 'text-red-600'}`} placeholder="0" /></div></div>
-          {billingSummary.ccSurcharge > 0 && (<div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-6 px-6 pt-3"><span className="text-sm font-bold text-amber-700">信用卡附加費 (3%)</span><span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(billingSummary.ccSurcharge)}</span></div>)}
+          {billingSummary.ccSurcharge > 0 && (<div className="flex justify-between items-center pb-3 border-b border-slate-100 bg-amber-50/50 -mx-6 px-6 pt-3"><span className="text-sm font-bold text-amber-700">信用卡附加費 ({billingSummary.ccSurchargePercent}%)</span><span className="font-mono text-sm text-amber-700 font-bold">+ ${formatMoney(billingSummary.ccSurcharge)}</span></div>)}
           <div className="flex justify-between items-center pt-2"><span className="text-base font-bold text-slate-800">總金額 (Total)</span><span className="text-2xl font-black text-blue-700 font-mono tracking-tight">${formatMoney(billingSummary.grandTotal)}</span></div>
         </div>
       </div>
@@ -141,7 +141,7 @@ const BillingTab = ({
               type="button" 
               title="點擊將根據後台設定的付款規則，自動計算並覆寫各期應付金額及日期。"
               onClick={() => {
-                const currentTotal = generateBillingSummary(formData).grandTotal;
+                const currentTotal = generateBillingSummary(formData, appSettings).grandTotal;
                 const terms = calculatePaymentTerms(currentTotal, formData.date);
                 if (terms) {
                   setFormData(prev => ({ ...prev, ...terms, totalAmount: currentTotal }));
@@ -187,7 +187,7 @@ const BillingTab = ({
               </div>
               <div className="flex flex-col gap-3 w-full md:w-auto min-w-[280px]">
                 <div className="grid grid-cols-2 gap-2">
-                  <div><label className="block text-xs font-bold text-slate-400 mb-1">付款方式</label><FormSelect label="" name="paymentMethod" options={['現金', '信用卡', '支票', '轉數快']} value={formData.paymentMethod} disabled={!canConfirmPayments} onChange={handleInputChange} className="w-full text-sm" /></div>
+                  <div><label className="block text-xs font-bold text-slate-400 mb-1">付款方式</label><FormSelect label="" name="paymentMethod" options={['現金', '信用卡', '支票', '轉數快', 'WeChat Pay', 'Alipay']} value={formData.paymentMethod} disabled={!canConfirmPayments} onChange={handleInputChange} className="w-full text-sm" /></div>
                   <div><label className="block text-xs font-bold text-slate-400 mb-1">付款日期</label><input type="date" value={formData.balanceDate || ''} disabled={!canConfirmPayments} onChange={e => { if (!canConfirmPayments) return; setFormData(prev => ({ ...prev, balanceDate: e.target.value })) }} className={`w-full px-2 py-2 border border-slate-300 rounded-lg text-sm outline-none bg-white focus:ring-2 focus:ring-blue-500 ${!canConfirmPayments ? 'cursor-not-allowed text-slate-400' : ''}`} /></div>
                 </div>
                 <div className="flex flex-wrap items-stretch gap-2 mt-1">

@@ -3,6 +3,7 @@ import { renderToString } from 'react-dom/server';
 import { functions, db } from '../../../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { APP_ID } from '../../../core/env';
 import DocumentRouter from '../components/DocumentRouter';
 
 let cachedTailwindCss = null;
@@ -57,7 +58,7 @@ export function usePdfGenerator() {
     const { data: { jobId } } = await enqueueApi({ html: fullHtml, fileName, docType });
 
     return new Promise((resolve, reject) => {
-      const jobRef = doc(db, 'artifacts', 'my-venue-crm', 'private', 'data', 'pdf_jobs', jobId);
+      const jobRef = doc(db, 'artifacts', APP_ID, 'private', 'data', 'pdf_jobs', jobId);
       const unsubscribe = onSnapshot(jobRef, (snap) => {
         const jobStatus = snap.data();
         if (jobStatus?.status === 'completed') {

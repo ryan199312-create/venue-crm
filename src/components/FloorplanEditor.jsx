@@ -1,12 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash2, RotateCw, Move, Image as ImageIcon, MousePointer2, Maximize, Minimize, Copy, Eraser, MoveHorizontal, MoveVertical, Undo2, Redo2, Link, Unlink, ChevronsUp, ChevronsDown, Grid, Save, AlignLeft, AlignRight, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
+import { Trash2, RotateCw, Move, Image as ImageIcon, MousePointer2, Maximize, Minimize, Copy, Eraser, MoveHorizontal, MoveVertical, Undo2, Redo2, Link, Unlink, ChevronsUp, ChevronsDown, Grid, Save, AlignLeft, AlignRight, ArrowUpToLine, ArrowDownToLine, PenTool, ZoomIn, ZoomOut, X } from 'lucide-react';
 import { TOOL_GROUPS } from './FloorplanTools';
 
-export default function FloorplanEditor({ formData, setFormData, defaultBgImage = '', defaultItemScale = 40, defaultZones = [], events = [] }) {
+export default function FloorplanEditor({ 
+  formData, 
+  setFormData, 
+  defaultBgImage = '', 
+  defaultItemScale = 40, 
+  defaultZones = [], 
+  events = [],
+  onClose = null,
+  initialFullscreen = false,
+  liteMode = false
+}) {
   const canvasRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
+  const [zoom, setZoom] = useState(1);
   const [clipboard, setClipboard] = useState(null);
   const [selectionBox, setSelectionBox] = useState(null);
   const [dragState, setDragState] = useState(null);
@@ -17,21 +28,33 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
   const previewCanvasRef = useRef(null);
   const [previewScale, setPreviewScale] = useState(1);
 
-  // Safely initialize floorplan state
-  const floorplan = formData.floorplan || { elements: [] };
-  const itemScale = defaultItemScale || 40;
-  const bgImage = defaultBgImage || '';
-  const zones = defaultZones || [];
+  const [isDrawingZone, setIsDrawingZone] = useState(false);
+  const [drawingZoneId, setDrawingZoneId] = useState(null);
 
-  // Determine which zones are active based on the Event's Selected Locations
-  const selectedLocs = formData.selectedLocations || [];
-  const isWholeVenue = selectedLocs.includes('全場');
-  const visibleZones = zones.filter(z => {
-    if (isWholeVenue) return true;
-    return selectedLocs.includes(z.name) || 
-           (z.nameZh && selectedLocs.includes(z.nameZh)) ||
-           (z.nameZh && z.nameEn && selectedLocs.includes(`${z.nameZh} (${z.nameEn})`));
-  });
+  // Safely initialize floorplan state - Prioritize formData, then fall back to defaults
+  const floorplan = formData.floorplan || { elements: [] };
+  const itemScale = floorplan.itemScale || defaultItemScale || 40;
+  const bgImage = floorplan.bgImage || defaultBgImage || '';
+  const zones = (floorplan.zones && floorplan.zones.length > 0) ? floorplan.zones : (defaultZones || []);
+
+  // Robust Highlight Logic
+  const highlightedZones = useMemo(() => {
+    const selectedLocs = formData.selectedLocations || [];
+    if (selectedLocs.length === 0) return [];
+    
+    const isWholeVenue = selectedLocs.includes('全場');
+    
+    return (zones || []).filter(z => {
+      if (isWholeVenue) return true;
+      const label = (z.nameZh || z.name || '').trim();
+      const combined = z.nameEn ? `${z.nameZh} (${z.nameEn})` : z.nameZh;
+      return selectedLocs.includes(label) || 
+             selectedLocs.includes(z.nameZh) || 
+             selectedLocs.includes(combined);
+    });
+  }, [zones, formData.selectedLocations]);
+
+  const visibleZones = zones; // Always show all zones to provide context
 
   // Keep a stable ref of elements for the drag-box mouseup closure
   const elementsRef = useRef(floorplan.elements);
@@ -40,24 +63,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
   // --- UNDO / REDO HISTORY ---
   const historyRef = useRef([floorplan.elements]);
   const historyStepRef = useRef(0);
-
-  // --- DYNAMIC PREVIEW SCALING ---
-  useEffect(() => {
-    if (isFullscreen) return;
-    const updateScale = () => {
-      if (!previewContainerRef.current || !previewCanvasRef.current) return;
-      const cw = previewContainerRef.current.clientWidth;
-      const ch = previewContainerRef.current.clientHeight;
-      const iw = previewCanvasRef.current.offsetWidth || 800;
-      const ih = previewCanvasRef.current.offsetHeight || 600;
-      
-      const scale = Math.min((cw - 40) / iw, (ch - 40) / ih, 1);
-      setPreviewScale(scale);
-    };
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, [isFullscreen, bgImage, floorplan.elements]);
 
   const updateFloorplan = (updates, saveHistory = true) => {
     if (saveHistory && updates.elements) {
@@ -70,6 +75,29 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       ...prev,
       floorplan: { ...(prev.floorplan || { elements: [] }), ...updates }
     }));
+  };
+
+  const updateZones = (newZones) => {
+    setFormData(prev => ({
+      ...prev,
+      floorplan: { ...(prev.floorplan || { elements: [] }), zones: newZones }
+    }));
+  };
+
+  const handleCanvasClick = (e) => {
+    if (!isDrawingZone || !drawingZoneId) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoom / itemScale;
+    const y = (e.clientY - rect.top) / zoom / itemScale;
+
+    const newZones = zones.map(z => {
+      if (z.id === drawingZoneId) {
+        return { ...z, points: [...(z.points || []), { x_m: x, y_m: y }] };
+      }
+      return z;
+    });
+    updateZones(newZones);
   };
 
   const expandSelectionByGroup = (ids, elements) => {
@@ -96,10 +124,22 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
     }
   };
 
+  // --- MOUSE WHEEL ZOOM ---
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setZoom(prev => Math.min(3, Math.max(0.1, prev + delta)));
+      }
+    };
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, []);
+
   // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignore if user is typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -165,9 +205,9 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
 
   // --- DRAG & DROP LOGIC ---
   const handleDragStart = (e, source, id = null) => {
-    e.dataTransfer.setData('source', source); // 'toolbox' or 'canvas'
+    e.dataTransfer.setData('source', source);
     if (source === 'toolbox') {
-      e.dataTransfer.setData('type', id); // id is the tool type here
+      e.dataTransfer.setData('type', id);
       setDragState({ type: id, startX: e.clientX, startY: e.clientY });
     } else {
       let draggedIds = selectedIds;
@@ -206,11 +246,11 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       if (!tool) return;
       projW = tool.w_m * itemScale;
       projH = tool.h_m * itemScale;
-      projectedX = applySnap(e.clientX - rect.left - (projW / 2));
-      projectedY = applySnap(e.clientY - rect.top - (projH / 2));
+      projectedX = applySnap((e.clientX - rect.left) / zoom - (projW / 2));
+      projectedY = applySnap((e.clientY - rect.top) / zoom - (projH / 2));
     } else if (dragState.ids) {
-      const deltaX = e.clientX - dragState.startX;
-      const deltaY = e.clientY - dragState.startY;
+      const deltaX = (e.clientX - dragState.startX) / zoom;
+      const deltaY = (e.clientY - dragState.startY) / zoom;
       const primaryEl = dragState.elementsSnapshot.find(el => el.id === dragState.ids[0]);
       if (!primaryEl) return;
       projW = (primaryEl.w_m || (primaryEl.w ? primaryEl.w / 40 : 1)) * itemScale;
@@ -257,7 +297,7 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
     setGuides({ x: [], y: [] });
     const source = e.dataTransfer.getData('source');
     const rect = canvasRef.current.getBoundingClientRect();
-    const snapStep = itemScale / 4; // 0.25m snap resolution
+    const snapStep = itemScale / 4;
     const applySnap = (val) => Math.round(val / snapStep) * snapStep;
     
     if (source === 'toolbox') {
@@ -268,9 +308,8 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       const w = tool.w_m * itemScale;
       const h = tool.h_m * itemScale;
 
-      // Center the dropped item on the mouse cursor
-      const x = applySnap(e.clientX - rect.left - (w / 2));
-      const y = applySnap(e.clientY - rect.top - (h / 2));
+      const x = applySnap((e.clientX - rect.left) / zoom - (w / 2));
+      const y = applySnap((e.clientY - rect.top) / zoom - (h / 2));
 
       const newElement = {
         id: Date.now().toString(),
@@ -293,8 +332,8 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       const startX = parseFloat(e.dataTransfer.getData('startx'));
       const startY = parseFloat(e.dataTransfer.getData('starty'));
       
-      const deltaX = e.clientX - startX;
-      const deltaY = e.clientY - startY;
+      const deltaX = (e.clientX - startX) / zoom;
+      const deltaY = (e.clientY - startY) / zoom;
 
       const elements = floorplan.elements.map(el => {
         if (draggedIds.includes(el.id)) {
@@ -310,20 +349,19 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
     }
   };
 
-  // --- DRAG BOX SELECTION ---
   const handleCanvasMouseDown = (e) => {
     if (e.target !== canvasRef.current) return;
-    if (e.button !== 0) return; // Only left click
+    if (e.button !== 0) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
+    const startX = (e.clientX - rect.left) / zoom;
+    const startY = (e.clientY - rect.top) / zoom;
 
     setSelectionBox({ startX, startY, currentX: startX, currentY: startY });
 
     const handleMouseMove = (moveEvent) => {
-      const currentX = moveEvent.clientX - rect.left;
-      const currentY = moveEvent.clientY - rect.top;
+      const currentX = (moveEvent.clientX - rect.left) / zoom;
+      const currentY = (moveEvent.clientY - rect.top) / zoom;
       setSelectionBox(prev => prev ? { ...prev, currentX, currentY } : null);
     };
 
@@ -338,7 +376,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
           const minY = Math.min(prev.startY, prev.currentY);
           const maxY = Math.max(prev.startY, prev.currentY);
           
-          // Simple click (no drag) clears selection
           if (maxX - minX < 5 && maxY - minY < 5) {
             setSelectedIds([]);
             return null;
@@ -367,7 +404,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // --- ELEMENT CONTROLS ---
   const handleRotate = () => {
     if (selectedIds.length === 0) return;
     const elements = floorplan.elements.map(el => 
@@ -382,7 +418,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
     setSelectedIds([]);
   };
 
-  // --- AUTO ALIGNMENT ---
   const handleAlignLeft = () => {
     if (selectedIds.length < 2) return;
     const minX = Math.min(...floorplan.elements.filter(el => selectedIds.includes(el.id)).map(el => el.x));
@@ -543,7 +578,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
     }
   };
 
-  // --- PRESET SYSTEM LOGIC ---
   const handleSavePreset = () => {
     if (floorplan.elements.length === 0) return window.alert("無物件可儲存 (Empty layout).");
     const name = window.prompt("請輸入預設佈置名稱 (Enter preset name):", "My Setup");
@@ -580,7 +614,8 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       onDragOver={isInteractive ? handleDragOver : undefined}
       onDrop={isInteractive ? handleDrop : undefined}
       onMouseDown={isInteractive ? handleCanvasMouseDown : undefined}
-      className={`relative ${isInteractive ? 'bg-slate-100' : 'bg-transparent'}`}
+      onClick={isInteractive ? (isDrawingZone ? handleCanvasClick : undefined) : undefined}
+      className={`relative ${isInteractive ? 'bg-slate-100' : 'bg-transparent'} ${isDrawingZone ? 'cursor-crosshair' : ''}`}
       style={{
         width: bgImage ? 'max-content' : (isInteractive ? '100%' : '800px'),
         height: bgImage ? 'max-content' : (isInteractive ? '100%' : '600px'),
@@ -605,14 +640,42 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
 
       {visibleZones.length > 0 && (
          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+           <defs>
+             <filter id="zoneGlow" x="-20%" y="-20%" width="140%" height="140%">
+               <feGaussianBlur stdDeviation="3" result="blur" />
+               <feComposite in="SourceGraphic" in2="blur" operator="over" />
+             </filter>
+           </defs>
            {visibleZones.map(z => {
+              if (!z.points || z.points.length === 0) return null;
               const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
               const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;
               const cy = ((Math.min(...z.points.map(p => p.y_m)) + Math.max(...z.points.map(p => p.y_m))) / 2) * itemScale;
+              const isHighlighted = highlightedZones.some(hz => hz.id === z.id);
+              
               return (
                 <g key={z.id}>
-                  <polygon points={points} fill={z.color} stroke={z.color.replace(/0\.\d+\)/, '0.8)')} strokeWidth="2" strokeDasharray="4 4" />
-                  <text x={cx} y={cy} fill={z.color.replace(/0\.\d+\)/, '1.0)')} fontSize={Math.max(14, itemScale * 0.8)} fontWeight="bold" textAnchor="middle" dominantBaseline="middle" style={{textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff'}} opacity="0.8">{z.name}</text>
+                  <polygon 
+                    points={points} 
+                    fill={isHighlighted ? z.color : 'transparent'} 
+                    stroke={isHighlighted ? z.color.replace(/0\.\d+\)/, '0.8)') : z.color.replace(/0\.\d+\)/, '0.2)')} 
+                    strokeWidth={isHighlighted ? "4" : "1.5"} 
+                    strokeDasharray={isHighlighted ? "" : "4 4"}
+                    filter={isHighlighted ? "url(#zoneGlow)" : ""}
+                    className={isHighlighted ? "animate-pulse" : ""}
+                    style={{ transition: 'all 0.3s ease' }}
+                  />
+                  <text 
+                    x={cx} y={cy} 
+                    fill={isHighlighted ? z.color.replace(/0\.\d+\)/, '1.0)') : 'rgba(148, 163, 184, 0.5)'} 
+                    fontSize={Math.max(12, itemScale * 0.7)} 
+                    fontWeight={isHighlighted ? "black" : "bold"} 
+                    textAnchor="middle" 
+                    dominantBaseline="middle" 
+                    style={{textShadow: isHighlighted ? '2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff' : 'none'}}
+                  >
+                    {z.nameZh || z.name}
+                  </text>
                 </g>
               );
            })}
@@ -642,7 +705,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
         const w_m = el.w_m || (el.w ? el.w / 40 : 1);
         const h_m = el.h_m || (el.h ? el.h / 40 : 1);
         
-        // Dynamically fetch updated styling and content from tools so older maps look beautiful too
         const toolDef = TOOL_GROUPS.flatMap(g => g.items).find(t => t.type === el.type);
         const displayStyle = toolDef && el.type !== 'text' ? toolDef.style : el.style;
         const displayContent = toolDef && el.type !== 'text' ? toolDef.content : el.content;
@@ -718,7 +780,6 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
             </div>
          </div>
 
-         {/* FOR PRINT ONLY */}
          <div className="hidden print:flex relative pointer-events-none rounded overflow-hidden justify-center my-4" style={{ breakInside: 'avoid' }}>
              <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center' }}>
                {canvasContent(false)}
@@ -733,12 +794,26 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
       {/* Toolbar */}
       <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
         <div className="flex items-center gap-4">
+          {!liteMode && (
+            <div className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg shadow-sm">
+              <span className="text-[10px] font-black text-slate-400 uppercase">比例 (Scale)</span>
+              <input 
+                type="range" 
+                min="10" 
+                max="150" 
+                value={itemScale} 
+                onChange={(e) => updateFloorplan({ itemScale: Number(e.target.value) })}
+                className="w-24 accent-blue-600"
+              />
+              <span className="text-xs font-mono font-bold text-blue-600 w-8">{itemScale}</span>
+            </div>
+          )}
+
           <button type="button" onClick={handleClearAll} className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors text-sm font-bold text-slate-700 shadow-sm select-none">
             <Eraser size={16} />
             <span>清除全部 (Clear)</span>
           </button>
 
-          {/* Preset System */}
           <div className="flex items-center gap-2 border-l border-slate-300 pl-4 ml-2">
             <button type="button" onClick={handleSavePreset} className="flex items-center gap-1.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm select-none">
               <Save size={16} /> <span className="hidden sm:inline">儲存佈置 (Save)</span>
@@ -776,6 +851,12 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
         </div>
 
         <div className="flex gap-4 items-center">
+          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-1 shadow-sm select-none">
+            <button type="button" onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors" title="縮小 (Zoom Out)"><ZoomOut size={16}/></button>
+            <button type="button" onClick={() => setZoom(1)} className="px-2 text-[10px] font-black text-blue-600 hover:bg-slate-100 rounded transition-colors" title="重設縮放 (Reset Zoom)">{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors" title="放大 (Zoom In)"><ZoomIn size={16}/></button>
+          </div>
+
           <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-1 shadow-sm select-none">
             <button type="button" onClick={handleUndo} disabled={historyStepRef.current === 0} className="p-1.5 hover:bg-slate-100 disabled:opacity-30 rounded text-slate-600 transition-colors" title="復原 (Undo - Ctrl+Z)"><Undo2 size={16}/></button>
             <button type="button" onClick={handleRedo} disabled={historyStepRef.current >= historyRef.current.length - 1} className="p-1.5 hover:bg-slate-100 disabled:opacity-30 rounded text-slate-600 transition-colors" title="重做 (Redo - Ctrl+Y)"><Redo2 size={16}/></button>
@@ -838,15 +919,84 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
             <button type="button" onClick={handleDelete} title="刪除 (Delete)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
           </div>
           )}
-          <button type="button" onClick={() => setIsFullscreen(false)} className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm">
+          <button 
+            type="button" 
+            onClick={() => {
+              setIsFullscreen(false);
+              if (onClose) onClose();
+            }} 
+            className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm"
+          >
             <Minimize size={16} /> 縮小完成 (Done)
           </button>
         </div>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
-        {/* Left: Draggable Tools */}
         <div className="w-64 min-w-[16rem] bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col gap-4 overflow-y-auto shadow-inner no-scrollbar">
+          {!liteMode && (
+            <div>
+              <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2 border-b border-blue-100 pb-1 flex items-center justify-between">
+                <span>區域繪製 (Zone Drawing)</span>
+                {isDrawingZone && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>}
+              </h4>
+              <div className="space-y-2">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsDrawingZone(!isDrawingZone);
+                    if (!isDrawingZone) setDrawingZoneId(zones[0]?.id);
+                  }}
+                  className={`w-full py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-2 ${isDrawingZone ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                >
+                  {isDrawingZone ? <><MousePointer2 size={14}/> 停止繪製 (Stop)</> : <><PenTool size={14}/> 開始繪製 (Draw Zones)</>}
+                </button>
+                
+                {isDrawingZone && (
+                  <div className="p-2 bg-white rounded-lg border border-red-100 space-y-2 animate-in slide-in-from-top-2">
+                    <p className="text-[10px] text-slate-500 mb-2 leading-tight">選擇一個區域並點擊右側地圖來繪製頂點</p>
+                    <select 
+                      value={drawingZoneId || ''} 
+                      onChange={(e) => setDrawingZoneId(e.target.value)}
+                      className="w-full p-2 text-xs border border-slate-200 rounded outline-none font-bold text-slate-700 bg-slate-50"
+                    >
+                      {zones.map(z => (
+                        <option key={z.id} value={z.id}>{z.nameZh || z.name}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const newZones = zones.map(z => z.id === drawingZoneId ? { ...z, points: [] } : z);
+                          updateZones(newZones);
+                        }}
+                        className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold transition-colors"
+                      >
+                        清除目前
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const newZones = zones.map(z => {
+                            if (z.id === drawingZoneId && z.points?.length > 0) {
+                              return { ...z, points: z.points.slice(0, -1) };
+                            }
+                            return z;
+                          });
+                          updateZones(newZones);
+                        }}
+                        className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold transition-colors"
+                      >
+                        復原點
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {TOOL_GROUPS.map((group, gIdx) => (
             <div key={gIdx}>
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">{group.name}</h4>
@@ -868,14 +1018,17 @@ export default function FloorplanEditor({ formData, setFormData, defaultBgImage 
               </div>
             </div>
           ))}
-          <div className="mt-auto pt-4 text-center">
-            <p className="text-[10px] text-slate-400 italic">拖曳組件至右方平面圖<br/>(Drag elements to canvas)</p>
-          </div>
         </div>
 
-        {/* Right: Canvas */}
         <div className="flex-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 relative overflow-auto shadow-inner">
-          {canvasContent(true)}
+          <div style={{ 
+            transform: `scale(${zoom})`, 
+            transformOrigin: 'top left',
+            width: 'max-content',
+            height: 'max-content'
+          }}>
+            {canvasContent(true)}
+          </div>
         </div>
       </div>
     </div>

@@ -235,7 +235,7 @@ const Weddings = () => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         const allMenus = data.defaultMenus || [];
-        const foodMenus = allMenus.filter(m => m.type === 'food');
+        const foodMenus = allMenus.filter(m => m?.type === 'food');
         setPresetMenus(foodMenus);
       }
     }, (error) => {

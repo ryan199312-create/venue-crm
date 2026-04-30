@@ -13,12 +13,10 @@ export const EVENT_TYPES = [
   '演唱會 (Concert)', '會議 (Conference)', '私人聚會 (Private Party)', '其他 (Other)'
 ];
 
-export const INDIVIDUAL_ZONES = ['紅區', '黃區', '綠區', '藍區'];
-export const LOCATION_CHECKBOXES = [...INDIVIDUAL_ZONES, '全場'];
 export const SERVING_STYLES = ['位上', '圍餐', '分菜', '自助餐'];
 export const DEFAULT_DRINK_PACKAGES = [];
 export const DECOR_COLORS = ['白 (White)', '金 (Gold)', '紅 (Red)'];
-export const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const DAY_LABELS = { Mon: '一', Tue: '二', Wed: '三', Thu: '四', Fri: '五', Sat: '六', Sun: '日' };
 
 export const DEPARTMENTS = [
@@ -56,7 +54,7 @@ export const decorationMap = {
 // ==========================================
 // RBAC CONFIGURATION
 // ==========================================
-
+// RBAC CONFIGURATION
 export const PERMISSION_CATEGORIES = [
   { 
     id: 'system', 
@@ -66,7 +64,8 @@ export const PERMISSION_CATEGORIES = [
       { id: 'events', label: '訂單管理 (EOs)' },
       { id: 'docs', label: '使用指南 (Docs)' },
       { id: 'settings', label: '設定 (Settings)' },
-      { id: 'delete_eo', label: '刪除訂單 (Delete EOs)' }
+      { id: 'delete_eo', label: '刪除訂單 (Delete EOs)' },
+      { id: 'manage_all_outlets', label: '管理所有分店 (Manage All Outlets)' }
     ]
   },
   {

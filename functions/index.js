@@ -23,6 +23,8 @@ setGlobalOptions({ region: "asia-east2" });
 const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
 const adminPhone = defineSecret("ADMIN_PHONE");
 
+const APP_ID = process.env.VITE_APP_ID || "my-venue-crm";
+
 // 3. SECURE SLEEKFLOW FUNCTION
 exports.sendSleekFlow = onCall(
   { secrets: [sleekflowKey] },
@@ -106,8 +108,8 @@ exports.enqueuePdfJob = onCall(
     if (!html) throw new HttpsError("invalid-argument", "HTML string is required.");
 
     const db = admin.firestore();
-    const jobId = `job_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const jobRef = db.collection('artifacts').doc('my-venue-crm').collection('private').doc('data').collection('pdf_jobs').doc(jobId);
+    const appId = APP_ID; 
+    const jobRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId);
 
     // Store the massive HTML string in Firestore
     await jobRef.set({
@@ -128,7 +130,8 @@ exports.generatePdfTask = onTaskDispatched(
   async (request) => {
     const { jobId } = request.data;
     const db = admin.firestore();
-    const jobRef = db.collection('artifacts').doc('my-venue-crm').collection('private').doc('data').collection('pdf_jobs').doc(jobId);
+    const appId = APP_ID;
+    const jobRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId);
 
     const jobSnap = await jobRef.get();
     if (!jobSnap.exists) return;
@@ -216,7 +219,7 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
     throw new HttpsError('invalid-argument', 'Missing required fields.');
   }
 
-  const appId = "my-venue-crm"; 
+  const appId = APP_ID; 
   const db = admin.firestore();
   // Use default bucket
   const bucket = admin.storage().bucket();
@@ -312,7 +315,7 @@ exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
       throw new HttpsError('invalid-argument', 'Missing required fields.');
     }
 
-    const appId = "my-venue-crm";
+    const appId = APP_ID;
     const db = admin.firestore();
 
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
@@ -359,7 +362,7 @@ exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
     throw new HttpsError('invalid-argument', 'Missing phone number.');
   }
 
-  const appId = "my-venue-crm"; 
+  const appId = APP_ID; 
   const db = admin.firestore();
   
   try {
@@ -459,7 +462,8 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   const db = admin.firestore();
   
   try {
-    const eventRef = db.collection('artifacts').doc("my-venue-crm").collection('private').doc('data').collection('events').doc(eventId);
+    const appId = APP_ID;
+    const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
     
@@ -485,7 +489,7 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
     throw new HttpsError('invalid-argument', 'Missing eventId or phone number.');
   }
 
-  const appId = "my-venue-crm";
+  const appId = APP_ID;
   const db = admin.firestore();
   
   const adminNotificationPhone = adminPhone.value(); 
@@ -556,7 +560,7 @@ exports.inviteUser = onCall(async (request) => {
   const { email, displayName, role } = request.data;
   if (!email || !role) throw new HttpsError('invalid-argument', 'Email and role are required.');
 
-  const appId = "my-venue-crm";
+  const appId = APP_ID;
   const db = admin.firestore();
 
   try {
@@ -598,11 +602,13 @@ exports.inviteUser = onCall(async (request) => {
  * Update role securely: Updates Custom Claims AND Firestore.
  */
 exports.updateUserRoleSecure = onCall(async (request) => {
-  const appId = "my-venue-crm";
+  const appId = APP_ID;
   const db = admin.firestore();
 
-  // 🌟 TEMPORARY: DISABLED SECURITY CHECK FOR BOOTSTRAPPING
-  // if (!request.auth || request.auth.token.role !== 'admin') { ... }
+  // 🌟 SECURITY CHECK: Only admins can update roles
+  if (!request.auth || request.auth.token.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only admins can update user roles.');
+  }
 
   const { uid, newRole } = request.data;
   if (!uid || !newRole) throw new HttpsError('invalid-argument', 'UID and newRole are required.');

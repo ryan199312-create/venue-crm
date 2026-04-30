@@ -5,9 +5,9 @@ import { Card, Badge } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
 
 const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete }) => {
-  const { hasPermission, userProfile } = useAuth();
+  const { hasPermission, userProfile, selectedVenueId } = useAuth();
   const [filter, setFilter] = useState('');
-  // 1. New State for Status Filter & Pagination
+  // ...
   const [statusFilter, setStatusFilter] = useState('incomplete'); // 'incomplete', 'completed', 'all'
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 30;
@@ -15,11 +15,14 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, statusFilter]);
+  }, [filter, statusFilter, selectedVenueId]);
 
   // 2. Filter & Sort Logic
   const filteredAndSorted = useMemo(() => {
     return events.filter(e => {
+      // Venue Filter
+      if (selectedVenueId !== 'all' && e.venueId !== selectedVenueId) return false;
+
       // Status Filter Logic
       // "未完成" (Incomplete) = Tentative or Confirmed. Excludes Completed & Cancelled.
       if (statusFilter === 'completed' && e.status !== 'completed') return false;
@@ -36,7 +39,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
 
       return true;
     });
-  }, [events, filter, statusFilter]);
+  }, [events, filter, statusFilter, selectedVenueId]);
 
   // 3. Pagination Logic
   const totalPages = Math.ceil(filteredAndSorted.length / ITEMS_PER_PAGE);

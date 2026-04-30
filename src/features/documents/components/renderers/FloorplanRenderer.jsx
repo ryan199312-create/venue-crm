@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TOOL_GROUPS } from '../../../../components/FloorplanTools';
 
 export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {  
@@ -6,24 +6,29 @@ export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) =
   const bgImage = fp.bgImage || appSettings?.defaultFloorplan?.bgImage || '';
   const hasElements = fp.elements && fp.elements.length > 0;
 
-  if (!bgImage && !hasElements) return null;
-
   const itemScale = fp.itemScale || appSettings?.defaultFloorplan?.itemScale || 40;
   const zones = fp.zones || appSettings?.defaultFloorplan?.zones || [];
-  
-  const selectedLocs = data.selectedLocations || (data.venueLocation ? [data.venueLocation] : []);
-  const isWholeVenue = selectedLocs.includes('全場');
-  
-  const visibleZones = zones.filter(z => {
-    if (isWholeVenue) return true;
-    // Robust check for zone name matching selectedLocations
-    // Zone object 'z' from floorplan usually has 'name' property
-    return selectedLocs.includes(z.name) || 
-           (z.nameZh && selectedLocs.includes(z.nameZh)) ||
-           (z.nameZh && z.nameEn && selectedLocs.includes(`${z.nameZh} (${z.nameEn})`));
-  });
 
-  const allElements = [...(fp.elements || []), ...visibleZones.flatMap(z => z.points.map(p => ({ x: p.x_m * itemScale, y: p.y_m * itemScale, w_m: 0, h_m: 0 })))];
+  // Robust Highlight Logic
+  const highlightedZones = useMemo(() => {
+    const selectedLocs = data.selectedLocations || (data.venueLocation ? [data.venueLocation] : []);
+    if (selectedLocs.length === 0) return [];
+
+    const isWholeVenue = selectedLocs.includes('全場');
+    
+    return (zones || []).filter(z => {
+      if (isWholeVenue) return true;
+      const label = (z.nameZh || z.name || '').trim();
+      const combined = z.nameEn ? `${z.nameZh} (${z.nameEn})` : z.nameZh;
+      return selectedLocs.includes(label) || 
+             selectedLocs.includes(z.nameZh) || 
+             selectedLocs.includes(combined);
+    });
+  }, [zones, data.selectedLocations, data.venueLocation]);
+
+  if (!bgImage && !hasElements && zones.length === 0) return null;
+
+  const allElements = [...(fp.elements || []), ...zones.flatMap(z => (z.points || []).map(p => ({ x: p.x_m * itemScale, y: p.y_m * itemScale, w_m: 0, h_m: 0 })))];
   
   const minX = allElements.length > 0 ? Math.min(0, ...allElements.map(el => el.x || 0)) : 0;
   const minY = allElements.length > 0 ? Math.min(0, ...allElements.map(el => el.y || 0)) : 0;
@@ -63,24 +68,49 @@ export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) =
             top: `${-minY * scale}px`,
             width: `${contentWidth}px`,
             height: `${contentHeight}px`,
-            backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)', backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`, backgroundPosition: bgImage ? 'top left, top left, top left' : 'top left', backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat' 
+            backgroundImage: bgImage ? `linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px), url("${bgImage}")` : 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
+            backgroundSize: bgImage ? `${itemScale}px ${itemScale}px, ${itemScale}px ${itemScale}px, auto` : `${itemScale}px ${itemScale}px`,
+            backgroundPosition: 'top left',
+            backgroundRepeat: bgImage ? 'repeat, repeat, no-repeat' : 'repeat'
           }}>
           {bgImage && <img src={bgImage} className="opacity-0 pointer-events-none select-none block" alt="" />}
-          {visibleZones.length > 0 && (
-             <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-               {visibleZones.map(z => {
+          
+          {zones.length > 0 && (
+              <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+                {zones.map(z => {
+                  if (!z.points || z.points.length === 0) return null;
                   const points = z.points.map(p => `${p.x_m * itemScale},${p.y_m * itemScale}`).join(' ');
                   const cx = ((Math.min(...z.points.map(p => p.x_m)) + Math.max(...z.points.map(p => p.x_m))) / 2) * itemScale;
                   const cy = ((Math.min(...z.points.map(p => p.y_m)) + Math.max(...z.points.map(p => p.y_m))) / 2) * itemScale;
+                  const isHighlighted = highlightedZones.some(hz => hz.id === z.id);
+                  
                   return (
                     <g key={z.id}>
-                      <polygon points={points} fill={z.color} stroke={z.color.replace(/0\.\d+\)/, '0.8)')} strokeWidth="2" strokeDasharray="4 4" />
-                      <text x={cx} y={cy} fill={z.color.replace(/0\.\d+\)/, '1.0)')} fontSize={Math.max(14, itemScale * 0.8)} fontWeight="bold" textAnchor="middle" dominantBaseline="middle" style={{textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff'}} opacity="0.8">{z.name}</text>
+                      <polygon 
+                        points={points} 
+                        fill={isHighlighted ? z.color : 'transparent'} 
+                        stroke={isHighlighted ? z.color.replace(/0\.\d+\)/, '0.8)') : z.color.replace(/0\.\d+\)/, '0.2)')} 
+                        strokeWidth={isHighlighted ? "4" : "1.5"} 
+                        strokeDasharray={isHighlighted ? "" : "4 4"} 
+                        className="transition-all duration-500"
+                      />
+                      <text 
+                        x={cx} y={cy} 
+                        fill={isHighlighted ? z.color.replace(/0\.\d+\)/, '1.0)') : 'rgba(148, 163, 184, 0.5)'} 
+                        fontSize={Math.max(12, itemScale * 0.7)} 
+                        fontWeight={isHighlighted ? "black" : "bold"} 
+                        textAnchor="middle" 
+                        dominantBaseline="middle" 
+                        style={{textShadow: isHighlighted ? '2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff' : 'none'}}
+                      >
+                        {z.nameZh || z.name}
+                      </text>
                     </g>
                   );
-               })}
-             </svg>
-          )}
+                })}
+              </svg>
+           )}
+
           {(fp.elements || []).map(el => {
             const w_m = el.w_m || (el.w ? el.w / 40 : 1);
             const h_m = el.h_m || (el.h ? el.h / 40 : 1);

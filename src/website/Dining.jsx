@@ -6,6 +6,7 @@ import { useOutletContext } from 'react-router-dom';
 // --- FIREBASE IMPORTS ---
 import { db } from '../core/firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
+import { APP_ID } from "../core/env";
 
 // --- STATIC CONTENT ---
 const content = {
@@ -94,13 +95,13 @@ const Dining = () => {
   const [presetMenus, setPresetMenus] = useState([]);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "artifacts", "my-venue-crm", "public", "data", "settings", "config"), (doc) => {
+    const unsub = onSnapshot(doc(db, "artifacts", APP_ID, "public", "data", "settings", "config"), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         const allMenus = data.defaultMenus || [];
         // Filter for 'dining' type menus (assuming you will add this type in admin)
         // Fallback: show all if no specific 'dining' tag, or filter generic 'food'
-        const diningMenus = allMenus.filter(m => m.type === 'dining' || m.type === 'food');
+        const diningMenus = allMenus.filter(m => m?.type === 'dining' || m?.type === 'food');
         setPresetMenus(diningMenus);
       }
     }, (error) => {

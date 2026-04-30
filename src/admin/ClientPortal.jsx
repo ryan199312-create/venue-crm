@@ -4,6 +4,8 @@ import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, Chev
 import { motion } from 'framer-motion';
 import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
+import { getScopedSettings } from '../services/helpers';
+import { Card, Badge } from '../components/ui';
 const DocumentManager = React.lazy(() => import('../components/DocumentManager'));
 const FloorplanViewer = React.lazy(() => import('../components/FloorplanViewer'));
 
@@ -787,7 +789,7 @@ export default function ClientPortal() {
             <div>
               <DocumentManager 
                 eventData={eventData} 
-                appSettings={appSettings} 
+                appSettings={getScopedSettings(appSettings, eventData.venueId)} 
               onSign={handleSignatureSubmit} 
                 isClientPortal={true} 
               />

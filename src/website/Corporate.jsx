@@ -7,6 +7,7 @@ import { useOutletContext } from 'react-router-dom';
 // --- FIREBASE IMPORTS ---
 import { db } from '../core/firebase'; 
 import { doc, onSnapshot } from "firebase/firestore";
+import { APP_ID } from "../core/env";
 
 // ... keep the rest of the file exactly as it was ...
 // --- STATIC CONTENT ---
@@ -170,12 +171,12 @@ const Corporate = () => {
   const prevVenue = () => setVenueIndex((prev) => (prev - 1 + t.venueShowcase.images.length) % t.venueShowcase.images.length);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "artifacts", "my-venue-crm", "public", "data", "settings", "config"), (doc) => {
+    const unsub = onSnapshot(doc(db, "artifacts", APP_ID, "public", "data", "settings", "config"), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         const allMenus = data.defaultMenus || [];
         // Ideally filter for 'corporate', but for now using 'food' or all
-        const corpMenus = allMenus.filter(m => m.type === 'food'); 
+        const corpMenus = allMenus.filter(m => m?.type === 'food'); 
         setPresetMenus(corpMenus);
       }
       setLoadingMenus(false);

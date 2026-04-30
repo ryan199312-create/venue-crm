@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Rocket, ShieldAlert } from 'lucide-react';
 
 // Firebase
-import { db, auth, storage } from '../core/firebase';
+import { db, auth, storage, functions } from '../core/firebase';
 import {
   signInAnonymously,
   signInWithEmailAndPassword,
@@ -25,7 +25,7 @@ import {
 } from 'firebase/storage';
 
 // Components
-import { ConfirmationModal, Toast } from '../components/ui';
+import { ConfirmationModal, Toast, Card } from '../components/ui';
 
 // Admin Views
 import AdminSidebar from './AdminSidebar';
@@ -45,6 +45,7 @@ const AnalysisAssistant = React.lazy(() => import('../components/AnalysisAssista
 import { usePdfGenerator } from '../features/documents/hooks/usePdfGenerator';
 import { useAdminData, INITIAL_FORM_STATE } from '../hooks/useAdminData';
 import { APP_ID, INITIAL_AUTH_TOKEN } from '../core/env';
+import { getScopedSettings } from '../services/helpers';
 
 // ==========================================
 // SECTION 1: CONFIGURATION & CONSTANTS
@@ -53,7 +54,11 @@ import { APP_ID, INITIAL_AUTH_TOKEN } from '../core/env';
 const appId = APP_ID;
 
 export default function AdminLayout() {
-  const { user, userProfile, loading: authLoading, error: authError, hasPermission, login, loginGuest, signOut: handleSignOut, refreshUserClaims } = useAuth();
+  const { 
+    user, userProfile, loading: authLoading, error: authError, 
+    hasPermission, login, loginGuest, signOut: handleSignOut, 
+    refreshUserClaims, selectedVenueId, outlets 
+  } = useAuth();
   const [printData, setPrintData] = useState(null);
   const [printMode, setPrintMode] = useState('EO');
   const [isAiOpen, setIsAiOpen] = useState(false);
@@ -209,12 +214,24 @@ export default function AdminLayout() {
     const dateStr = today.toLocaleDateString('en-CA').replace(/-/g, '');
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
 
+    // --- DEFAULT VENUE LOGIC ---
+    const defaultVenueId = selectedVenueId !== 'all' ? selectedVenueId : (outlets.length === 1 ? outlets[0].id : '');
+    const defaultVenue = outlets.find(o => o.id === defaultVenueId);
+    const defaultVenueName = defaultVenue?.name || '';
+    const scopedAppSettings = getScopedSettings(appSettings, defaultVenueId);
+
     setFormData({
       ...INITIAL_FORM_STATE,
+      venueId: defaultVenueId,
+      venueLocation: defaultVenueName, // Also set venueLocation for legacy compatibility
+      selectedLocations: defaultVenueName ? [defaultVenueName] : [],
       floorplan: {
-        bgImage: appSettings?.defaultFloorplan?.bgImage || '',
-        itemScale: appSettings?.defaultFloorplan?.itemScale || 40,
-        zones: appSettings?.defaultFloorplan?.zones || [],
+        // Only lock in floorplan defaults if a specific venue is already selected.
+        // If 'all' is selected, we leave these empty so they can be dynamic 
+        // when the user picks a venue inside the modal.
+        bgImage: defaultVenueId ? (scopedAppSettings?.defaultFloorplan?.bgImage || '') : undefined,
+        itemScale: defaultVenueId ? (scopedAppSettings?.defaultFloorplan?.itemScale || undefined) : undefined,
+        zones: defaultVenueId ? (scopedAppSettings?.zonesConfig || []) : [],
         elements: []
       },
       menus: [{ id: Date.now(), title: '主菜單 (Main Menu)', content: '' }],
@@ -229,13 +246,24 @@ export default function AdminLayout() {
     setEditingEvent(event);
     setPrintData(null);
     setPrintMode('EO');
+
+    // Auto-resolve venueId if missing (for legacy data)
+    let resolvedVenueId = event.venueId;
+    if (!resolvedVenueId && event.venueLocation && outlets.length > 0) {
+      const match = outlets.find(o => o.name === event.venueLocation || o.id === event.venueLocation);
+      if (match) resolvedVenueId = match.id;
+    }
+
+    const scopedAppSettings = getScopedSettings(appSettings, resolvedVenueId);
+
     const safeData = {
       ...INITIAL_FORM_STATE,
       ...event,
+      venueId: resolvedVenueId,
       floorplan: {
-        bgImage: event.floorplan?.bgImage || appSettings?.defaultFloorplan?.bgImage || '',
-        itemScale: event.floorplan?.itemScale || appSettings?.defaultFloorplan?.itemScale || 40,
-        zones: (event.floorplan?.zones && event.floorplan.zones.length > 0) ? event.floorplan.zones : (appSettings?.defaultFloorplan?.zones || []),
+        bgImage: event.floorplan?.bgImage || scopedAppSettings?.defaultFloorplan?.bgImage || undefined,
+        itemScale: event.floorplan?.itemScale || scopedAppSettings?.defaultFloorplan?.itemScale || undefined,
+        zones: (event.floorplan?.zones && event.floorplan.zones.length > 0) ? event.floorplan.zones : (scopedAppSettings?.zonesConfig || []),
         elements: event.floorplan?.elements || []
       },
       selectedLocations: event.selectedLocations || (event.venueLocation ? [event.venueLocation] : []),
@@ -365,7 +393,8 @@ export default function AdminLayout() {
   const generateAndUploadPDF = async (docType) => {
     try {
       addToast(`正在雲端產生並儲存 ${docType} PDF...`, "info");
-      const pdfData = await generatePdf({ docType, data: formData, appSettings });
+      const scopedAppSettings = getScopedSettings(appSettings, formData.venueId);
+      const pdfData = await generatePdf({ docType, data: formData, appSettings: scopedAppSettings });
       if (!pdfData || !pdfData.url) return null;
       
       addToast("文件產生並上傳成功！", "success");
@@ -385,11 +414,12 @@ export default function AdminLayout() {
     if (!pdfUrl) return;
 
     // 2. Prepare Email Body
-    const subject = formData.emailSubject || `[璟瓏軒] ${formData.eventName} - ${docType}`;
-    const baseBody = formData.emailBody || `你好 ${formData.clientName},\n\n感謝您選擇璟瓏軒。請查看以下連結以獲取您的最新文件。`;
+    const scopedAppSettings = getScopedSettings(appSettings, formData.venueId);
+    const subject = formData.emailSubject || `[${scopedAppSettings.venueProfile?.nameZh || '璟瓏軒'}] ${formData.eventName} - ${docType}`;
+    const baseBody = formData.emailBody || `你好 ${formData.clientName},\n\n感謝您選擇${scopedAppSettings.venueProfile?.nameZh || '璟瓏軒'}。請查看以下連結以獲取您的最新文件。`;
 
     // Append the Document Link to the body
-    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\nKing Lung Heen`;
+    const finalBody = `${baseBody}\n\n📄 點擊下載文件 (Click to download document):\n${pdfUrl}\n\n${scopedAppSettings.venueProfile?.nameZh || 'King Lung Heen'}`;
 
     // 3. Open Email Client
     const mailtoLink = `mailto:${formData.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
@@ -413,7 +443,8 @@ export default function AdminLayout() {
       addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
 
       // 取得 PDF 雲端連結資料
-      const pdfData = await generatePdf({ docType, data: formData, appSettings });
+      const scopedAppSettings = getScopedSettings(appSettings, formData.venueId);
+      const pdfData = await generatePdf({ docType, data: formData, appSettings: scopedAppSettings });
       if (!pdfData) return;
 
       const messageContent = formData.whatsappDraft || `你好 ${formData.clientName}，請查看您的文件。`;
@@ -444,7 +475,8 @@ export default function AdminLayout() {
     addToast(`正在雲端產生 ${docType} 向量 PDF...`, "info");
     
     try {
-      await generatePdf({ docType, data: formData, appSettings, download: true });
+      const scopedAppSettings = getScopedSettings(appSettings, formData.venueId);
+      await generatePdf({ docType, data: formData, appSettings: scopedAppSettings, download: true });
 
       addToast(`${docType} PDF 產生完成！`, "success");
     } catch (error) {
@@ -619,7 +651,7 @@ export default function AdminLayout() {
       {/* 5. Print Output */}
       {printData && (
         <div className="absolute -left-[10000px] -top-[10000px] -z-50 print:static print:left-auto print:top-auto print:z-auto">
-          <DocumentRouter data={printData} printMode={printMode} appSettings={appSettings} />
+          <DocumentRouter data={printData} printMode={printMode} appSettings={getScopedSettings(appSettings, printData.venueId)} />
         </div>
       )}
     </React.Suspense>

@@ -1,4 +1,4 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -15,11 +15,14 @@ const crypto = require("crypto");
 admin.initializeApp();
 
 // 2. SET GLOBAL REGION
-setGlobalOptions({ region: "asia-east2" });
+setGlobalOptions({ 
+  region: "asia-east2"
+});
 
 // Define Secrets
 const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
 const adminPhone = defineSecret("ADMIN_PHONE");
+const deepseekKey = defineSecret("DEEPSEEK_KEY");
 
 const APP_ID = "my-venue-crm"; 
 
@@ -312,6 +315,61 @@ exports.updateUserRoleSecure = onCall({ cors: true }, async (request) => {
     }, { merge: true });
     return { success: true };
   } catch (error) { throw new HttpsError('internal', error.message); }
+});
+
+// ==========================================
+// 6. AI & EXTERNAL SERVICES
+// ==========================================
+exports.callAiAssistant = onRequest({ 
+  secrets: [deepseekKey], 
+  invoker: "public",
+  timeoutSeconds: 120,
+  memory: "256MiB"
+}, async (req, res) => {
+  // 🌟 Bulletproof Manual CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  const { messages, response_format } = req.body.data || req.body; 
+  const API_KEY = deepseekKey.value();
+  
+  console.log(`[callAiAssistant] Calling DeepSeek API... (Key configured: ${!!API_KEY})`);
+  
+  if (!API_KEY) {
+    console.error("[callAiAssistant] ERROR: DeepSeek API Key is missing.");
+    return res.status(400).json({ error: { message: "DeepSeek API Key is not configured." } });
+  }
+
+  try {
+    const response = await axios.post("https://api.deepseek.com/chat/completions", {
+      model: "deepseek-chat",
+      messages: messages,
+      response_format: response_format || { type: "text" },
+      temperature: 0.7
+    }, {
+      headers: {
+        "Authorization": `Bearer ${API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 110000
+    });
+
+    return res.json({ data: response.data });
+  } catch (error) {
+    console.error("DeepSeek API Error:", error.response?.data || error.message);
+    return res.status(500).json({ 
+      error: { 
+        message: error.response?.data?.error?.message || error.message,
+        details: error.response?.data 
+      } 
+    });
+  }
 });
 
 // Cleanup

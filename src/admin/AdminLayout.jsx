@@ -46,7 +46,7 @@ export default function AdminLayout() {
   
   const { 
     events, users, loading: dataLoading, saveEvent, deleteEvent, 
-    updateUserProfile, createUser 
+    updateUserProfile, updateUserRole, createUser 
   } = useAdminData(appId);
 
   const { toasts, addToast, removeToast } = useToast();
@@ -305,7 +305,7 @@ export default function AdminLayout() {
               {activeTab === 'dashboard' && <AdminDashboard events={events} openEditModal={openEditModal} setIsDataAiOpen={setIsDataAiOpen} />}
               {activeTab === 'events' && <EventsListView events={events} openNewEventModal={openNewEventModal} openEditModal={openEditModal} handleDelete={handleDeleteEvent} />}
               {activeTab === 'docs' && <DocumentationHub />}
-              {activeTab === 'settings' && (<SettingsView settings={appSettings} onSave={(s) => setDoc(doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config'), s, { merge: true })} addToast={addToast} users={users} updateUserProfile={updateUserProfile} deleteUser={(id) => updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'users', id), { role: 'deleted' })} />)}
+              {activeTab === 'settings' && (<SettingsView settings={appSettings} onSave={(s) => setDoc(doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config'), s, { merge: true })} addToast={addToast} users={users} updateUserProfile={updateUserProfile} updateUserRole={updateUserRole} deleteUser={(id) => updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'users', id), { role: 'deleted' })} />)}
             </div>
           </React.Suspense>
         </div>

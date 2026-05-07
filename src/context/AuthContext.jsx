@@ -82,7 +82,11 @@ export const AuthProvider = ({ children }) => {
 
           if (userSnap.exists()) {
             const existingData = userSnap.data();
-            const finalRole = claimRole === 'super_admin' ? 'super_admin' : (existingData.role || claimRole || 'staff');
+            // 🌟 Senior Fix: Prioritize high-privilege claims (super_admin, admin) over Firestore data
+            let finalRole = existingData.role || claimRole || 'staff';
+            if (claimRole === 'super_admin') finalRole = 'super_admin';
+            else if (claimRole === 'admin') finalRole = 'admin';
+            
             profileData = { ...profileData, ...existingData, role: finalRole };
             await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
           } else {

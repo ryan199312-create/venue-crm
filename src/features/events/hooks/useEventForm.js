@@ -105,7 +105,13 @@ export const useEventForm = (formData, setFormData, appSettings, editingEvent, a
     if (!content) return addToast("請先輸入菜單內容", "error");
     setTranslatingMenuId(menuId);
     try {
-      const systemPrompt = `You are a professional banquet menu translator. Task: Translate from Chinese to English line by line. STRICT RULES: 1. Brand Names: ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'. 2. Format: Output the original Chinese line, followed immediately by the English translation on the next line. 3. Spacing: Remove ALL empty lines between items. 4. Punctuation: Do NOT add full stops. 5. Cleanliness: Do not add bullet points.`;
+      const systemPrompt = `You are a professional Cantonese banquet menu translator. Task: Translate from Chinese to English line by line. 
+STRICT RULES: 
+1. Culinary Accuracy: Chinese banquet dishes often use poetic or auspicious prefixes (e.g., '鴻運', '喜慶', '翡翠', '富貴'). Focus the translation ONLY on the actual ingredients and preparation method (e.g., translate '鴻運金豬全體' as 'Whole Roasted Suckling Pig'). Avoid literal translations of idioms or poetic adjectives.
+2. Brand Names: ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'. 
+3. Format: Output the original Chinese line, followed immediately by the English translation on the next line. 
+4. Spacing: Remove ALL empty lines between items. 
+5. Punctuation: Do NOT add full stops. Do not add bullet points. Use Title Case for English translations.`;
       let translatedText = await generate(content, systemPrompt);
       if (!translatedText) throw new Error("Translation API Failed");
       handleMenuChange(menuId, 'content', translatedText.replace(/\n\s*\n/g, '\n').trim());
@@ -121,7 +127,12 @@ export const useEventForm = (formData, setFormData, appSettings, editingEvent, a
     if (!formData.drinksPackage) return addToast("請先輸入酒水內容", "error");
     setIsTranslatingDrinks(true);
     try {
-      const systemPrompt = `You are a professional banquet translator. Task: Translate the beverage list from Chinese to English line by line. STRICT RULES: 1. Format: Output original Chinese line, followed immediately by English translation on the next line. 2. Spacing: Remove ALL empty lines. 3. Punctuation: Do NOT add full stops.`;
+      const systemPrompt = `You are a professional Cantonese banquet translator. Task: Translate the beverage list from Chinese to English line by line. 
+STRICT RULES: 
+1. Culinary Accuracy: Focus on the actual beverage names. Avoid literal translations of auspicious prefixes.
+2. Format: Output original Chinese line, followed immediately by English translation on the next line. 
+3. Spacing: Remove ALL empty lines. 
+4. Punctuation: Do NOT add full stops. Use Title Case for English translations.`;
       let translatedText = await generate(formData.drinksPackage, systemPrompt);
       if (!translatedText) throw new Error("Translation API Failed");
       setFormData(prev => ({ ...prev, drinksPackage: translatedText.replace(/\n\s*\n/g, '\n').trim() }));

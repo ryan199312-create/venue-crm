@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../core/firebase'; 
+import { getTenantId } from '../core/tenantResolver';
 
 export const useAI = () => {
   const [loading, setLoading] = useState(false);
@@ -14,22 +15,40 @@ export const useAI = () => {
     setResult(null);
 
     try {
-      const callDeepSeek = httpsCallable(functions, 'callDeepSeek');
+      const appId = getTenantId();
+      console.log(`[useAI] Calling AI for tenant: ${appId}`);
       
-      const response = await callDeepSeek({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        response_format: { type: "text" }
+      const response = await fetch('https://callaiassistant-tebfenc7da-df.a.run.app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: { // Wrapped in data to keep compatibility with existing backend structure
+            appId,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
+            ]
+          }
+        }),
       });
 
-      const aiText = response.data.choices[0].message.content;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `HTTP Error ${response.status}`);
+      }
+
+      const resultData = await response.json();
+      const aiText = resultData.data.choices[0].message.content;
       setResult(aiText);
-      return aiText; // Return it so you can use it immediately if needed
+      return aiText; 
 
     } catch (err) {
       console.error("AI Hook Error:", err);
+      if (err.details) {
+        console.error("AI Hook Error Details:", err.details);
+      }
       setError(err.message || "Something went wrong");
       return null;
     } finally {

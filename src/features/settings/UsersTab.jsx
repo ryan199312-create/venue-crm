@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_ROLE_PERMISSIONS } from '../../core/constants';
 
 const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, deleteUser, createUser, addToast }) => {
-  const { outlets } = useAuth();
+  const { outlets, userProfile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
@@ -239,7 +239,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                     <select 
                       value={u.role || 'staff'}
                       onChange={(e) => handleUpdateRole(u.id, e.target.value)}
-                      disabled={(u.role === 'admin' || u.role === 'super_admin') && users.filter(usr => usr.role === 'admin' || usr.role === 'super_admin').length === 1}
+                      disabled={userProfile?.role !== 'super_admin' && (u.role === 'admin' || u.role === 'super_admin') && users.filter(usr => usr.role === 'admin' || usr.role === 'super_admin').length === 1}
                       className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm"
                     >
                       {Object.entries(roles).map(([id, config]) => (

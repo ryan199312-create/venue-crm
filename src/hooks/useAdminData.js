@@ -135,10 +135,15 @@ export function useAdminData(appId) {
     await updateDoc(userRef, { ...updates, updatedAt: serverTimestamp() });
   };
 
+  const updateUserRole = async (userId, newRole) => {
+    const updateUserRoleSecure = httpsCallable(functions, 'updateUserRoleSecure');
+    await updateUserRoleSecure({ appId, uid: userId, newRole });
+  };
+
   const createUser = async (userData) => {
     const inviteUser = httpsCallable(functions, 'inviteUser');
     await inviteUser({ ...userData, appId });
   };
 
-  return { events, users, loading, saveEvent, deleteEvent, updateUserProfile, createUser };
+  return { events, users, loading, saveEvent, deleteEvent, updateUserProfile, updateUserRole, createUser };
 }

@@ -128,12 +128,16 @@ export default function EventFormModal({
   const restoreMenuSnapshot = (menuId, snapshot) => {
     setFormData(prev => ({
       ...prev,
-      menus: prev.menus.map(m => {
+      menus: (prev.menus || []).map(m => {
         if (m.id === menuId) {
+          // 🌟 Fix: Use the first item from the data array
+          const restored = snapshot.data?.[0] || snapshot; 
           return {
             ...m,
-            content: snapshot.content,
-            title: snapshot.title
+            content: restored.content,
+            title: restored.title,
+            price: restored.price || m.price,
+            priceType: restored.priceType || m.priceType
           };
         }
         return m;
@@ -174,8 +178,13 @@ export default function EventFormModal({
           const newVersion = {
             id: Date.now(),
             name: snapshotName,
-            content: m.content,
-            title: m.title,
+            // 🌟 Fix: Store in 'data' array for VersionPreviewModal compatibility
+            data: [{
+              title: m.title,
+              content: m.content,
+              price: m.price,
+              priceType: m.priceType
+            }],
             timestamp: new Date().toISOString()
           };
           return {
@@ -545,7 +554,7 @@ export default function EventFormModal({
         isOpen={!!previewVersion} 
         onClose={() => setPreviewVersion(null)} 
         version={previewVersion}
-        onRestore={restoreMenuSnapshot}
+        onRestore={(snapshot) => restoreMenuSnapshot(previewVersion.menuId, snapshot)}
       />
     </Modal>
   );

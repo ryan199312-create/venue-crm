@@ -12,7 +12,7 @@ export const getTenantId = () => {
   const hostname = window.location.hostname;
   const parts = hostname.split('.');
 
-  // Localhost handling (e.g., kinglungheen.localhost)
+  // 1. Localhost handling
   if (hostname.endsWith('.localhost') || hostname === 'localhost') {
     if (parts.length > 1 && parts[0] !== 'www' && parts[0] !== 'app') {
       return parts[0];
@@ -20,8 +20,22 @@ export const getTenantId = () => {
     return null;
   }
 
-  // Production domain handling (e.g., kinglungheen.vowsos.com)
-  // Assuming the main domain has 2 parts (vowsos.com)
+  // 2. Vercel / Subdomain Handling
+  // If we are on *.vercel.app or *.vowsos.com
+  // Root domains like 'venue-crm-klh.vercel.app' have 3 parts.
+  // Subdomains like 'kinglungheen.venue-crm-klh.vercel.app' have 4 parts.
+  
+  const isVercel = hostname.endsWith('.vercel.app');
+  
+  if (isVercel) {
+    // For Vercel, root is usually [project].vercel.app (3 parts)
+    if (parts.length > 3) {
+      return parts[0];
+    }
+    return null;
+  }
+
+  // 3. Standard Production Domain (e.g., vowsos.com)
   if (parts.length > 2) {
     const subdomain = parts[0];
     if (subdomain !== 'www' && subdomain !== 'app') {

@@ -36,8 +36,19 @@ export const shouldShowField = (data, printMode, field, defaultClient, defaultIn
 
 export const onlyChinese = (text) => {
   if (!text) return '';
-  // Keep lines that have Chinese characters OR are just numbers/punctuation/whitespace (common in menus)
-  return text.split('\n').filter(line => 
+  
+  // 🌟 Senior Fix: Detect if the menu is intended to be bilingual.
+  // We check if there's a significant amount of English words (3+ characters).
+  // If it's bilingual, we return the FULL text so the English isn't stripped.
+  const lines = text.split('\n');
+  const hasSignificantEnglish = lines.some(line => /[a-zA-Z]{3,}/.test(line));
+  
+  if (hasSignificantEnglish) {
+    return text;
+  }
+
+  // Legacy behavior: Keep lines that have Chinese characters OR are just numbers/punctuation/whitespace (common in menus)
+  return lines.filter(line => 
     /[\u4e00-\u9fa5]/.test(line) || (line.trim().length > 0 && /^[0-9\s.,()\-:：]*$/.test(line.trim()))
   ).join('\n');
 };

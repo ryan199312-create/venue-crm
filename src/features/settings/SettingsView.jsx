@@ -6,6 +6,7 @@ import {
 import { Card, FormInput, MoneyInput, FormTextArea, FormSelect, ConfirmationModal, Modal } from '../../components/ui';
 import RolePermissionsTab from './RolePermissionsTab';
 import UsersTab from './UsersTab';
+import BrandingTab from './BrandingTab';
 import FloorplanEditor from '../../components/FloorplanEditor';
 import { ContractRenderer } from '../documents/components/renderers/ContractRenderer';
 import { useAuth } from '../../context/AuthContext';

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { db } from '../core/firebase';
+import { db, functions } from '../core/firebase';
 import { collection, getDocs, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { Loader2, ArrowRight, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const DataMigrationTool = ({ sourceId = 'my-venue-crm', targetId = 'kinglungheen', onComplete }) => {

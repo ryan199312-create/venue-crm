@@ -12,7 +12,7 @@ import {
   PaymentMethodBlock
 } from './DocumentShared';
 
-const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings, children }) => {
+const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings }) => {
   const { clientSig, adminSig } = getSignatures(data, printMode);
   const isCn = printMode === 'INVOICE' || printMode === 'RECEIPT' ? false : false; // Placeholder if we add CN versions later, but for now we look at the specific renderer
   
@@ -34,10 +34,9 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
         isEn={useEn} 
         showFinancials={true} 
         showPayments={printMode === 'INVOICE' || printMode === 'RECEIPT'}
+        showSchedule={printMode === 'QUOTATION'}
         data={data}
       />
-
-      {children}
 
       <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} isCn={!useEn} />
 
@@ -94,52 +93,8 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
 export const QuotationRenderer = ({ data, appSettings, onSign }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
   const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, true) : { setupStr: '', avStr: '', decorStr: '' };
-  
   if (!data) return null;
-
-  const paymentSteps = [
-    { label: '1st Payment (Deposit)', amount: billing.dep1, date: data.deposit1Date },
-    { label: '2nd Payment', amount: billing.dep2, date: data.deposit2Date },
-    { label: '3rd Payment', amount: billing.dep3, date: data.deposit3Date },
-    { label: 'Final Balance', amount: billing.balanceDue, date: data.date }
-  ].filter(step => step.amount > 0);
-
-  return (
-    <InvoiceReceiptLayout 
-      data={data} 
-      typeEn="Quotation" 
-      typeZh="報價單" 
-      billing={billing} 
-      setupStr={setupStr} 
-      avStr={avStr} 
-      decorStr={decorStr} 
-      onSign={onSign} 
-      printMode="QUOTATION" 
-      appSettings={appSettings}
-    >
-      {paymentSteps.length > 0 && (
-        <div className="mb-8 break-inside-avoid">
-          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-            <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-4 border-b border-slate-200 pb-2">
-              Payment Schedule (付款進度)
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {paymentSteps.map((step, idx) => (
-                <div key={idx} className="space-y-1">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{step.label}</p>
-                  <p className="text-sm font-black text-slate-900 font-mono">${formatMoney(step.amount)}</p>
-                  <p className="text-[10px] text-slate-500 font-medium italic">Due: {step.date || 'TBC'}</p>
-                </div>
-              ))}
-            </div>
-            <p className="text-[9px] text-slate-400 mt-4 italic font-medium">
-              * The payment schedule above is a suggested timeline based on your event date.
-            </p>
-          </div>
-        </div>
-      )}
-    </InvoiceReceiptLayout>
-  );
+  return <InvoiceReceiptLayout data={data} typeEn="Quotation" typeZh="報價單" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="QUOTATION" appSettings={appSettings} />;
 };
 
 export const InvoiceRenderer = ({ data, appSettings, onSign }) => {

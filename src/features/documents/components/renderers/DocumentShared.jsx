@@ -282,7 +282,7 @@ export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings }) =>
   </div>
 );
 
-export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, showFinancials = false, showPayments = false, data = {}, grandTotalLabel = null }) => (
+export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, showFinancials = false, showPayments = false, showSchedule = false, data = {}, grandTotalLabel = null }) => (
   <div className="mb-8 rounded-xl border border-slate-200 overflow-hidden break-inside-avoid shadow-sm">
     <table className="w-full text-xs text-left">
       <thead className="bg-slate-50 border-b border-slate-200">
@@ -420,6 +420,28 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
             </td>
             <td className="py-3 px-4 text-right font-black text-xl font-mono text-[var(--brand-primary)]">${formatMoney(billing.grandTotal)}</td>
           </tr>
+        </tbody>
+      )}
+      {showSchedule && (
+        <tbody className="border-t border-slate-200">
+          <tr className="bg-slate-50/30">
+            <td colSpan="4" className="py-1 px-4 font-black text-[9px] text-[var(--brand-primary)] uppercase tracking-widest">
+               Suggested Payment Schedule (付款進度)
+            </td>
+          </tr>
+          {[
+            { label: '1st Payment (Deposit)', date: data.deposit1Date, amount: billing.dep1 },
+            { label: '2nd Payment', date: data.deposit2Date, amount: billing.dep2 },
+            { label: '3rd Payment', date: data.deposit3Date, amount: billing.dep3 },
+            { label: 'Final Balance', date: data.date, amount: billing.balanceDue }
+          ].map((p, i) => p.amount > 0 && (
+            <tr key={`s-${i}`} className="bg-white text-slate-500 italic">
+              <td colSpan="3" className="py-1 px-4 text-right">
+                {p.label} ({p.date || 'TBC'})
+              </td>
+              <td className="py-1 px-4 text-right font-mono font-medium">${formatMoney(p.amount)}</td>
+            </tr>
+          ))}
         </tbody>
       )}
       {showPayments && (

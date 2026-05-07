@@ -36,19 +36,8 @@ export const shouldShowField = (data, printMode, field, defaultClient, defaultIn
 
 export const onlyChinese = (text) => {
   if (!text) return '';
-  
-  // 🌟 Senior Fix: Detect if the menu is intended to be bilingual.
-  // We check if there's a significant amount of English words (3+ characters).
-  // If it's bilingual, we return the FULL text so the English isn't stripped.
-  const lines = text.split('\n');
-  const hasSignificantEnglish = lines.some(line => /[a-zA-Z]{3,}/.test(line));
-  
-  if (hasSignificantEnglish) {
-    return text;
-  }
-
   // Legacy behavior: Keep lines that have Chinese characters OR are just numbers/punctuation/whitespace (common in menus)
-  return lines.filter(line => 
+  return text.split('\n').filter(line => 
     /[\u4e00-\u9fa5]/.test(line) || (line.trim().length > 0 && /^[0-9\s.,()\-:：]*$/.test(line.trim()))
   ).join('\n');
 };
@@ -310,7 +299,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
               <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">
-                {isEn ? m.content : onlyChinese(m.content)}
+                {m.content}
               </p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(m.cleanPrice)}</td>

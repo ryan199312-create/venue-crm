@@ -2,21 +2,48 @@ import React, { useState } from 'react';
 import { User, Mail, Shield, Trash2, Plus, Search, MoreVertical, Edit2, Building2 } from 'lucide-react';
 import { Card } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
+import { DEFAULT_ROLE_PERMISSIONS } from '../../core/constants';
 
-const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, deleteUser, addToast }) => {
+const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, deleteUser, createUser, addToast }) => {
   const { outlets } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'staff', accessibleVenues: [] });
   const [editingUserId, setEditingUserId] = useState(null);
   const [editingName, setEditingName] = useState('');
 
-  const roles = appSettings.rolePermissions || {};
+  // 🌟 Senior Fix: Merge custom roles with default roles to ensure essential roles always exist.
+  const roles = { ...DEFAULT_ROLE_PERMISSIONS, ...(appSettings.rolePermissions || {}) };
 
   const filteredUsers = users.filter(u => 
     u.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleInviteUser = async () => {
+    if (!newUser.email || !newUser.name) {
+      return addToast("請輸入姓名與電郵", "error");
+    }
+    
+    setIsInviting(true);
+    try {
+      await createUser({
+        email: newUser.email,
+        displayName: newUser.name,
+        role: newUser.role,
+        accessibleVenues: newUser.accessibleVenues
+      });
+      addToast(`邀請已送出至 ${newUser.email}`, "success");
+      setNewUser({ name: '', email: '', role: 'staff', accessibleVenues: [] });
+      setIsAddingUser(false);
+    } catch (err) {
+      console.error(err);
+      addToast("邀請失敗: " + err.message, "error");
+    } finally {
+      setIsInviting(false);
+    }
+  };
 
   const handleUpdateRole = async (userId, role) => {
     try {
@@ -141,17 +168,17 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
             <button 
               onClick={() => setIsAddingUser(false)}
               className="px-4 py-2 text-slate-600 font-bold text-sm hover:bg-slate-50 rounded-lg transition-colors"
+              disabled={isInviting}
             >
               取消 (Cancel)
             </button>
             <button 
-              onClick={() => {
-                addToast("用戶邀請功能需配合 Firebase Admin SDK", "info");
-                setIsAddingUser(false);
-              }}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 shadow-md transition-all active:scale-95"
+              onClick={handleInviteUser}
+              disabled={isInviting}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 shadow-md transition-all active:scale-95 flex items-center gap-2"
             >
-              送出邀請 (Invite)
+              {isInviting ? <MoreVertical className="animate-spin" size={16} /> : <Plus size={16} />}
+              {isInviting ? '發送中...' : '送出邀請 (Invite)'}
             </button>
           </div>
         </Card>
@@ -212,7 +239,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                     <select 
                       value={u.role || 'staff'}
                       onChange={(e) => handleUpdateRole(u.id, e.target.value)}
-                      disabled={u.role === 'admin' && users.filter(usr => usr.role === 'admin').length === 1}
+                      disabled={(u.role === 'admin' || u.role === 'super_admin') && users.filter(usr => usr.role === 'admin' || usr.role === 'super_admin').length === 1}
                       className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm"
                     >
                       {Object.entries(roles).map(([id, config]) => (
@@ -222,7 +249,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                   </td>
                   <td className="p-4">
                     <div className="flex flex-wrap gap-1.5 max-w-[300px]">
-                      {u.role === 'admin' ? (
+                      {(u.role === 'admin' || u.role === 'super_admin') ? (
                         <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100">所有分店 (All Outlets)</span>
                       ) : (
                         <>
@@ -261,8 +288,8 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                   <td className="p-4 text-right">
                     <button 
                       onClick={() => handleDeleteUser(u.id, u.displayName)}
-                      disabled={u.role === 'admin'}
-                      className={`p-2 rounded-lg transition-all ${u.role === 'admin' ? 'text-slate-100 cursor-not-allowed' : 'text-slate-400 hover:text-red-600 hover:bg-red-50 hover:scale-110'}`}
+                      disabled={u.role === 'admin' || u.role === 'super_admin'}
+                      className={`p-2 rounded-lg transition-all ${u.role === 'admin' || u.role === 'super_admin' ? 'text-slate-100 cursor-not-allowed' : 'text-slate-400 hover:text-red-600 hover:bg-red-50 hover:scale-110'}`}
                     >
                       <Trash2 size={20} />
                     </button>

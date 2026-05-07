@@ -307,7 +307,7 @@ export default function EventFormModal({
   };
 
   const isOwner = (formData?.salesRep?.split(', ').includes(userProfile?.displayName)) || (formData?.clientEmail === userProfile?.email);
-  const isAdmin = userProfile?.role === 'admin';
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
   const canManageEvent = isAdmin || !hasPermission('manage_own_only') || isOwner;
 
   return (

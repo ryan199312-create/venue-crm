@@ -1,6 +1,9 @@
-# Venue CRM Project Overview
+# VowsOS SaaS: Master Context & Recovery
 
-This project is a CRM and Document Management system for a venue group. It handles event bookings, contract generation, floorplans, and billing across multiple outlets.
+> **⚠️ STATE RECOVERY PROTOCOL:** Memory in long sessions is limited. If you are starting a new session or feel context is missing, immediately read **`VOWSOS_ROADMAP.md`**. It contains the current architectural state, subdomain routing logic, and the roadmap for upcoming sprints.
+
+## Project Overview
+This project is a CRM and Document Management system transitioned into a full SaaS platform named **VowsOS**. It handles event bookings, contract generation, floorplans, and billing across multiple tenants using subdomain isolation.
 
 ## Core Technologies
 - **Frontend:** React, Tailwind CSS, Lucide React (icons)
@@ -50,30 +53,54 @@ The system uses a hierarchical settings model. Global settings in `artifacts/${a
     - `isOwner` checks if the user's `displayName` is in `salesRep` or matches `clientEmail`.
 - **Venue Access:** `userProfile.accessibleVenues` restricts which outlets a user can see in the switcher.
 
-### Refactoring Completed:
+### SaaS & Multi-Tenant Architecture (VowsOS)
+
+The system has transitioned into a full SaaS platform named **VowsOS**. It supports independent tenant organizations through subdomain isolation and a centralized management console.
+
+### Multi-Tenancy Implementation
+- **Tenant Resolver (`src/core/tenantResolver.js`):** Dynamically extracts the `tenantId` from the URL subdomain (e.g., `kinglungheen.localhost` -> `kinglungheen`).
+- **Dynamic Scoping:** The `appId` in `AuthContext` is resolved via the subdomain. All Firestore paths and Cloud Function calls are scoped using this dynamic ID: `artifacts/${appId}/...`.
+- **Subdomain Routing:** `App.jsx` conditionally renders the UI based on the domain:
+    - **Root Domain (`localhost` / `vowsos.com`):** Renders the **Super Admin Portal**.
+    - **Subdomain (`tenant.vowsos.com`):** Renders the Tenant Admin Dashboard and Client Portal.
+
+### Super Admin Portal (`src/super-admin`)
+A central console for platform-level management, restricted to the `super_admin` role.
+- **Tenant Management:** Create and initialize new tenant environments.
+- **System Bootstrapping:** Includes an emergency "Claim Super Admin" function for first-time setup on new environments.
+- **Global Overview:** Monitor active tenants and platform health.
+
+### Cloud Functions Refactoring
+All backend logic in `functions/index.js` has been refactored to be tenant-aware. Every `onCall` function now extracts `appId` from the request payload to ensure strict data isolation between tenants.
+
+## Refactoring Completed:
 - [x] Renamed and moved files from legacy `src/admin/` to `src/features/`.
-- [x] Refactored `DocumentRenderer.jsx` into `DocumentRouter.jsx`.
-- [x] Implemented Role-Based Access Control (RBAC) with custom roles.
-- [x] Implemented Multi-Outlet scalability with scoped settings and data isolation.
-- [x] Unified document financial presentation with right-aligned totals in `ItemTable`.
-- [x] Removed redundant/legacy files from `src/admin/` to ensure a clean codebase.
-- [x] Standardized prop naming (`appSettings`) across event form tabs.
-
-## Next Steps
-- Implement advanced reporting and analytics for HQ view.
-- Enhance the Client Portal with more interactive features (e.g., seat planning).
-- Ensure full type safety or consistent validation across the document data pipeline.
-
-## SaaS Commercialization Roadmap
-To transition this platform into a sellable B2B SaaS product, the following areas must be addressed:
-- **Tenant Management:** Replace the static `appId` with a dynamic tenant resolver (via subdomains or login ID) to support independent customer organizations.
-- **Advanced Branding (White-Labeling):** Fully externalize all UI assets (logos, colors, legal clauses) into the `venueProfile` settings. Use CSS variables for primary/secondary colors to allow one-click UI theming.
-- **Self-Service Onboarding:** Build a setup wizard for new tenants to upload floorplans, define zones, and configure initial menus without developer intervention.
-- **Subscription & Feature Gating:** Implement a Super Admin portal to manage tenant subscriptions and toggle features (e.g., AI Assistant, SMS integration) based on payment tiers.
-- **Integration Layer:** Develop standard exports for common accounting (Xero) and marketing (Mailchimp) platforms to increase system stickiness.
+- [x] Implemented VowsOS Multi-Tenant SaaS architecture with subdomain routing.
+- [x] Refactored all Cloud Functions for dynamic `appId` scoping.
+- [x] Built the Super Admin Portal with tenant onboarding workflow.
+- [x] Implemented `super_admin` role across RBAC and UI.
+- [x] Removed legacy client-facing website files (`src/website/`).
+- [x] **Sprint 1: Identity & Branding (VowsOS):** Implemented dynamic CSS variable theme engine, tenant-specific logo/favicon/title support, and fully white-labeled layouts for Admin and Client Portal.
+- [x] **Sprint 2: Tenant Autonomy (Part 1):** 
+    - [x] **Onboarding Wizard:** Multi-step setup for new tenants (Identity -> Colors -> Presence).
+    - [x] **Staff Invitation:** Secure, tenant-scoped user creation and role assignment via Cloud Functions.
+    - [x] **Super Admin Stability:** Resolved auth race conditions and added global user monitoring.
+    - [x] **First-Time Flow Fix:** Added registration toggle to Login and fixed headless detection for zero-user tenants.
+    - [x] **Data Sync Tool:** Built a cross-tenant sync tool in the Super Admin panel to push legacy data (my-venue-crm) to branded tenants.
+    - [x] **Documentation Hub:** Automated help center for self-service support.
 
 ## Log for Future Self (Continuity)
-- **Current State:** The multi-outlet architecture is fully implemented and verified.
-- **Source of Truth:** `helpers.js` -> `getScopedSettings` for configuration; `AuthContext.jsx` -> `selectedVenueId` for state.
-- **Workflow:** When adding new features, always ensure they respect the `venueId` scoping and permission checks.
-- **Legacy Note:** Legacy events without `venueId` are auto-resolved by matching `venueLocation` against outlet names in the `openEditModal` function.
+- **Current State:** The platform is multi-tenant and white-labeled. 
+- **Production Setup:** `kinglungheen` is the official branded tenant. `my-venue-crm` is the legacy production source.
+- **Sync Workflow:** Use the **Sync Tool** in `localhost:5173/super-admin` to update `kinglungheen` from `my-venue-crm`.
+- **Known Blocker:** The **Onboarding Wizard** currently experiences a reset loop on new tenants (like `weddingcorp`). Despite moving to a single-return tree and decoupling loading states, background data updates (profile/settings) can still trigger unmounting.
+- **Architectural Note:** `AdminLayout.jsx` uses an early-return isolation pattern. `AuthContext.jsx` is the primary driver for `appSettings`.
+
+
+
+## Security & Scoping Rules
+- **Firestore:** Rules and Functions MUST validate `appId` in the path. NEVER use global collections without a tenant prefix.
+- **Cloud Functions:** All functions (invite, PDF, SleekFlow) now support an optional `appId` parameter to ensure correct data targeting.
+
+- **Security:** Firestore rules and Cloud Functions strictly validate `appId` and user roles (`admin` vs `super_admin`).
+- **Bootstrap Note:** Use the root domain (`localhost:5174/super-admin`) to gain initial platform access via the "Bootstrap" button.

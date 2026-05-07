@@ -3,9 +3,11 @@ import { X, Mail, MessageCircle, Sparkles, Copy, Check, Loader2, Send, Settings2
 import { useAI } from '../hooks/useAI'; 
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../core/firebase'; 
+import { useAuth } from '../context/AuthContext';
 
 export default function AiAssistant({ formData, setFormData, onClose }) {
-  
+  const { appSettings } = useAuth();
+  const venueProfile = appSettings?.venueProfile || {};
   const { generate, loading: aiLoading } = useAI();
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -53,7 +55,7 @@ export default function AiAssistant({ formData, setFormData, onClose }) {
       - Contact: ${formData.clientPhone || "No Phone"} | Email: ${formData.clientEmail || "No Email"}
       - Date: ${formData.date}
       - Time: ${formData.startTime} to ${formData.endTime} (Serving Time: ${formData.servingTime || "TBC"})
-      - Venue: ${formData.venueLocation || "King Lung Heen"}
+      - Venue: ${formData.venueLocation || "{venueProfile.nameEn || 'Venue Management'}"}
       - Attendance: ${formData.tableCount || 0} Tables / ${formData.guestCount || 0} Pax
 
       === FINANCIALS (HKD) ===
@@ -114,7 +116,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
     else if (tone === 'apologetic') toneInstruction = "Maintain a deeply apologetic, empathetic, and humble tone.";
     else if (tone === 'urgent') toneInstruction = "Maintain an urgent, clear, and firm tone while remaining polite.";
 
-    const venueIdentity = `You represent King Lung Heen (璟瓏軒). 
+    const venueIdentity = `You represent {venueProfile.nameEn || 'Venue Management'} ({venueProfile.nameZh || 'VowsOS'}). 
     Your official contact phone number is 2788 3939. 
     Your official address is 尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓 (4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon). 
     ALWAYS use 2788 3939 if you ask the client to call or contact you. NEVER use the client's phone number as the venue's contact number.`;
@@ -155,7 +157,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
           
           setFormData(prev => ({ 
             ...prev, 
-            emailSubject: json.subject || "璟瓏軒 活動通知", 
+            emailSubject: json.subject || "{venueProfile.nameZh || 'VowsOS'} 活動通知", 
             emailBody: json.body || cleanText 
           }));
         } catch (e) {

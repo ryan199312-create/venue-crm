@@ -1,11 +1,22 @@
 import React from 'react';
-import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen, ChevronDown, Building2, Globe } from 'lucide-react';
+import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function AdminSidebar({ activeTab, setActiveTab, userProfile, user, handleSignOut }) {
-  const { hasPermission, selectedVenueId, setSelectedVenueId, getVisibleVenues, outlets } = useAuth();
+export default function AdminSidebar({ activeTab, setActiveTab }) {
+  const { 
+    hasPermission, 
+    selectedVenueId, 
+    setSelectedVenueId, 
+    getVisibleVenues, 
+    outlets,
+    userProfile,
+    user,
+    signOut: handleSignOut,
+    appSettings
+  } = useAuth();
+
+  const venueProfile = appSettings?.venueProfile || {};
   const visibleVenues = getVisibleVenues(outlets);
-  const currentVenue = outlets.find(v => v.id === selectedVenueId);
 
   const menuItems = [
     { id: 'dashboard', label: '儀表板 (Dashboard)', icon: LayoutDashboard, permission: 'dashboard' },
@@ -15,14 +26,14 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
   ].filter(item => hasPermission(item.permission));
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all border-r border-slate-800">
+    <aside className="w-64 bg-brand-secondary text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all border-r border-slate-800">
       <div className="p-6 border-b border-slate-800 flex items-center space-x-3 text-white">
-        <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/50">
+        <div className="bg-brand-primary p-2 rounded-lg shadow-lg shadow-brand-primary/50">
           <MapPin size={20} />
         </div>
         <div>
-          <h1 className="text-l font-bold leading-none mb-1">璟瓏軒系統</h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Venue Management</p>
+          <h1 className="text-l font-bold leading-none mb-1">{venueProfile.nameZh || 'VowsOS'}</h1>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">{venueProfile.nameEn || 'Management System'}</p>
         </div>
       </div>
 
@@ -35,7 +46,7 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
           <select 
             value={selectedVenueId}
             onChange={(e) => setSelectedVenueId(e.target.value)}
-            className="w-full bg-slate-800/50 border border-slate-700 text-white text-sm rounded-lg px-3 py-2.5 appearance-none cursor-pointer hover:bg-slate-800 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-full bg-slate-800/50 border border-slate-700 text-white text-sm rounded-lg px-3 py-2.5 appearance-none cursor-pointer hover:bg-slate-800 transition-colors focus:ring-2 focus:ring-brand-primary focus:outline-none"
           >
             {hasPermission('manage_all_outlets') && (
               <option value="all">🌐 所有分店 (Global HQ)</option>
@@ -53,7 +64,7 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
           <button 
             key={item.id} 
             onClick={() => setActiveTab(item.id)} 
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 translate-x-1' : 'hover:bg-slate-800 hover:text-white'}`}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${activeTab === item.id ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/40 translate-x-1' : 'hover:bg-slate-800 hover:text-white'}`}
           >
             <div className="flex items-center space-x-3 font-medium">
               <item.icon size={19} className={activeTab === item.id ? 'text-white' : 'text-slate-400'} />
@@ -64,15 +75,15 @@ export default function AdminSidebar({ activeTab, setActiveTab, userProfile, use
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-800 bg-slate-900/80 backdrop-blur-sm">
+      <div className="p-4 border-t border-slate-800 bg-brand-secondary/80 backdrop-blur-sm">
         <div className="flex items-center space-x-3 px-2 mb-4 bg-slate-800/40 p-2 rounded-xl border border-slate-700/50">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-bold text-white shadow-inner">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-primary to-brand-accent flex items-center justify-center text-sm font-bold text-white shadow-inner">
             {userProfile?.displayName?.slice(0, 2).toUpperCase() || user?.uid?.slice(0, 2) || 'U'}
           </div>
           <div className="overflow-hidden flex-1">
             <p className="text-sm font-bold text-white truncate leading-none mb-1">{userProfile?.displayName || 'Staff'}</p>
             <div className="flex items-center space-x-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${userProfile?.role === 'admin' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${userProfile?.role === 'super_admin' ? 'bg-brand-accent' : userProfile?.role === 'admin' ? 'bg-amber-500' : 'bg-brand-primary'}`} />
               <p className="text-[10px] text-slate-400 truncate uppercase font-bold tracking-tight">{userProfile?.role || 'User'}</p>
             </div>
           </div>

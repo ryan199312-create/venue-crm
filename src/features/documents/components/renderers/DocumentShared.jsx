@@ -183,7 +183,7 @@ export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = fal
 
   return (
     <div className="mt-6 bg-slate-50 p-5 rounded-2xl border border-slate-200 break-inside-avoid">
-      <h4 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-3 flex items-center gap-2">
+      <h4 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 flex items-center gap-2">
         {isCn ? '付款方式及銀行資料' : 'Payment Methods & Bank Details'}
       </h4>
       <div className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -204,13 +204,13 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
   const logoUrl = appSettings?.companyLogoUrl;
 
   return (
-    <div className="flex justify-between items-start border-b-[3px] pb-6 mb-8" style={{ borderColor: '#A57C00' }}>
+    <div className="flex justify-between items-start border-b-[3px] pb-6 mb-8" style={{ borderColor: 'var(--brand-primary)' }}>
       <div className="max-w-[60%]">
         <div className="flex flex-col gap-1">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="h-12 object-contain self-start mb-2" />
           ) : (
-            <div className="flex flex-col gap-0" style={{ color: '#A57C00' }}>
+            <div className="flex flex-col gap-0" style={{ color: 'var(--brand-primary)' }}>
               <span className="text-3xl font-black tracking-tight leading-none">{profile.nameZh || '璟瓏軒'}</span>
               <span className="text-xs font-bold tracking-[0.2em] uppercase mt-1">{profile.nameEn || 'King Lung Heen'}</span>
             </div>
@@ -227,7 +227,7 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
       </div>
       <div className="text-right">
         <h1 className="text-3xl md:text-4xl font-light text-slate-800 uppercase tracking-widest mb-1">{typeEn}</h1>
-        {typeZh && <h2 className="text-sm font-bold text-[#A57C00] uppercase tracking-widest mb-3">{typeZh}</h2>}
+        {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-widest mb-3">{typeZh}</h2>}
         <div className="text-right space-y-1 mt-2">
           <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
           <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></div>
@@ -240,7 +240,7 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
 export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings }) => (
   <div className="grid grid-cols-2 gap-12 mb-8 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
     <div>
-      <h3 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-3 border-b border-slate-200 pb-1.5">Bill To (客戶)</h3>
+      <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 border-b border-slate-200 pb-1.5">Bill To (客戶)</h3>
       {!hideClientInfo ? (
         <div className="space-y-3">
           <div>
@@ -261,7 +261,7 @@ export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings }) =>
       ) : <div className="py-2 text-xs text-slate-400 italic">(Client details hidden)</div>}
     </div>
     <div>
-      <h3 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-3 border-b border-slate-200 pb-1.5">Event Details (活動)</h3>
+      <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 border-b border-slate-200 pb-1.5">Event Details (活動)</h3>
       <div className="space-y-3">
         <div>
           <p className="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">{data.eventName}</p>
@@ -418,7 +418,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
             <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-base text-slate-900">
               {grandTotalLabel || (isEn ? "Grand Total (總金額)" : "總金額 (Grand Total)")}
             </td>
-            <td className="py-3 px-4 text-right font-black text-xl font-mono text-[#A57C00]">${formatMoney(billing.grandTotal)}</td>
+            <td className="py-3 px-4 text-right font-black text-xl font-mono text-[var(--brand-primary)]">${formatMoney(billing.grandTotal)}</td>
           </tr>
         </tbody>
       )}

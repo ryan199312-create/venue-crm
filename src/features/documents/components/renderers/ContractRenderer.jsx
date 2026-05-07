@@ -73,7 +73,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
       <DocumentHeader data={data} typeEn="Service Agreement" typeZh={isCn ? "服務合約" : "合約"} appSettings={appSettings} />
       
       <div className="bg-slate-50 border border-slate-200 px-8 py-10 rounded-[2rem] mb-8 text-center relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-[#A57C00]"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-[var(--brand-primary)]"></div>
         <div className="max-w-2xl mx-auto">
           <p className="text-sm text-slate-700 leading-relaxed font-medium text-center whitespace-pre-wrap">
             {getIntroText()}
@@ -83,7 +83,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
 
       <div className="grid grid-cols-2 gap-8 mb-8 border-b border-slate-100 pb-8">
         <div>
-          <h3 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-4">
+          <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-4">
             {isCn ? '合約雙方' : 'Agreement Parties'}
           </h3>
           <div className="space-y-4">
@@ -105,7 +105,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
           </div>
         </div>
         <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-           <h3 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-4">
+           <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-4">
              {isCn ? '活動時間表' : 'Event Schedule'}
            </h3>
            <div className="space-y-3">
@@ -132,7 +132,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
       </div>
 
       <div className="mb-8">
-        <h3 className="text-[10px] font-black text-[#A57C00] uppercase tracking-widest mb-4">
+        <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-4">
           {isCn ? '服務與最低消費' : 'Services & Minimum Spend'}
         </h3>
         <ItemTable 
@@ -153,7 +153,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
       {/* PAGE 2: TERMS & CONDITIONS */}
       <div className="mt-8 px-4">
         <div className="text-center mb-6">
-          <h3 className="inline-block font-black uppercase text-sm tracking-[0.2em] border-b-2 pb-1" style={{ color: '#A57C00', borderColor: '#A57C00' }}>
+          <h3 className="inline-block font-black uppercase text-sm tracking-[0.2em] border-b-2 pb-1" style={{ color: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' }}>
             {isCn ? '條款及細則' : 'Terms and Conditions'}
           </h3>
         </div>

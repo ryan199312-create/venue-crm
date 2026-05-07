@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { getScopedSettings } from '../services/helpers';
+import { getTenantId } from '../core/tenantResolver';
 import { Card, Badge } from '../components/ui';
 const DocumentManager = React.lazy(() => import('../components/DocumentManager'));
 const FloorplanViewer = React.lazy(() => import('../components/FloorplanViewer'));
@@ -16,6 +17,7 @@ const STYLES = {
 
 export default function ClientPortal() {
   const { eventId: urlEventId } = useParams();
+  const appId = getTenantId() || "vowsos-central";
   const [eventId, setEventId] = useState(urlEventId);
   const [viewState, setViewState] = useState('LOGIN'); // 'LOGIN', 'SELECT', 'PORTAL'
   const [isLoading, setIsLoading] = useState(false);
@@ -59,7 +61,7 @@ export default function ClientPortal() {
       }
       
       const verifyAccess = httpsCallable(functions, 'verifyClientAccess');
-      const payload = eventToUse ? { eventId: eventToUse, phone: phoneToUse } : { phone: phoneToUse };
+      const payload = eventToUse ? { appId, eventId: eventToUse, phone: phoneToUse } : { appId, phone: phoneToUse };
       const response = await verifyAccess(payload);
       
       const fetchedEvents = response.data.events;
@@ -138,6 +140,7 @@ export default function ClientPortal() {
         const uploadApi = httpsCallable(functions, 'uploadClientPaymentProof');
         const safePrefix = milestoneLabel.split(' ')[0]; // e.g. "1st", "2nd"
         const response = await uploadApi({ 
+          appId,
           eventId, 
           phone: currentPhone, 
           fileName: `${safePrefix}_${file.name}`,
@@ -179,6 +182,7 @@ export default function ClientPortal() {
       const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
       const updateDietaryApi = httpsCallable(functions, 'updateClientDietaryReq');
       await updateDietaryApi({
+        appId,
         eventId,
         phone: currentPhone,
         specialMenuReq: dietaryReq,
@@ -202,7 +206,7 @@ export default function ClientPortal() {
       const api = httpsCallable(functions, 'updateClientRundown');
       // JSON.parse/stringify cleans the array of any React-specific proxy metadata so Firebase doesn't crash (INTERNAL ERROR)
       const cleanRundown = JSON.parse(JSON.stringify(editedRundown));
-      await api({ eventId, phone: currentPhone, rundown: cleanRundown });
+      await api({ appId, eventId, phone: currentPhone, rundown: cleanRundown });
       setEventData(prev => ({ ...prev, rundown: editedRundown }));
       setIsEditingRundown(false);
       alert("流程更新成功 (Rundown updated successfully)!");
@@ -219,7 +223,7 @@ export default function ClientPortal() {
     try {
       const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
       const signApi = httpsCallable(functions, 'signClientContract');
-      await signApi({ eventId, phone: currentPhone, signatureBase64: base64String, docType });
+      await signApi({ appId, eventId, phone: currentPhone, signatureBase64: base64String, docType });
       
       setEventData(prev => ({ 
         ...prev, 
@@ -296,11 +300,11 @@ export default function ClientPortal() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
         <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-100 relative overflow-hidden">
           {/* Decorative Gold Header */}
-          <div className="absolute top-0 left-0 w-full h-2 bg-[#A57C00]"></div>
+          <div className="absolute top-0 left-0 w-full h-2 bg-brand-primary"></div>
           
           <div className="text-center mb-8 mt-4">
-            <h1 className="text-3xl font-black text-[#A57C00] tracking-tight mb-1">璟瓏軒</h1>
-            <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase">King Lung Heen</h2>
+            <h1 className="text-3xl font-black text-brand-primary tracking-tight mb-1">{appSettings?.venueProfile?.nameZh || appSettings?.branding?.portalTitle || 'VowsOS'}</h1>
+            <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase">{appSettings?.venueProfile?.nameEn || 'Venue Management'}</h2>
           </div>
           
           <div className="mb-8">
@@ -314,7 +318,7 @@ export default function ClientPortal() {
               <input 
                 type="tel" 
                 placeholder="電話號碼 (Phone No.)" 
-                className="w-full bg-slate-50 border border-slate-200 py-3 pl-12 pr-4 rounded-xl text-lg font-bold tracking-wider focus:border-[#A57C00] focus:ring-2 focus:ring-[#A57C00]/20 outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 py-3 pl-12 pr-4 rounded-xl text-lg font-bold tracking-wider focus:border-brand-primary focus:ring-2 focus:ring-[var(--brand-primary)]/20 outline-none transition-all"
                 value={phoneInput}
                 onChange={(e) => setPhoneInput(e.target.value)}
               />
@@ -324,7 +328,7 @@ export default function ClientPortal() {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-[#A57C00] hover:bg-[#8a6800] text-white py-3.5 rounded-xl font-bold tracking-wide transition-colors flex justify-center items-center shadow-lg shadow-[#A57C00]/20"
+            className="w-full bg-brand-primary hover:bg-[brand-primary/90] text-white py-3.5 rounded-xl font-bold tracking-wide transition-colors flex justify-center items-center shadow-lg shadow-[var(--brand-primary)]/20"
           >
             {isLoading ? <Loader2 className="animate-spin" size={20} /> : '登入查看 (Access Portal)'}
           </button>
@@ -339,7 +343,7 @@ export default function ClientPortal() {
       <div className="min-h-screen bg-slate-50 p-6 font-sans pb-24">
         <div className="max-w-md mx-auto mt-6">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-[#A57C00] tracking-tight mb-1">璟瓏軒</h1>
+            <h1 className="text-3xl font-black text-brand-primary tracking-tight mb-1">{appSettings?.venueProfile?.nameZh || appSettings?.branding?.portalTitle || 'VowsOS'}</h1>
             <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase">Select Your Event</h2>
           </div>
           <div className="space-y-4">
@@ -347,17 +351,17 @@ export default function ClientPortal() {
               <button 
                 key={ev.id} 
                 onClick={() => handleSelectEvent(ev)}
-                className="w-full bg-white p-5 rounded-2xl shadow-sm border border-slate-100 text-left hover:border-[#A57C00] transition-colors group relative overflow-hidden flex flex-col"
+                className="w-full bg-white p-5 rounded-2xl shadow-sm border border-slate-100 text-left hover:border-brand-primary transition-colors group relative overflow-hidden flex flex-col"
               >
-                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#A57C00] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-brand-primary opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="flex justify-between items-start mb-2 w-full">
                   <h3 className="font-bold text-slate-800 text-lg leading-tight">{ev.eventName}</h3>
                   <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ml-2 shrink-0 ${ev.status === 'completed' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'}`}>{ev.status}</span>
                 </div>
                 <div className="flex items-center text-sm text-slate-500">
-                  <Calendar size={14} className="mr-1.5 text-[#A57C00]" />
+                  <Calendar size={14} className="mr-1.5 text-brand-primary" />
                   {ev.date}
-                  <MapPin size={14} className="ml-4 mr-1.5 text-[#A57C00]" />
+                  <MapPin size={14} className="ml-4 mr-1.5 text-brand-primary" />
                   {ev.venueLocation}
                 </div>
               </button>
@@ -374,13 +378,13 @@ export default function ClientPortal() {
       {/* Hero Banner with Dynamic Back Button */}
       <div className="bg-slate-900 text-white p-6 pt-12 pb-10 rounded-b-[2.5rem] shadow-lg relative overflow-hidden">
         {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#A57C00 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(var(--brand-primary) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
         
         <div className="relative z-10 text-center">
-          <h2 className="text-[10px] tracking-[0.2em] text-[#A57C00] uppercase font-bold mb-3">Your Event Details</h2>
+          <h2 className="text-[10px] tracking-[0.2em] text-brand-primary uppercase font-bold mb-3">Your Event Details</h2>
           <h1 className="text-2xl md:text-3xl font-black mb-2 leading-tight">{eventData.eventName}</h1>
           <div className="flex items-center justify-center text-sm text-slate-300 font-medium bg-white/10 w-max mx-auto px-4 py-1.5 rounded-full backdrop-blur-sm mt-4">
-            <Calendar size={14} className="mr-2 text-[#A57C00]" />
+            <Calendar size={14} className="mr-2 text-brand-primary" />
             {eventData.date}
           </div>
         </div>
@@ -414,7 +418,7 @@ export default function ClientPortal() {
             {/* 1. WELCOME & COUNTDOWN */}
             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="flex-1 text-center md:text-left">
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-[#A57C00] text-[10px] font-bold uppercase tracking-widest mb-4">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-brand-primary text-[10px] font-bold uppercase tracking-widest mb-4">
                   <Sparkles size={12} className="mr-1.5" /> Welcome to your portal
                 </span>
                 <h3 className="text-2xl font-black text-slate-800 mb-2">Hello, {eventData.clientName || 'Valued Guest'}</h3>
@@ -424,7 +428,7 @@ export default function ClientPortal() {
               {countdown !== null && (
                 <div className="bg-slate-900 rounded-3xl p-6 text-center min-w-[200px] shadow-xl shadow-slate-200">
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">{countdown < 0 ? 'Days Since Event' : 'Countdown'}</p>
-                  <div className="text-5xl font-black text-[#A57C00] font-mono leading-none mb-1">
+                  <div className="text-5xl font-black text-brand-primary font-mono leading-none mb-1">
                     {Math.abs(countdown)}
                   </div>
                   <p className="text-white text-xs font-bold uppercase tracking-widest">{Math.abs(countdown) === 1 ? 'Day' : 'Days'} {countdown < 0 ? 'Ago' : 'To Go'}</p>
@@ -436,12 +440,12 @@ export default function ClientPortal() {
               <div className="md:col-span-2 space-y-4">
                 <div className={`${STYLES.gridBox} flex items-center justify-between`}>
                   <div className="flex items-center">
-                    <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
-                      <MapPin size={20} className="text-[#A57C00]" />
+                    <div className="bg-brand-primary/10 p-3 rounded-full mr-4">
+                      <MapPin size={20} className="text-brand-primary" />
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Venue</p>
-                      <p className="font-bold text-[#A57C00] text-base mb-0.5">璟瓏軒 King Lung Heen</p>
+                      <p className="font-bold text-brand-primary text-base mb-0.5">{appSettings?.venueProfile?.nameZh || appSettings?.branding?.portalTitle || 'VowsOS'} {appSettings?.venueProfile?.nameEn || 'Venue Management'}</p>
                       <p className="font-bold text-slate-800 text-sm mb-1.5">{eventData.venueLocation}</p>
                       <div className="mt-1.5 space-y-0.5">
                         <p className="text-xs text-slate-600 font-medium leading-relaxed">尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓</p>
@@ -453,8 +457,8 @@ export default function ClientPortal() {
 
                 <div className={`${STYLES.gridBox} flex items-center justify-between`}>
                   <div className="flex items-center">
-                    <div className="bg-[#A57C00]/10 p-3 rounded-full mr-4">
-                      <Clock size={20} className="text-[#A57C00]" />
+                    <div className="bg-brand-primary/10 p-3 rounded-full mr-4">
+                      <Clock size={20} className="text-brand-primary" />
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Time</p>
@@ -470,10 +474,10 @@ export default function ClientPortal() {
               <div className="space-y-6">
                 <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl">
                   {/* Decorative Sparkle */}
-                  <Sparkles className="absolute -top-4 -right-4 text-[#A57C00] opacity-20" size={100} />
+                  <Sparkles className="absolute -top-4 -right-4 text-brand-primary opacity-20" size={100} />
                   
                   <div className="relative z-10 text-center">
-                    <div className="w-20 h-20 bg-[#A57C00] rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg border-4 border-white/10">
+                    <div className="w-20 h-20 bg-brand-primary rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg border-4 border-white/10">
                       <Phone size={32} className="text-white" />
                     </div>
                     <h4 className="text-xl font-black mb-2 uppercase tracking-tight">Need Help?</h4>
@@ -483,7 +487,7 @@ export default function ClientPortal() {
                       href={`https://wa.me/852${(eventData.salesRepPhone || '52226066').replace(/[^0-9]/g, '')}`} 
                       target="_blank" 
                       rel="noreferrer"
-                      className="inline-flex items-center justify-center w-full bg-white text-slate-900 px-6 py-4 rounded-2xl font-black text-sm hover:bg-[#A57C00] hover:text-white transition-all shadow-lg"
+                      className="inline-flex items-center justify-center w-full bg-white text-slate-900 px-6 py-4 rounded-2xl font-black text-sm hover:bg-brand-primary hover:text-white transition-all shadow-lg"
                     >
                       <MessageCircle size={18} className="mr-3" /> WhatsApp Specialist
                     </a>
@@ -493,12 +497,12 @@ export default function ClientPortal() {
                 {/* Quick Info Grid */}
                 <div className="grid grid-cols-2 gap-4">
                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
-                      <Users size={20} className="mx-auto text-[#A57C00] mb-2" />
+                      <Users size={20} className="mx-auto text-brand-primary mb-2" />
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Guests</p>
                       <p className="text-lg font-black text-slate-800">{eventData.guestCount || '--'}</p>
                    </div>
                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
-                      <Utensils size={20} className="mx-auto text-[#A57C00] mb-2" />
+                      <Utensils size={20} className="mx-auto text-brand-primary mb-2" />
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Tables</p>
                       <p className="text-lg font-black text-slate-800">{eventData.tableCount || '--'}</p>
                    </div>
@@ -513,10 +517,10 @@ export default function ClientPortal() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="md:col-span-5 space-y-6">
               <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#A57C00] opacity-10 rounded-full -mr-16 -mt-16"></div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary opacity-10 rounded-full -mr-16 -mt-16"></div>
                 <div className="relative z-10">
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">Current Outstanding</p>
-                  <h3 className="text-5xl font-black text-[#A57C00] font-mono tracking-tighter mb-2">
+                  <h3 className="text-5xl font-black text-brand-primary font-mono tracking-tighter mb-2">
                     ${billingMetrics.remaining.toLocaleString()}
                   </h3>
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-medium border-t border-white/10 pt-4 mt-4">
@@ -535,7 +539,7 @@ export default function ClientPortal() {
                         initial={{ width: 0 }}
                         animate={{ width: `${billingMetrics.progressPercent}%` }}
                         transition={{ duration: 1.5, ease: "easeOut" }}
-                        className="h-full bg-gradient-to-r from-[#A57C00] to-[#C5A059] rounded-full shadow-[0_0_15px_rgba(165,124,0,0.4)]" 
+                        className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[#C5A059] rounded-full shadow-[0_0_15px_rgba(165,124,0,0.4)]" 
                       ></motion.div>
                     </div>
                   </div>
@@ -544,13 +548,13 @@ export default function ClientPortal() {
               
               <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                  <AlertCircle size={14} className="text-[#A57C00]" /> Payment Policy
+                  <AlertCircle size={14} className="text-brand-primary" /> Payment Policy
                 </h4>
                 <p className="text-xs text-slate-500 leading-relaxed mb-4">
                   All payments are processed within 2-3 business days after upload. Official receipts will be generated automatically once verified by our finance team.
                 </p>
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
-                  <div className="p-2 bg-white rounded-lg shadow-sm"><Phone size={14} className="text-[#A57C00]" /></div>
+                  <div className="p-2 bg-white rounded-lg shadow-sm"><Phone size={14} className="text-brand-primary" /></div>
                   <div>
                     <p className="text-[10px] font-bold text-slate-800 uppercase tracking-tight">Billing Inquiry</p>
                     <p className="text-[10px] text-slate-400">+852 2788 3939 (Ext. 401)</p>
@@ -618,9 +622,9 @@ export default function ClientPortal() {
 
                             {/* UPLOAD BOX (Only visible if not received) */}
                             {!m.received && (
-                              <div className={`mt-2 relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-[#A57C00]/50 rounded-lg transition-colors group ${uploadingMilestone === m.label ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#A57C00]/5 hover:border-[#A57C00]'}`}>
-                                {uploadingMilestone === m.label ? <Loader2 className="animate-spin text-[#A57C00] mr-2" size={14} /> : <Upload size={14} className="text-[#A57C00] mr-2 group-hover:-translate-y-0.5 transition-transform" />}
-                                <span className="text-[10px] font-bold text-[#A57C00] uppercase tracking-widest">{uploadingMilestone === m.label ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
+                              <div className={`mt-2 relative overflow-hidden flex items-center justify-center w-full py-2.5 border-2 border-dashed border-brand-primary/50 rounded-lg transition-colors group ${uploadingMilestone === m.label ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-primary/5 hover:border-brand-primary'}`}>
+                                {uploadingMilestone === m.label ? <Loader2 className="animate-spin text-brand-primary mr-2" size={14} /> : <Upload size={14} className="text-brand-primary mr-2 group-hover:-translate-y-0.5 transition-transform" />}
+                                <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">{uploadingMilestone === m.label ? 'Uploading...' : 'Upload Proof (上傳紀錄)'}</span>
                                 <input type="file" accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => handleFileUpload(e, m.label)} disabled={!!uploadingMilestone} title="Upload Proof" />
                               </div>
                             )}
@@ -640,7 +644,7 @@ export default function ClientPortal() {
             <div className="md:col-span-7 space-y-4">
               {eventData.menus.map(menu => (
                 <div key={menu.id} className={STYLES.gridBox}>
-                  <h3 className="font-black text-[#A57C00] text-lg mb-4 text-center border-b border-slate-100 pb-3">{menu.title}</h3>
+                  <h3 className="font-black text-brand-primary text-lg mb-4 text-center border-b border-slate-100 pb-3">{menu.title}</h3>
                   <p className="text-sm text-slate-700 leading-loose text-center whitespace-pre-wrap font-serif">
                     {menu.content}
                   </p>
@@ -659,7 +663,7 @@ export default function ClientPortal() {
                     <label className="block text-xs font-bold text-slate-600 mb-1">Special Requirements (特殊要求 e.g. 3 Vegetarians)</label>
                     <textarea 
                       rows={2} 
-                      className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#A57C00]/50 outline-none resize-none bg-slate-50"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[var(--brand-primary)]/50 outline-none resize-none bg-slate-50"
                       placeholder="e.g. 3位素食, 1位走青..."
                       value={dietaryReq}
                       onChange={(e) => setDietaryReq(e.target.value)}
@@ -691,7 +695,7 @@ export default function ClientPortal() {
               <div className="flex justify-between items-center mb-6">
                 <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Clock size={16} /> Event Rundown</h3>
                 {!isEditingRundown && (
-                  <button onClick={() => setIsEditingRundown(true)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
+                  <button onClick={() => setIsEditingRundown(true)} className="text-xs bg-brand-primary/10 text-brand-primary px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-brand-primary/20 transition-colors">
                     <PenTool size={12} className="mr-1"/> 編輯 (Edit)
                   </button>
                 )}
@@ -702,17 +706,17 @@ export default function ClientPortal() {
                 {editedRundown.map((item, idx) => (
                    <div key={item.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm">
                       <div className="flex flex-col gap-1">
-                         <button onClick={() => { if (idx === 0) return; const newR = [...editedRundown]; [newR[idx-1], newR[idx]] = [newR[idx], newR[idx-1]]; setEditedRundown(newR); }} disabled={idx===0} className="text-slate-400 hover:text-[#A57C00] disabled:opacity-30"><ChevronUp size={14}/></button>
-                         <button onClick={() => { if (idx === editedRundown.length - 1) return; const newR = [...editedRundown]; [newR[idx+1], newR[idx]] = [newR[idx], newR[idx+1]]; setEditedRundown(newR); }} disabled={idx===editedRundown.length-1} className="text-slate-400 hover:text-[#A57C00] disabled:opacity-30"><ChevronDown size={14}/></button>
+                         <button onClick={() => { if (idx === 0) return; const newR = [...editedRundown]; [newR[idx-1], newR[idx]] = [newR[idx], newR[idx-1]]; setEditedRundown(newR); }} disabled={idx===0} className="text-slate-400 hover:text-brand-primary disabled:opacity-30"><ChevronUp size={14}/></button>
+                         <button onClick={() => { if (idx === editedRundown.length - 1) return; const newR = [...editedRundown]; [newR[idx+1], newR[idx]] = [newR[idx], newR[idx+1]]; setEditedRundown(newR); }} disabled={idx===editedRundown.length-1} className="text-slate-400 hover:text-brand-primary disabled:opacity-30"><ChevronDown size={14}/></button>
                       </div>
-                      <input value={item.time} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, time: e.target.value} : it))} className="w-16 p-2 border border-slate-200 rounded bg-white text-xs text-center font-mono focus:border-[#A57C00] outline-none" placeholder="18:00" />
-                      <input value={item.activity} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, activity: e.target.value} : it))} className="flex-1 p-2 border border-slate-200 rounded bg-white text-xs focus:border-[#A57C00] outline-none" placeholder="活動內容 (Activity)" />
+                      <input value={item.time} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, time: e.target.value} : it))} className="w-16 p-2 border border-slate-200 rounded bg-white text-xs text-center font-mono focus:border-brand-primary outline-none" placeholder="18:00" />
+                      <input value={item.activity} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, activity: e.target.value} : it))} className="flex-1 p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none" placeholder="活動內容 (Activity)" />
                       <button onClick={() => setEditedRundown(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 p-1"><X size={16}/></button>
                    </div>
                 ))}
                 
                 {showDishSelector && (
-                  <div className="mt-4 p-3 bg-white border border-[#A57C00]/30 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2">
+                  <div className="mt-4 p-3 bg-white border border-brand-primary/30 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2">
                     <div className="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
                        <span className="text-xs font-bold text-slate-700">點擊加入個別菜單項目 (Tap dish to insert)</span>
                        <button onClick={() => setShowDishSelector(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
@@ -726,7 +730,7 @@ export default function ClientPortal() {
                            return dishes
                              .filter(dish => !addedDishSet.has(dish))
                              .map((dish, dIdx) => (
-                                <button key={`${m.id}-${dIdx}`} onClick={() => setEditedRundown(prev => [...prev, { id: Date.now().toString() + Math.random(), time: '', activity: `上菜: ${dish}` }])} className="text-[10px] bg-slate-50 border border-[#A57C00]/20 text-slate-700 px-3 py-2 rounded-lg hover:bg-[#A57C00] hover:text-white transition-colors text-left font-medium">
+                                <button key={`${m.id}-${dIdx}`} onClick={() => setEditedRundown(prev => [...prev, { id: Date.now().toString() + Math.random(), time: '', activity: `上菜: ${dish}` }])} className="text-[10px] bg-slate-50 border border-brand-primary/20 text-slate-700 px-3 py-2 rounded-lg hover:bg-brand-primary hover:text-white transition-colors text-left font-medium">
                                   + {dish}
                                 </button>
                              ));
@@ -750,13 +754,13 @@ export default function ClientPortal() {
                    <button onClick={() => setEditedRundown(prev => [...prev, { id: Date.now().toString() + Math.random(), time: '', activity: '' }])} className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-200 transition-colors flex items-center justify-center">
                      <Plus size={14} className="mr-1"/> 新增項目
                    </button>
-                   <button onClick={() => setShowDishSelector(!showDishSelector)} className="flex-1 py-2.5 bg-[#A57C00]/10 text-[#A57C00] rounded-lg text-xs font-bold border border-[#A57C00]/20 hover:bg-[#A57C00]/20 transition-colors flex items-center justify-center">
+                   <button onClick={() => setShowDishSelector(!showDishSelector)} className="flex-1 py-2.5 bg-brand-primary/10 text-brand-primary rounded-lg text-xs font-bold border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors flex items-center justify-center">
                      <Utensils size={14} className="mr-1"/> 載入個別菜式
                    </button>
                 </div>
                 <div className="flex gap-2 mt-6 pt-4 border-t border-slate-100">
                    <button onClick={() => setIsEditingRundown(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors">取消 (Cancel)</button>
-                   <button onClick={handleSaveRundown} disabled={isSavingRundown} className="flex-1 py-3 bg-[#A57C00] text-white rounded-xl text-xs font-bold hover:bg-[#8a6800] transition-colors shadow-md flex justify-center items-center">
+                   <button onClick={handleSaveRundown} disabled={isSavingRundown} className="flex-1 py-3 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-[brand-primary/90] transition-colors shadow-md flex justify-center items-center">
                       {isSavingRundown ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2"/>} 儲存流程
                    </button>
                 </div>
@@ -766,11 +770,11 @@ export default function ClientPortal() {
                 {(!eventData.rundown || eventData.rundown.length === 0) && <p className="text-center text-slate-400 italic text-sm">無流程紀錄 (No rundown provided)</p>}
                 {(eventData.rundown || []).map((item, index) => (
                   <div key={item.id || index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-[#A57C00] text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-brand-primary text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
                       <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
                     </div>
                     <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 bg-slate-50 shadow-sm">
-                      <time className="font-mono text-xs font-bold text-[#A57C00] mb-1 block">{item.time}</time>
+                      <time className="font-mono text-xs font-bold text-brand-primary mb-1 block">{item.time}</time>
                       <div className="text-sm font-bold text-slate-700">{item.activity}</div>
                     </div>
                   </div>
@@ -784,7 +788,7 @@ export default function ClientPortal() {
         {/* TAB 6: DOCUMENTS */}
         {activeTab === 'documents' && (
           <div className="max-w-4xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-4">
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center px-1"><FileText size={18} className="mr-2 text-[#A57C00]" /> Official Documents</h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center px-1"><FileText size={18} className="mr-2 text-brand-primary" /> Official Documents</h3>
             
             <div>
               <DocumentManager 
@@ -814,7 +818,7 @@ export default function ClientPortal() {
 const NavButton = ({ icon: Icon, label, active, onClick }) => (
   <button 
     onClick={onClick} 
-    className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${active ? 'text-[#A57C00]' : 'text-slate-400 hover:text-slate-600'}`}
+    className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${active ? 'text-brand-primary' : 'text-slate-400 hover:text-slate-600'}`}
   >
     <Icon size={20} className={`mb-1 transition-transform ${active ? 'scale-110' : ''}`} />
     <span className="text-[10px] font-bold">{label}</span>
@@ -826,8 +830,8 @@ const DesktopTab = ({ icon: Icon, label, active, onClick }) => (
     onClick={onClick} 
     className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
       active 
-        ? 'bg-[#A57C00] text-white shadow-lg shadow-[#A57C00]/20 scale-105' 
-        : 'bg-white text-slate-500 hover:bg-[#A57C00]/5 hover:text-[#A57C00] border border-slate-200'
+        ? 'bg-brand-primary text-white shadow-lg shadow-[var(--brand-primary)]/20 scale-105' 
+        : 'bg-white text-slate-500 hover:bg-brand-primary/5 hover:text-brand-primary border border-slate-200'
     }`}
   >
     <Icon size={18} />

@@ -21,7 +21,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
   const roles = Object.keys(rolePermissions);
 
   const handleToggle = (role, permissionId) => {
-    if (role === 'admin' || rolePermissions[role].isFixed && role === 'admin') return;
+    if (role === 'admin' || role === 'super_admin' || (rolePermissions[role].isFixed && (role === 'admin' || role === 'super_admin'))) return;
     
     setRolePermissions(prev => {
       const updated = {
@@ -168,7 +168,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                           </td>
                           {roles.map(role => {
                             const isGranted = rolePermissions[role].permissions[p.id];
-                            const isAdmin = role === 'admin';
+                            const isAdmin = role === 'admin' || role === 'super_admin';
                             return (
                               <td 
                                 key={`${role}-${p.id}`} 
@@ -254,7 +254,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
               <span className="text-xs font-black">使用提示 (Tips)</span>
             </div>
             <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
-              • Admin 權限是固定的，不可修改。<br/>
+              • Admin 及 Super Admin 權限是固定的，不可修改。<br/>
               • 變更權限後，相關人員需重新整理頁面生效。<br/>
               • 「存取限制」可限制員工僅能看到自己負責的訂單。
             </p>

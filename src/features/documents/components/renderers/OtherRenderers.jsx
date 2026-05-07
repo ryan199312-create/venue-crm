@@ -130,7 +130,7 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
             )}
           </tbody>
           <tfoot>
-            <tr className="bg-slate-800 text-white font-bold border-t-4 border-[#A57C00]">
+            <tr className="bg-slate-800 text-white font-bold border-t-4 border-[var(--brand-primary)]">
               <td colSpan="3" className="py-3 px-4 text-right uppercase tracking-widest">New Grand Total (更新後總金額):</td>
               <td className="py-3 px-4 text-right font-mono text-lg">${formatMoney(billing.grandTotal)}</td>
             </tr>

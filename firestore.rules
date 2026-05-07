@@ -9,39 +9,51 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'admin';
+      return isAuthenticated() && (request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin');
     }
     
     function isStaff() {
-      return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin');
+      return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin');
+    }
+
+    // --- GLOBAL TENANTS (SaaS Level) ---
+    match /tenants/{tenantId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // --- ARTIFACTS NAMESPACE ---
     match /artifacts/{appId} {
       
+      // Allow super_admin to do anything across all tenants
+      allow read, write: if request.auth.token.role == 'super_admin';
+
       // Public data (for website)
       match /public/data/settings/config {
         allow read: if true;
       }
       
-      // Private data
+      // Private data path
       match /private/data/{document=**} {
         
-        // Settings (RBAC, etc)
+        // Settings (RBAC, outlets, etc)
         match /settings/config {
-          allow read: if isAuthenticated();
+          allow read: if true; 
           allow write: if isAdmin();
         }
         
-        // Users
+        // Users: Allow reading list for headless check & teammates
+        // Allow creating own profile for first-time login
         match /users/{userId} {
-          allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-          allow write: if isAdmin();
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() && request.auth.uid == userId;
+          allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
         }
         
-        // Events
+        // Events: Allow read for all authenticated to prevent init hang
         match /events/{eventId} {
-          allow read, update, delete: if isStaff();
+          allow read: if isAuthenticated();
+          allow update, delete: if isStaff();
           allow create: if isStaff() || (
             request.resource.data.status == 'tentative' && 
             request.resource.data.source == 'website_inquiry'
@@ -51,8 +63,14 @@ service cloud.firestore {
         // PDF Jobs
         match /pdf_jobs/{jobId} {
           allow read: if isAuthenticated();
-          allow write: if isStaff();
+          allow write: if isAuthenticated();
         }
+      }
+
+      // Public Calendar
+      match /public_calendar/{eventId} {
+        allow read: if true;
+        allow write: if isStaff();
       }
     }
     

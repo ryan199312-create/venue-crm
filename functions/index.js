@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
-const { setGlobalOptions } = require("firebase-functions/v2"); // Import this
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onTaskDispatched } = require("firebase-functions/v2/tasks");
 const { getFunctions } = require("firebase-admin/functions");
@@ -11,622 +11,283 @@ const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
 const crypto = require("crypto");
 
+// 1. INITIALIZE ADMIN SDK
 admin.initializeApp();
 
-// Global cache for Puppeteer to dramatically speed up PDF generation
-let cachedBrowser = null;
-
-// 1. SET GLOBAL REGION TO HONG KONG
+// 2. SET GLOBAL REGION
 setGlobalOptions({ region: "asia-east2" });
 
 // Define Secrets
 const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
 const adminPhone = defineSecret("ADMIN_PHONE");
 
-const APP_ID = process.env.VITE_APP_ID || "my-venue-crm";
+const APP_ID = "my-venue-crm"; 
 
-// 3. SECURE SLEEKFLOW FUNCTION
-exports.sendSleekFlow = onCall(
-  { secrets: [sleekflowKey] },
-  async (request) => {
-    
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "User must be logged in.");
+// Global cache for Puppeteer
+let cachedBrowser = null;
+
+// ==========================================
+// 1. DATA MIGRATION (SUPER ADMIN ONLY)
+// ==========================================
+exports.migrateTenantData = onCall({ 
+  memory: "1GiB", 
+  timeoutSeconds: 300,
+  cors: true 
+}, async (request) => {
+  if (!request.auth || request.auth.token.role !== 'super_admin') {
+    throw new HttpsError('permission-denied', 'Only super admins can migrate data.');
+  }
+  const { sourceId, targetId } = request.data;
+  if (!sourceId || !targetId) throw new HttpsError('invalid-argument', 'Source and Target IDs required.');
+  const db = admin.firestore();
+  const copyCollection = async (sourcePath, targetPath) => {
+    const sourceSnap = await db.collection(sourcePath).get();
+    const batches = [];
+    let currentBatch = db.batch();
+    let count = 0;
+    for (const doc of sourceSnap.docs) {
+      currentBatch.set(db.collection(targetPath).doc(doc.id), doc.data(), { merge: true });
+      count++;
+      if (count === 400) { batches.push(currentBatch.commit()); currentBatch = db.batch(); count = 0; }
     }
+    if (count > 0) batches.push(currentBatch.commit());
+    await Promise.all(batches);
+    return sourceSnap.size;
+  };
+  try {
+    await copyCollection(`artifacts/${sourceId}/private/data/settings`, `artifacts/${targetId}/private/data/settings`);
+    await copyCollection(`artifacts/${sourceId}/private/data/events`, `artifacts/${targetId}/private/data/events`);
+    await copyCollection(`artifacts/${sourceId}/public_calendar`, `artifacts/${targetId}/public_calendar`);
+    await copyCollection(`artifacts/${sourceId}/private/data/users`, `artifacts/${targetId}/private/data/users`);
+    await db.collection('artifacts').doc(targetId).collection('private').doc('data').collection('settings').doc('config').set({
+      isSetupComplete: true, migratedFrom: sourceId, migratedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { success: true };
+  } catch (error) { throw new HttpsError('internal', error.message); }
+});
 
-    const { to, messageContent, pdfUrl, fileName, isTemplate } = request.data;
+// ==========================================
+// 2. SLEEKFLOW & PING
+// ==========================================
+exports.sendSleekFlow = onCall({ secrets: [sleekflowKey], cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "User must be logged in.");
+    const { to, messageContent, pdfUrl, fileName, isTemplate, appId: requestAppId } = request.data;
     const API_KEY = sleekflowKey.value();
-
     try {
       if (pdfUrl) {
-        // 🌟 Fetch the PDF from URL into a buffer
         const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
-        const fileBuffer = Buffer.from(pdfResponse.data);
-        
         const form = new FormData();
-        
         form.append("channel", "whatsappcloudapi");
         form.append("to", to);
         form.append("type", "document"); 
         form.append("caption", messageContent || ""); 
-        
-        // 附加檔案，必須指定檔名與類型
-        form.append("file", fileBuffer, {
-          filename: fileName || "Document.pdf",
-          contentType: "application/pdf"
-        });
-
-        await axios.post("https://api.sleekflow.io/api/message/send/file", form, {
-          headers: { 
-            ...form.getHeaders(),
-            "X-Sleekflow-Api-Key": API_KEY 
-          }
-        });
-
+        form.append("file", Buffer.from(pdfResponse.data), { filename: fileName || "Document.pdf", contentType: "application/pdf" });
+        await axios.post("https://api.sleekflow.io/api/message/send/file", form, { headers: { ...form.getHeaders(), "X-Sleekflow-Api-Key": API_KEY } });
       } else {
-        // 🌟 沒有 PDF 的情況：發送純文字或模板
-        const payload = isTemplate ? {
-          type: "template",
-          template: { name: "document_sending_template", language: "zh_HK" },
-          receiver: to,
-          channel: "whatsappcloudapi",
-          from: "85252226066"
-        } : {
-          type: "text",
-          messageType: "text",
-          messageContent: messageContent,
-          to: to,
-          channel: "whatsappcloudapi",
-          from: "85252226066"
-        };
-
-        await axios.post("https://api.sleekflow.io/api/message/send/json", payload, {
-          headers: { 
-            "Content-Type": "application/json",
-            "X-Sleekflow-Api-Key": API_KEY 
-          }
-        });
+        const payload = isTemplate ? { type: "template", template: { name: "document_sending_template", language: "zh_HK" }, receiver: to, channel: "whatsappcloudapi", from: "85252226066" } : { type: "text", messageType: "text", messageContent, to, channel: "whatsappcloudapi", from: "85252226066" };
+        await axios.post("https://api.sleekflow.io/api/message/send/json", payload, { headers: { "Content-Type": "application/json", "X-Sleekflow-Api-Key": API_KEY } });
       }
-
       return { success: true };
-    } catch (error) {
-      const exactError = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-      console.error("SleekFlow API Error:", exactError);
-      throw new HttpsError("internal", `SleekFlow 拒絕請求: ${exactError}`);
-    }
+    } catch (error) { throw new HttpsError("internal", error.message); }
 });
 
-// 4. PING TEST
-exports.ping = onCall({}, (request) => {
-    return { message: "Pong from Hong Kong! (asia-east2)" };
-});
+exports.ping = onCall({ cors: true }, () => ({ message: "Pong!" }));
 
-// 5a. ENQUEUE PDF JOB (Stores HTML safely, avoids 100KB Task Queue limit)
-exports.enqueuePdfJob = onCall(
-  async (request) => {
-    const { html, fileName, docType } = request.data;
-    if (!html) throw new HttpsError("invalid-argument", "HTML string is required.");
-
+// ==========================================
+// 3. PDF GENERATION SYSTEM
+// ==========================================
+exports.enqueuePdfJob = onCall({ cors: true }, async (request) => {
+    const { html, fileName, docType, jobId, appId: requestAppId } = request.data;
     const db = admin.firestore();
-    const appId = APP_ID; 
-    const jobRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId);
-
-    // Store the massive HTML string in Firestore
-    await jobRef.set({
-      status: 'pending', html, fileName, docType, createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Enqueue the background task
+    const appId = requestAppId || APP_ID; 
+    await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId).set({ status: 'pending', html, fileName, docType, createdAt: admin.firestore.FieldValue.serverTimestamp() });
     const queue = getFunctions().taskQueue("generatePdfTask", "asia-east2");
-    await queue.enqueue({ jobId }, { dispatchDeadlineSeconds: 60 * 5 }); // 5 minute timeout
-
+    await queue.enqueue({ jobId, appId }, { dispatchDeadlineSeconds: 60 * 5 });
     return { jobId };
-  }
-);
+});
 
-// 5b. ASYNC TASK GENERATOR (Does the heavy lifting in the background)
-exports.generatePdfTask = onTaskDispatched(
-  { memory: "2GiB", timeoutSeconds: 120 },
-  async (request) => {
-    const { jobId } = request.data;
+exports.generatePdfTask = onTaskDispatched({ memory: "2GiB", timeoutSeconds: 120 }, async (request) => {
+    const { jobId, appId: taskAppId } = request.data;
     const db = admin.firestore();
-    const appId = APP_ID;
+    const appId = taskAppId || APP_ID;
     const jobRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId);
-
     const jobSnap = await jobRef.get();
     if (!jobSnap.exists) return;
     const { html, fileName } = jobSnap.data();
-    
     await jobRef.update({ status: 'processing' });
-
     let page = null;
     try {
-      // 1. Reuse browser instance to avoid 3-5 second Chromium cold start
-      if (!cachedBrowser || !cachedBrowser.isConnected()) {
-        cachedBrowser = await puppeteer.launch({
-          args: chromium.args,
-          defaultViewport: chromium.defaultViewport,
-          executablePath: await chromium.executablePath(),
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-        });
-      }
-
-      try {
-        page = await cachedBrowser.newPage();
-      } catch (e) {
-        // Fallback: If the cached browser crashed while the container was frozen, relaunch it
-        cachedBrowser = await puppeteer.launch({
-          args: chromium.args, defaultViewport: chromium.defaultViewport,
-          executablePath: await chromium.executablePath(), headless: chromium.headless, ignoreHTTPSErrors: true,
-        });
-        page = await cachedBrowser.newPage();
-      }
-      
-      // 1. Force high DPI (4x) for crisp vector/raster rendering (fixes "low resolution" look)
+      if (!cachedBrowser || !cachedBrowser.isConnected()) { cachedBrowser = await puppeteer.launch({ args: chromium.args, defaultViewport: chromium.defaultViewport, executablePath: await chromium.executablePath(), headless: chromium.headless, ignoreHTTPSErrors: true }); }
+      page = await cachedBrowser.newPage();
       await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 4 });
-
-      // 2. Wait for 'networkidle0'
       await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
-      
-      // 🌟 CRITICAL FIX: Force Puppeteer to wait until custom fonts (Noto Sans TC) are fully loaded
       await page.evaluateHandle('document.fonts.ready');
-
-      // 3. Add a small buffer to let the browser paint complex floorplan transforms
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // 4. Force Puppeteer to respect CSS page sizes and pagination
       const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true });
-      
-      // 5. ONLY close the page, keep the browser alive for the next request
       await page.close();
-
-      // Save to Firebase Storage instead of returning Base64 payload
       const bucket = admin.storage().bucket();
       const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : "document.pdf";
       const uniquePath = `generated_pdfs/${Date.now()}_${safeFileName}`;
       const file = bucket.file(uniquePath);
       const token = crypto.randomUUID();
-
-      await file.save(pdfBuffer, {
-        metadata: { 
-          contentType: 'application/pdf',
-          contentDisposition: `attachment; filename="${safeFileName}"`,
-          metadata: { firebaseStorageDownloadTokens: token }
-        }
-      });
-
+      await file.save(pdfBuffer, { metadata: { contentType: 'application/pdf', metadata: { firebaseStorageDownloadTokens: token } } });
       const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniquePath)}?alt=media&token=${token}`;
-
-      // Update job as completed and delete the heavy HTML string to save database space
-      await jobRef.update({
-        status: 'completed', url: publicUrl, html: admin.firestore.FieldValue.delete()
-      });
-
-    } catch (error) {
-      if (page) await page.close().catch(() => {});
-      console.error("PDF Generation failed:", error);
-      await jobRef.update({ status: 'error', error: error.message });
-      throw error; // Throwing triggers Cloud Tasks to automatically retry
-    }
+      await jobRef.update({ status: 'completed', url: publicUrl, html: admin.firestore.FieldValue.delete() });
+    } catch (error) { if (page) await page.close().catch(() => {}); await jobRef.update({ status: 'error', error: error.message }); throw error; }
 });
 
-// 6. CLIENT PORTAL SECURE UPLOAD
-exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) => {
-  const { eventId, phone, fileName, fileBase64 } = request.data;
+// ==========================================
+// 4. CLIENT PORTAL OPERATIONS (CRITICAL)
+// ==========================================
 
-  if (!eventId || !phone || !fileBase64) {
-    throw new HttpsError('invalid-argument', 'Missing required fields.');
-  }
-
-  const appId = APP_ID; 
+exports.verifyClientAccess = onCall({ invoker: "public", cors: true }, async (request) => {
+  const { eventId, phone, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID; 
   const db = admin.firestore();
-  // Use default bucket
-  const bucket = admin.storage().bucket();
-  
-  try {
-    const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
-    const docSnap = await eventRef.get();
-
-    if (!docSnap.exists) {
-      throw new HttpsError('not-found', 'Event not found.');
-    }
-
-    const eventData = docSnap.data();
-    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
-    const cleanDbPhone = String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
-
-    if (cleanInputPhone !== cleanDbPhone) {
-      throw new HttpsError('permission-denied', 'Invalid phone number.');
-    }
-
-    // Upload to Storage securely with a generated token
-    const fileBuffer = Buffer.from(fileBase64, 'base64');
-    const uniqueFileName = `receipts/client_${eventId}_${Date.now()}_${fileName}`;
-    const file = bucket.file(uniqueFileName);
-    const token = crypto.randomUUID();
-    
-    await file.save(fileBuffer, {
-      metadata: { 
-        contentType: fileName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
-        metadata: { firebaseStorageDownloadTokens: token }
-      }
-    });
-    
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniqueFileName)}?alt=media&token=${token}`;
-
-    // Save URL to the Event Document
-    await eventRef.update({
-      clientUploadedProofs: admin.firestore.FieldValue.arrayUnion({
-        url: publicUrl,
-        uploadedAt: new Date().toISOString(),
-        fileName: fileName
-      })
-    });
-
-    return { success: true, url: publicUrl };
-  } catch (error) {
-    console.error("Upload Proof Error:", error);
-    if (error instanceof HttpsError) throw error;
-    const validCodes = ['ok', 'cancelled', 'unknown', 'invalid-argument', 'deadline-exceeded', 'not-found', 'already-exists', 'permission-denied', 'resource-exhausted', 'failed-precondition', 'aborted', 'out-of-range', 'unimplemented', 'internal', 'unavailable', 'data-loss', 'unauthenticated'];
-    const code = validCodes.includes(error?.code) ? error.code : 'aborted';
-    throw new HttpsError(code, error.message || 'Unknown upload error occurred');
-  }
-});
-
-// ==========================================
-// 9. AUTOMATIC CLEANUP OF OLD PDFS
-// ==========================================
-exports.cleanupOldPdfs = onSchedule("every day 00:00", async (event) => {
-  const bucket = admin.storage().bucket();
-  
-  try {
-    const [files] = await bucket.getFiles({ prefix: 'generated_pdfs/' });
-    const now = Date.now();
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    let deletedCount = 0;
-
-    const deletePromises = files.map(async (file) => {
-      const [metadata] = await file.getMetadata();
-      const timeCreated = new Date(metadata.timeCreated).getTime();
-      
-      if (now - timeCreated > THIRTY_DAYS_MS) {
-        await file.delete();
-        deletedCount++;
-      }
-    });
-    
-    await Promise.all(deletePromises);
-    console.log(`Successfully deleted ${deletedCount} old PDF(s) from Storage.`);
-  } catch (error) {
-    console.error("Error cleaning up old PDFs:", error);
-  }
-});
-
-// ==========================================
-// 10. SIGN CLIENT CONTRACT
-// ==========================================
-exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
-  try {
-    if (!request || !request.data) throw new HttpsError('invalid-argument', 'Request data is missing.');
-    const { eventId, phone, signatureBase64, docType } = request.data;
-
-    if (!eventId || !phone || !signatureBase64) {
-      throw new HttpsError('invalid-argument', 'Missing required fields.');
-    }
-
-    const appId = APP_ID;
-    const db = admin.firestore();
-
-    const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
-    const docSnap = await eventRef.get();
-
-    if (!docSnap.exists) {
-      throw new HttpsError('not-found', 'Event not found.');
-    }
-
-    const eventData = docSnap.data();
-    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
-    const cleanDbPhone = String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
-
-    if (cleanInputPhone !== cleanDbPhone) {
-      throw new HttpsError('permission-denied', 'Invalid phone number.');
-    }
-
-    // Update the database with the signature PNG
-    const updateData = {};
-    if (docType) {
-      updateData[`signatures.${docType}.client`] = signatureBase64;
-      updateData[`signatures.${docType}.clientDate`] = new Date().toISOString();
-    } else {
-      // Fallback for legacy
-      updateData.clientSignature = signatureBase64;
-      updateData.clientSignatureDate = new Date().toISOString();
-    }
-
-    await eventRef.update(updateData);
-
-    return { success: true };
-  } catch (error) {
-    console.error("Sign Contract Error:", error);
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', `Sign Contract Error: ${error.message}`);
-  }
-});
-
-// 7. VERIFY CLIENT ACCESS (PORTAL LOGIN)
-exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
-  const { eventId, phone } = request.data;
-
-  if (!phone) {
-    throw new HttpsError('invalid-argument', 'Missing phone number.');
-  }
-
-  const appId = APP_ID; 
-  const db = admin.firestore();
-  
   try {
     const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
     let matchedEvents = [];
     const eventsRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events');
-
-    // 1. Fetch relevant event(s)
     if (eventId) {
-      // Direct Link Access
       const eventDoc = await eventsRef.doc(eventId).get();
-      if (eventDoc.exists) {
-        const data = eventDoc.data();
-        const cleanDbPhone = String(data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
-        if (cleanDbPhone === cleanInputPhone) {
-          matchedEvents.push({ id: eventDoc.id, ...data });
-        }
-      }
+      if (eventDoc.exists) { const data = eventDoc.data(); if (String(data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8) === cleanInputPhone) matchedEvents.push({ id: eventDoc.id, ...data }); }
     } else {
-      // General Login Access (Indexed Query)
       const cleanSnap = await eventsRef.where('clientPhoneClean', '==', cleanInputPhone).get();
-      cleanSnap.forEach(doc => {
-        matchedEvents.push({ id: doc.id, ...doc.data() });
-      });
-      
-      // Fallback for legacy records that don't have clientPhoneClean yet
-      const legacySnap = await eventsRef.where('clientPhone', '==', phone).get();
-      legacySnap.forEach(doc => {
-        if (!matchedEvents.some(e => e.id === doc.id)) {
-          matchedEvents.push({ id: doc.id, ...doc.data() });
-        }
-      });
+      cleanSnap.forEach(doc => matchedEvents.push({ id: doc.id, ...doc.data() }));
     }
-
-    if (matchedEvents.length === 0) {
-      throw new HttpsError('not-found', '找不到符合的手機號碼或活動紀錄 (No events found for this phone number).');
-    }
-
-    // 2. Sanitize all matches
-    const sanitizedEvents = matchedEvents.map(eventData => {
-      const total = parseFloat(eventData.totalAmount) || 0;
-      
-      let actualPaid = 0;
-      if (eventData.deposit1Received) actualPaid += (parseFloat(eventData.deposit1) || 0);
-      if (eventData.deposit2Received) actualPaid += (parseFloat(eventData.deposit2) || 0);
-      if (eventData.deposit3Received) actualPaid += (parseFloat(eventData.deposit3) || 0);
-      
-      const expectedFinalBalance = Math.max(0, total - ((parseFloat(eventData.deposit1) || 0) + (parseFloat(eventData.deposit2) || 0) + (parseFloat(eventData.deposit3) || 0)));
-      if (eventData.balanceReceived) actualPaid += expectedFinalBalance;
-
-      const balanceDue = Math.max(0, total - actualPaid);
-
-      return {
-        ...eventData,
-        id: eventData.id,
-        totalAmount: total,
-        balanceDue: balanceDue
-      };
-    });
-
-    // 3. Sort newest first
+    if (matchedEvents.length === 0) throw new HttpsError('not-found', 'No events found.');
+    const sanitizedEvents = matchedEvents.map(e => ({ ...e, totalAmount: parseFloat(e.totalAmount) || 0 }));
     sanitizedEvents.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    // Fetch appSettings securely inside the backend
-    let appSettings = null;
-    try {
-      const settingsDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('settings').doc('config').get();
-      if (settingsDoc.exists) {
-        appSettings = settingsDoc.data();
-      }
-    } catch (e) {
-      console.error("Failed to fetch settings", e);
-    }
-
-    // Safely serialize data to prevent "INTERNAL" crashes caused by Firestore Timestamps
-    const safeEvents = JSON.parse(JSON.stringify(sanitizedEvents));
-    const safeSettings = appSettings ? JSON.parse(JSON.stringify(appSettings)) : null;
-
-    return { events: safeEvents, appSettings: safeSettings };
-  } catch (error) {
-    console.error("Client Portal Auth Error:", error);
-    if (error instanceof HttpsError) throw error;
-    const validCodes = ['ok', 'cancelled', 'unknown', 'invalid-argument', 'deadline-exceeded', 'not-found', 'already-exists', 'permission-denied', 'resource-exhausted', 'failed-precondition', 'aborted', 'out-of-range', 'unimplemented', 'internal', 'unavailable', 'data-loss', 'unauthenticated'];
-    const code = validCodes.includes(error?.code) ? error.code : 'internal';
-    throw new HttpsError(code, error.message || 'Unknown auth error occurred');
-  }
+    const settingsDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('settings').doc('config').get();
+    return { events: JSON.parse(JSON.stringify(sanitizedEvents)), appSettings: settingsDoc.exists ? JSON.parse(JSON.stringify(settingsDoc.data())) : null };
+  } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
-// 9. UPDATE CLIENT RUNDOWN
-exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
-  const { eventId, phone, rundown } = request.data;
-
-  if (!eventId || !phone || !rundown) {
-    throw new HttpsError('invalid-argument', 'Missing fields.');
-  }
-
+exports.uploadClientPaymentProof = onCall({ memory: "512MiB", cors: true }, async (request) => {
+  const { eventId, phone, fileName, fileBase64, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID; 
   const db = admin.firestore();
-  
+  const bucket = admin.storage().bucket();
   try {
-    const appId = APP_ID;
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-    
-    const eventData = docSnap.data();
-    if (String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) {
-      throw new HttpsError('permission-denied', 'Invalid phone number.');
-    }
-
-    await eventRef.update({ rundown });
-    return { success: true };
-  } catch (error) {
-    console.error("Update Rundown Error:", error);
-    throw new HttpsError('internal', error.message || 'Unknown update error occurred');
-  }
+    if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+    const uniqueFileName = `receipts/client_${eventId}_${Date.now()}_${fileName}`;
+    const file = bucket.file(uniqueFileName);
+    const token = crypto.randomUUID();
+    await file.save(Buffer.from(fileBase64, 'base64'), { metadata: { contentType: fileName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg', metadata: { firebaseStorageDownloadTokens: token } } });
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniqueFileName)}?alt=media&token=${token}`;
+    await eventRef.update({ clientUploadedProofs: admin.firestore.FieldValue.arrayUnion({ url: publicUrl, uploadedAt: new Date().toISOString(), fileName }) });
+    return { success: true, url: publicUrl };
+  } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
-// 8. UPDATE CLIENT DIETARY REQUIREMENTS
-// Add { secrets: [sleekflowKey] } to allow this function to access your SleekFlow API Key
-exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], invoker: "public" }, async (request) => {
-  const { eventId, phone, specialMenuReq, allergies } = request.data;
-
-  if (!eventId || !phone) {
-    throw new HttpsError('invalid-argument', 'Missing eventId or phone number.');
-  }
-
-  const appId = APP_ID;
-  const db = admin.firestore();
-  
-  const adminNotificationPhone = adminPhone.value(); 
-
-  try {
+exports.signClientContract = onCall({ invoker: "public", cors: true }, async (request) => {
+    const { eventId, phone, signatureBase64, docType, appId: requestAppId } = request.data;
+    const appId = requestAppId || APP_ID;
+    const db = admin.firestore();
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
     const docSnap = await eventRef.get();
-
-    if (!docSnap.exists) {
-      throw new HttpsError('not-found', 'Event not found.');
-    }
-
-    const eventData = docSnap.data();
-    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
-    const cleanDbPhone = String(eventData.clientPhone || '').replace(/[^0-9]/g, '').slice(-8);
-
-    if (cleanInputPhone !== cleanDbPhone) {
-      throw new HttpsError('permission-denied', 'Invalid phone number.');
-    }
-
-    // Update dietary fields securely
-    await eventRef.update({ specialMenuReq: specialMenuReq || '', allergies: allergies || '' });
-    
-    // --- AUTOMATED WHATSAPP NOTIFICATION ---
-    try {
-      const notificationText = `⚠️ *客戶已更新餐飲要求 (Dietary Update)*\n\n*活動 (Event):* ${eventData.eventName}\n*編號 (Order ID):* ${eventData.orderId || eventId}\n\n*特殊要求 (Special Reqs):*\n${specialMenuReq || '無 (None)'}\n\n*食物過敏 (Allergies):*\n${allergies || '無 (None)'}`;
-      
-      await axios.post("https://api.sleekflow.io/api/message/send/json", {
-        type: "text",
-        messageType: "text",
-        messageContent: notificationText,
-        to: adminNotificationPhone,
-        channel: "whatsappcloudapi",
-        from: "85252226066" // Your King Lung Heen SleekFlow Sender Number
-      }, {
-        headers: { 
-          "Content-Type": "application/json",
-          "X-Sleekflow-Api-Key": sleekflowKey.value() 
-        }
-      });
-    } catch (sfError) {
-      console.error("Failed to send SleekFlow notification:", sfError.message);
-    }
-
+    if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+    if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+    const updateData = {};
+    if (docType) { updateData[`signatures.${docType}.client`] = signatureBase64; updateData[`signatures.${docType}.clientDate`] = new Date().toISOString(); }
+    else { updateData.clientSignature = signatureBase64; updateData.clientSignatureDate = new Date().toISOString(); }
+    await eventRef.update(updateData);
     return { success: true };
-  } catch (error) {
-    console.error("Update Dietary Req Error:", error);
-    if (error instanceof HttpsError) throw error;
-    const validCodes = ['ok', 'cancelled', 'unknown', 'invalid-argument', 'deadline-exceeded', 'not-found', 'already-exists', 'permission-denied', 'resource-exhausted', 'failed-precondition', 'aborted', 'out-of-range', 'unimplemented', 'internal', 'unavailable', 'data-loss', 'unauthenticated'];
-    const code = validCodes.includes(error?.code) ? error.code : 'aborted';
-    throw new HttpsError(code, error.message || 'Unknown dietary update error occurred');
-  }
+});
+
+exports.updateClientRundown = onCall({ invoker: "public", cors: true }, async (request) => {
+  const { eventId, phone, rundown, appId: requestAppId } = request.data;
+  const db = admin.firestore();
+  const appId = requestAppId || APP_ID;
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
+  const docSnap = await eventRef.get();
+  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+  await eventRef.update({ rundown });
+  return { success: true };
+});
+
+exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], invoker: "public", cors: true }, async (request) => {
+  const { eventId, phone, specialMenuReq, allergies, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const db = admin.firestore();
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
+  const docSnap = await eventRef.get();
+  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+  await eventRef.update({ specialMenuReq: specialMenuReq || '', allergies: allergies || '' });
+  return { success: true };
 });
 
 // ==========================================
-// 11. SECURE USER MANAGEMENT (RBAC)
+// 5. USER MANAGEMENT (RBAC)
 // ==========================================
-
-/**
- * Invite a user: Creates them in Auth and sets Custom Claims.
- */
-exports.inviteUser = onCall(async (request) => {
-  // 1. Check if requester is Admin
-  if (!request.auth || request.auth.token.role !== 'admin') {
-    throw new HttpsError('permission-denied', 'Only admins can invite users.');
-  }
-
-  const { email, displayName, role } = request.data;
-  if (!email || !role) throw new HttpsError('invalid-argument', 'Email and role are required.');
-
-  const appId = APP_ID;
+exports.inviteUser = onCall({ cors: true }, async (request) => {
+  const { email, displayName, role, accessibleVenues, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
   const db = admin.firestore();
-
+  if (!request.auth || (request.auth.token.role !== 'super_admin' && (await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(request.auth.uid).get()).data()?.role !== 'admin')) {
+    throw new HttpsError('permission-denied', 'Only admins can invite.');
+  }
   try {
     let userRecord;
-    try {
-      // Check if user already exists in Auth
-      userRecord = await admin.auth().getUserByEmail(email);
-    } catch (e) {
-      // If not, create them with a temporary random password
-      userRecord = await admin.auth().createUser({
-        email,
-        displayName,
-        password: crypto.randomBytes(16).toString('hex')
-      });
-    }
-
-    // 2. Set Custom Claims (The most secure part!)
-    await admin.auth().setCustomUserClaims(userRecord.uid, { role: role });
-
-    // 3. Update Firestore Profile
-    const userRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(userRecord.uid);
-    await userRef.set({
-      uid: userRecord.uid,
-      email: email,
-      displayName: displayName || email,
-      role: role,
-      isInvited: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    try { userRecord = await admin.auth().getUserByEmail(email); } 
+    catch (e) { userRecord = await admin.auth().createUser({ email, displayName, password: crypto.randomBytes(16).toString('hex') }); }
+    await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(userRecord.uid).set({
+      uid: userRecord.uid, email, displayName: displayName || email, role, accessibleVenues: accessibleVenues || [], isInvited: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-
-    return { success: true, uid: userRecord.uid };
-  } catch (error) {
-    console.error("Invite User Error:", error);
-    throw new HttpsError('internal', error.message);
-  }
+    return { success: true };
+  } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
-/**
- * Update role securely: Updates Custom Claims AND Firestore.
- */
-exports.updateUserRoleSecure = onCall(async (request) => {
-  const appId = APP_ID;
+exports.updateUserRoleSecure = onCall({ cors: true }, async (request) => {
+  const { uid, newRole, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
   const db = admin.firestore();
 
-  // 🌟 SECURITY CHECK: Only admins can update roles
-  if (!request.auth || request.auth.token.role !== 'admin') {
-    throw new HttpsError('permission-denied', 'Only admins can update user roles.');
-  }
+  // 🌟 Senior Security: Only allow promotion if:
+  // 1. Requester is Super Admin
+  // 2. Requester is already an Admin in this tenant
+  // 3. The tenant has NO admins (Bootstrap case)
+  const requester = request.auth;
+  if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
 
-  const { uid, newRole } = request.data;
-  if (!uid || !newRole) throw new HttpsError('invalid-argument', 'UID and newRole are required.');
+  const isSuperAdmin = requester.token.role === 'super_admin';
+
+  if (!isSuperAdmin) {
+    // Check if requester is admin
+    const requesterDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).get();
+    const requesterRole = requesterDoc.data()?.role;
+    const isTenantAdmin = requesterRole === 'admin';
+
+    if (!isTenantAdmin) {
+       // Check for bootstrap case: are there ANY admins?
+       const adminsSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users')
+         .where('role', 'in', ['admin', 'super_admin']).limit(1).get();
+
+       if (!adminsSnap.empty) {
+         throw new HttpsError('permission-denied', 'Only admins can manage roles.');
+       }
+       // If snap is empty, we allow the promotion (Bootstrap)
+    }
+  }
 
   try {
-    // 1. Update Auth Custom Claims
     await admin.auth().setCustomUserClaims(uid, { role: newRole });
-
-    // 2. Update Firestore
-    const userRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(uid);
-    await userRef.update({ 
-      role: newRole, 
-      updatedAt: admin.firestore.FieldValue.serverTimestamp() 
-    });
-
+    await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(uid).set({ 
+      role: newRole, updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+    }, { merge: true });
     return { success: true };
-  } catch (error) {
-    console.error("Update Role Error:", error);
-    throw new HttpsError('internal', error.message);
-  }
+  } catch (error) { throw new HttpsError('internal', error.message); }
+});
+
+// Cleanup
+exports.cleanupOldPdfs = onSchedule("every day 00:00", async (event) => {
+  const bucket = admin.storage().bucket();
+  const [files] = await bucket.getFiles({ prefix: 'generated_pdfs/' });
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  await Promise.all(files.map(async (file) => {
+    const [metadata] = await file.getMetadata();
+    if (Date.now() - new Date(metadata.timeCreated).getTime() > THIRTY_DAYS_MS) await file.delete();
+  }));
 });

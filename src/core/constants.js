@@ -123,6 +123,14 @@ export const PERMISSION_CATEGORIES = [
 ];
 
 export const DEFAULT_ROLE_PERMISSIONS = {
+  super_admin: {
+    label: 'Super Admin (系統管理員)',
+    isFixed: true,
+    permissions: PERMISSION_CATEGORIES.reduce((acc, cat) => {
+      cat.permissions.forEach(p => acc[p.id] = true);
+      return acc;
+    }, {})
+  },
   admin: {
     label: 'Admin (管理員)',
     isFixed: true,
@@ -132,7 +140,7 @@ export const DEFAULT_ROLE_PERMISSIONS = {
     }, {})
   },
   manager: {
-    label: 'Manager',
+    label: 'Manager (經理)',
     isFixed: false,
     permissions: {
       dashboard: true, events: true, docs: true, settings: false, delete_eo: true,
@@ -143,7 +151,7 @@ export const DEFAULT_ROLE_PERMISSIONS = {
     }
   },
   staff: {
-    label: 'Staff',
+    label: 'Staff (員工)',
     isFixed: false,
     permissions: {
       dashboard: true, events: true, docs: true, settings: false, delete_eo: false,
@@ -151,17 +159,6 @@ export const DEFAULT_ROLE_PERMISSIONS = {
       edit_prices: false, confirm_payments: false, manage_own_only: true,
       doc_eo: true, doc_quotation: true, doc_contract: false, doc_invoice: false, doc_receipt: false, doc_menu: true, doc_floorplan: true,
       tab_basic: true, tab_fnb: true, tab_billing: false, tab_venue: true, tab_logistics: true, tab_remarks: false, tab_print: false, tab_save: true
-    }
-  },
-  dinner_staff: {
-    label: '一般晚飯訂台員',
-    isFixed: false,
-    permissions: {
-      dashboard: true, events: true, docs: false, settings: false, delete_eo: false,
-      print_download: false, send_messages: false, ai_assistant: false, admin_sign: false,
-      edit_prices: false, confirm_payments: false, manage_own_only: true,
-      doc_eo: false, doc_quotation: false, doc_contract: false, doc_invoice: false, doc_receipt: false, doc_menu: false, doc_floorplan: false,
-      tab_basic: true, tab_fnb: false, tab_billing: false, tab_venue: false, tab_logistics: false, tab_remarks: false, tab_print: false, tab_save: true
     }
   }
 };

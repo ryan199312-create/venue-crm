@@ -1,20 +1,15 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { isRootDomain } from './core/tenantResolver';
 
 // Helpers
-import ScrollToTop from './components/ScrollToTop'; // <--- IMPORT THIS
+import ScrollToTop from './components/ScrollToTop';
 
 // Pages
-import WebsiteLayout from './website/WebsiteLayout';
-import Home from './website/Home';
-import Weddings from './website/Weddings';
-import Corporate from './website/Corporate';
-import Dining from './website/Dining';
-
-// Lazy Loaded Routes (These will only download when the user visits them!)
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const ClientPortal = lazy(() => import('./admin/ClientPortal'));
+const SuperAdminPortal = lazy(() => import('./super-admin/SuperAdminPortal'));
 
 // Error Boundary to catch Chunk Load errors or React UI crashes
 class GlobalErrorBoundary extends React.Component {
@@ -50,31 +45,29 @@ const PageLoader = () => (
 );
 
 export default function App() {
+  const rootDomain = isRootDomain();
+
   return (
     <Router>
       <ScrollToTop />
       <GlobalErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            
-            {/* PUBLIC WEBSITE ROUTES */}
-            <Route element={<WebsiteLayout />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/weddings" element={<Weddings />} />
-              <Route path="/corporate" element={<Corporate />} /> 
-              <Route path="/dining" element={<Dining />} />
-            </Route>
-    
-            {/* ADMIN ROUTE */}
-            <Route path="/admin" element={<AdminLayout />} />
-    
-            {/* CLIENT PORTAL ROUTES */}
-            <Route path="/portal" element={<ClientPortal />} />
-            <Route path="/portal/:eventId" element={<ClientPortal />} />
-    
-            {/* CATCH ALL */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-            
+            {rootDomain ? (
+              <>
+                {/* SUPER ADMIN CONSOLE (Root Domain) */}
+                <Route path="/super-admin" element={<SuperAdminPortal />} />
+                <Route path="*" element={<Navigate to="/super-admin" replace />} />
+              </>
+            ) : (
+              <>
+                {/* TENANT ADMIN & PORTAL (Subdomain) */}
+                <Route path="/admin" element={<AdminLayout />} />
+                <Route path="/portal" element={<ClientPortal />} />
+                <Route path="/portal/:eventId" element={<ClientPortal />} />
+                <Route path="*" element={<Navigate to="/admin" replace />} />
+              </>
+            )}
           </Routes>
         </Suspense>
       </GlobalErrorBoundary>

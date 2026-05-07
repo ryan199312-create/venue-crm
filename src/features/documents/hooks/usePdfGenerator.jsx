@@ -3,12 +3,14 @@ import { renderToString } from 'react-dom/server';
 import { functions, db } from '../../../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { APP_ID } from '../../../core/env';
+import { useAuth } from '../../../context/AuthContext';
 import DocumentRouter from '../components/DocumentRouter';
 
 let cachedTailwindCss = null;
 
 export function usePdfGenerator() {
+  const { appId } = useAuth();
+  
   const generatePdf = async ({ docType, data, appSettings, download = false, includeSignature = true }) => {
     const pdfData = includeSignature ? data : { 
       ...data, 
@@ -28,6 +30,15 @@ export function usePdfGenerator() {
       }
     }
 
+    const branding = appSettings?.branding || {};
+    const brandVars = `
+      :root {
+        --brand-primary: ${branding.primaryColor || '#4F46E5'};
+        --brand-secondary: ${branding.secondaryColor || '#1e293b'};
+        --brand-accent: ${branding.accentColor || '#8b5cf6'};
+      }
+    `;
+
     const fullHtml = `
       <!DOCTYPE html>
       <html>
@@ -35,6 +46,7 @@ export function usePdfGenerator() {
           <meta charset="utf-8">
           <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
           <style>
+            ${brandVars}
             ${cachedTailwindCss || ''}
             body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             @media print { 
@@ -55,10 +67,10 @@ export function usePdfGenerator() {
     const fileName = `${safeName}_${docType}${sigTag}.pdf`;
     
     const enqueueApi = httpsCallable(functions, 'enqueuePdfJob');
-    const { data: { jobId } } = await enqueueApi({ html: fullHtml, fileName, docType });
+    const { data: { jobId } } = await enqueueApi({ appId, html: fullHtml, fileName, docType });
 
     return new Promise((resolve, reject) => {
-      const jobRef = doc(db, 'artifacts', APP_ID, 'private', 'data', 'pdf_jobs', jobId);
+      const jobRef = doc(db, 'artifacts', appId, 'private', 'data', 'pdf_jobs', jobId);
       const unsubscribe = onSnapshot(jobRef, (snap) => {
         const jobStatus = snap.data();
         if (jobStatus?.status === 'completed') {

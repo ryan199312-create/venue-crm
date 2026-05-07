@@ -167,7 +167,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                 
                 // Ownership check for management
                 const isOwner = (event.salesRep?.split(', ').includes(userProfile?.displayName)) || (event.clientEmail === userProfile?.email);
-                const isAdmin = userProfile?.role === 'admin';
+                const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
                 const canManage = isAdmin || !hasPermission('manage_own_only') || isOwner;
 
                 return (

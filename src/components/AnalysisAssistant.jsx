@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, Loader2, Sparkles, BarChart3 } from 'lucide-react';
 import { useAI } from '../hooks/useAI'; 
+import { useAuth } from '../context/AuthContext';
 
 export default function AnalysisAssistant({ events, onClose }) {
+  const { appSettings } = useAuth();
+  const venueProfile = appSettings?.venueProfile || {};
   const { generate, loading } = useAI();
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
-    { role: 'ai', text: '你好！我是璟瓏軒的 AI 數據分析助理。你可以問我關於整個資料庫的任何問題！(例如："今年第四季預計總營業額是多少？" 或 "下個月有幾多單婚宴？")' }
+    { role: 'ai', text: `你好！我是 ${venueProfile.nameZh || 'VowsOS'} 的 AI 數據分析助理。你可以問我關於整個資料庫的任何問題！` }
   ]);
   const chatEndRef = useRef(null);
 
@@ -27,7 +30,7 @@ const handleDataChat = async () => {
     const dbSummary = events || [];
 
     // 3. AI Prompts
-    const systemPrompt = `You are a Senior Business Intelligence Data Analyst for King Lung Heen (璟瓏軒).
+    const systemPrompt = `You are a Senior Business Intelligence Data Analyst for {venueProfile.nameEn || 'Venue Management'} ({venueProfile.nameZh || 'VowsOS'}).
     I am providing you with a JSON array containing our COMPLETE, raw event database. It includes every single detail, timestamp, URL, and configuration.
     Analyze this deep data and answer the user's question accurately in Traditional Chinese (Cantonese context).
     You can cross-reference everything.

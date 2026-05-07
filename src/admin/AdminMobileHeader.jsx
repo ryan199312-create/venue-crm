@@ -7,7 +7,7 @@ export default function AdminMobileHeader({ activeTab, setActiveTab }) {
   const venueProfile = appSettings?.venueProfile || {};
 
   return (
-    <header className="md:hidden bg-white border-b p-4 flex justify-between items-center flex-shrink-0 shadow-sm z-20">
+    <header className="md:hidden bg-white border-b p-4 flex justify-between items-center flex-shrink-0 shadow-sm z-20 print:hidden">
       <span className="font-bold text-slate-900 flex items-center">
         <MapPin size={18} className="mr-2 text-brand-primary" /> {venueProfile.nameZh || 'VowsOS'}
       </span>

@@ -5,7 +5,7 @@ export const VersionPreviewModal = ({ isOpen, onClose, version, onRestore }) => 
   if (!isOpen || !version) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in print:hidden">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center">

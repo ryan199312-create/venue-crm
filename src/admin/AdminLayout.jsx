@@ -243,27 +243,9 @@ export default function AdminLayout() {
     );
   }
 
-  // 4. ONBOARDING OVERLAY (Strict Early Return)
-  if (needsOnboarding) {
-    console.log("[AdminLayout] Onboarding REQUIRED.");
-    return (
-      <div className="fixed inset-0 bg-slate-50 overflow-hidden z-[5000]">
-         <OnboardingWizard 
-           appSettings={appSettings} 
-           onSave={handleSaveSettings} 
-           onUploadProof={async (f) => {
-              const sRef = ref(storage, `receipts/${Date.now()}_${f.name}`);
-              await uploadBytes(sRef, f);
-              return await getDownloadURL(sRef);
-           }} 
-           addToast={addToast} 
-         />
-      </div>
-    );
-  }
-
-  // 5. NO ACCESS (Authenticated but no permission to any main view)
-  if (hasNoAccess) {
+  // 4. NO ACCESS (Authenticated but no permission to any main view)
+  // 🌟 Senior Fix: Only show "No Access" if onboarding isn't also required.
+  if (hasNoAccess && !needsOnboarding) {
     console.log("[AdminLayout] Access DENIED for user:", user?.email, "Role:", userProfile?.role);
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
@@ -285,9 +267,26 @@ export default function AdminLayout() {
   }
 
   // 5. FINAL PRODUCTION DASHBOARD
-  // 🌟 NO FLICKER: If we reached here, user has access and setup is complete.
+  // 🌟 NO FLICKER: If we reached here, user has access and setup is complete (or onboarding is shown as overlay).
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-900 font-sans flex overflow-hidden">
+      {/* ONBOARDING OVERLAY */}
+      {/* 🌟 Senior Strategy: Render inside the main tree to maintain component identity and state. */}
+      {needsOnboarding && (
+        <div className="fixed inset-0 bg-slate-50 overflow-hidden z-[5000]">
+           <OnboardingWizard 
+             appSettings={appSettings} 
+             onSave={handleSaveSettings} 
+             onUploadProof={async (f) => {
+                const sRef = ref(storage, `receipts/${Date.now()}_${f.name}`);
+                await uploadBytes(sRef, f);
+                return await getDownloadURL(sRef);
+             }} 
+             addToast={addToast} 
+           />
+        </div>
+      )}
+
       <ConfirmationModal isOpen={confirmConfig.isOpen} title={confirmConfig.title} message={confirmConfig.message} onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig({ ...confirmConfig, isOpen: false })} />
       
       <div className="fixed bottom-4 right-4 z-[6000] flex flex-col space-y-2">
@@ -296,7 +295,7 @@ export default function AdminLayout() {
 
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} userProfile={userProfile} user={user} handleSignOut={handleSignOut} />
       
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-screen bg-slate-50">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-screen bg-slate-50 print:hidden">
         <AdminMobileHeader activeTab={activeTab} setActiveTab={setActiveTab} />
         <div className="flex-1 overflow-auto p-4 md:p-8">
           <React.Suspense fallback={<div className="p-12 text-center text-slate-400"><Loader2 className="animate-spin inline mr-2"/> 正在載入頁面組件...</div>}>

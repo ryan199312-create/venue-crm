@@ -26,7 +26,7 @@ export default function AdminSidebar({ activeTab, setActiveTab }) {
   ].filter(item => hasPermission(item.permission));
 
   return (
-    <aside className="w-64 bg-brand-secondary text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all border-r border-slate-800">
+    <aside className="w-64 bg-brand-secondary text-slate-300 hidden md:flex flex-col flex-shrink-0 transition-all border-r border-slate-800 print:hidden">
       <div className="p-6 border-b border-slate-800 flex items-center space-x-3 text-white">
         <div className="bg-brand-primary p-2 rounded-lg shadow-lg shadow-brand-primary/50">
           <MapPin size={20} />

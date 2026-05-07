@@ -66,6 +66,39 @@ exports.migrateTenantData = onCall({
   } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
+exports.deleteTenant = onCall({ 
+  memory: "1GiB", 
+  timeoutSeconds: 300,
+  cors: true 
+}, async (request) => {
+  if (!request.auth || request.auth.token.role !== 'super_admin') {
+    throw new HttpsError('permission-denied', 'Only super admins can delete tenants.');
+  }
+
+  const { tenantId } = request.data;
+  if (!tenantId) throw new HttpsError('invalid-argument', 'Tenant ID is required.');
+
+  const db = admin.firestore();
+
+  try {
+    console.log(`[DeleteTenant] Starting deletion for: ${tenantId}`);
+    
+    // 1. Delete the global tenant record
+    await db.collection('tenants').doc(tenantId).delete();
+    console.log(`[DeleteTenant] Global record deleted`);
+
+    // 2. Recursively delete artifacts
+    const artifactRef = db.collection('artifacts').doc(tenantId);
+    await db.recursiveDelete(artifactRef);
+    console.log(`[DeleteTenant] Artifacts recursively deleted`);
+
+    return { success: true };
+  } catch (error) {
+    console.error(`[DeleteTenant] FATAL ERROR:`, error);
+    throw new HttpsError('internal', error.message || 'Unknown deletion error');
+  }
+});
+
 // ==========================================
 // 2. SLEEKFLOW & PING
 // ==========================================

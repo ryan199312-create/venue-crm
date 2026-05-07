@@ -4,7 +4,7 @@ import { Card, Modal } from '../components/ui';
 import { db, functions } from '../core/firebase';
 import { collection, doc, setDoc, onSnapshot, serverTimestamp, getDoc, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { Shield, Users, Building2, LayoutDashboard, Globe, Settings, LogOut, Plus, Search, Loader2, ChevronRight, ExternalLink, Clock, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Building2, LayoutDashboard, Globe, Settings, LogOut, Plus, Search, Loader2, ChevronRight, ExternalLink, Clock, AlertTriangle, Trash2 } from 'lucide-react';
 import AdminLogin from '../admin/AdminLogin';
 import DataMigrationTool from './DataMigrationTool';
 
@@ -18,6 +18,12 @@ const SuperAdminPortal = () => {
   const [newTenantName, setNewTenantName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+
+  // --- DELETE TENANT STATE ---
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [tenantToDelete, setTenantToDelete] = useState(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [globalUsers, setGlobalUsers] = useState([]);
   const [fetchingUsers, setFetchingUsers] = useState(false);
@@ -127,6 +133,30 @@ const SuperAdminPortal = () => {
       alert("設定租戶失敗: " + err.message);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteTenant = async (e) => {
+    e.preventDefault();
+    if (deleteConfirmation !== tenantToDelete?.id) {
+      alert("請輸入正確的租戶 ID 以確認刪除");
+      return;
+    }
+    setIsDeleting(true);
+
+    try {
+      const deleteApi = httpsCallable(functions, 'deleteTenant');
+      await deleteApi({ tenantId: tenantToDelete.id });
+      
+      setIsDeleteModalOpen(false);
+      setTenantToDelete(null);
+      setDeleteConfirmation('');
+      alert(`租戶 ${tenantToDelete.id} 已成功刪除。`);
+    } catch (err) {
+      console.error("Error deleting tenant:", err);
+      alert("刪除租戶失敗: " + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -345,9 +375,22 @@ const SuperAdminPortal = () => {
                         <div className="p-3 bg-slate-100 rounded-xl group-hover:bg-violet-50 transition-colors">
                           <Globe className="text-slate-400 group-hover:text-violet-500" size={24} />
                         </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${tenant.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {tenant.status}
-                        </span>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${tenant.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                            {tenant.status}
+                          </span>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTenantToDelete(tenant);
+                              setIsDeleteModalOpen(true);
+                            }}
+                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                            title="刪除租戶"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="relative z-10">
@@ -555,6 +598,61 @@ const SuperAdminPortal = () => {
               className="flex-[2] py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 transition-all shadow-lg shadow-violet-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
             >
               {isCreating ? <Loader2 className="animate-spin" size={20} /> : '確認建立租戶'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* DELETE TENANT MODAL */}
+      <Modal 
+        isOpen={isDeleteModalOpen} 
+        onClose={() => !isDeleting && setIsDeleteModalOpen(false)}
+        title="刪除租戶 (Delete Tenant)"
+      >
+        <form onSubmit={handleDeleteTenant} className="space-y-6 p-6 bg-slate-50">
+          <div className="p-4 bg-rose-50 rounded-xl border border-rose-100 flex gap-3 shadow-sm">
+             <AlertTriangle className="text-rose-600 shrink-0" size={20} />
+             <div>
+               <p className="text-sm font-bold text-rose-800">警告：此操作不可復原</p>
+               <p className="text-[10px] text-rose-700 leading-relaxed font-medium mt-1">
+                 您即將刪除租戶 <b>{tenantToDelete?.name} ({tenantToDelete?.id})</b>。
+                 這將永久移除所有相關的活動、設定、用戶資料與檔案。
+               </p>
+             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              請輸入租戶 ID <span className="text-rose-600 font-mono">"{tenantToDelete?.id}"</span> 以確認刪除：
+            </label>
+            <input 
+              type="text"
+              required
+              value={deleteConfirmation}
+              onChange={e => setDeleteConfirmation(e.target.value)}
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all font-mono font-bold shadow-sm"
+              placeholder={tenantToDelete?.id}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button 
+              type="button"
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setTenantToDelete(null);
+                setDeleteConfirmation('');
+              }}
+              className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+            >
+              取消
+            </button>
+            <button 
+              type="submit"
+              disabled={isDeleting || deleteConfirmation !== tenantToDelete?.id}
+              className="flex-[2] py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+            >
+              {isDeleting ? <Loader2 className="animate-spin" size={20} /> : '確認永久刪除'}
             </button>
           </div>
         </form>

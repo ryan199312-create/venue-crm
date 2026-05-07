@@ -12,7 +12,7 @@ import {
   PaymentMethodBlock
 } from './DocumentShared';
 
-const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings }) => {
+const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings, children }) => {
   const { clientSig, adminSig } = getSignatures(data, printMode);
   const isCn = printMode === 'INVOICE' || printMode === 'RECEIPT' ? false : false; // Placeholder if we add CN versions later, but for now we look at the specific renderer
   
@@ -36,6 +36,8 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
         showPayments={printMode === 'INVOICE' || printMode === 'RECEIPT'}
         data={data}
       />
+
+      {children}
 
       <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} isCn={!useEn} />
 
@@ -103,11 +105,20 @@ export const QuotationRenderer = ({ data, appSettings, onSign }) => {
   ].filter(step => step.amount > 0);
 
   return (
-    <div className="space-y-8">
-      <InvoiceReceiptLayout data={data} typeEn="Quotation" typeZh="報價單" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="QUOTATION" appSettings={appSettings} />
-      
+    <InvoiceReceiptLayout 
+      data={data} 
+      typeEn="Quotation" 
+      typeZh="報價單" 
+      billing={billing} 
+      setupStr={setupStr} 
+      avStr={avStr} 
+      decorStr={decorStr} 
+      onSign={onSign} 
+      printMode="QUOTATION" 
+      appSettings={appSettings}
+    >
       {paymentSteps.length > 0 && (
-        <div className="px-[10mm] print:px-0 break-inside-avoid mt-[-2rem]">
+        <div className="mb-8 break-inside-avoid">
           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
             <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-4 border-b border-slate-200 pb-2">
               Payment Schedule (付款進度)
@@ -127,7 +138,7 @@ export const QuotationRenderer = ({ data, appSettings, onSign }) => {
           </div>
         </div>
       )}
-    </div>
+    </InvoiceReceiptLayout>
   );
 };
 

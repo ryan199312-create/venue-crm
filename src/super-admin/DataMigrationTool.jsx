@@ -12,65 +12,27 @@ const DataMigrationTool = ({ sourceId = 'my-venue-crm', targetId = 'kinglungheen
 
   const runMigration = async () => {
     setStatus('migrating');
-    setProgress(['開始資料同步程序 (Browser Sync Mode)...']);
+    setProgress(['正在初始化雲端同步程序 (Cloud Sync Mode)...']);
     
     try {
-      // 1. Migrate Settings
-      addProgress('正在同步系統設定 (Settings)...');
-      const settingsSnap = await getDocs(collection(db, 'artifacts', sourceId, 'private', 'data', 'settings'));
+      const migrateApi = httpsCallable(functions, 'migrateTenantData');
       
-      for (const d of settingsSnap.docs) {
-        await setDoc(doc(db, 'artifacts', targetId, 'private', 'data', 'settings', d.id), {
-          ...d.data(),
-          isSetupComplete: true 
-        }, { merge: true });
+      addProgress(`正在從 ${sourceId} 搬運資料至 ${targetId}...`);
+      addProgress('這可能需要 10-30 秒，請稍候...');
+
+      const result = await migrateApi({ sourceId, targetId });
+
+      if (result.data.success) {
+        addProgress('✅ 所有集合同步完成 (Settings, Events, Users, Calendar)');
+        setStatus('success');
+        addProgress(`🎉 同步成功！${targetId} 已準備就緒。`);
+        if (onComplete) onComplete();
+      } else {
+        throw new Error("同步回傳結果異常");
       }
-      addProgress('✅ 系統設定同步完成');
-
-      // 2. Migrate Events (EOs)
-      addProgress('正在同步訂單資料 (Events)...');
-      const eventsSnap = await getDocs(collection(db, 'artifacts', sourceId, 'private', 'data', 'events'));
-      addProgress(`發現 ${eventsSnap.size} 筆訂單，開始同步...`);
-      
-      const eventChunks = [];
-      const tempEvents = [...eventsSnap.docs];
-      while (tempEvents.length > 0) eventChunks.push(tempEvents.splice(0, 400));
-
-      for (const chunk of eventChunks) {
-        const batch = writeBatch(db);
-        chunk.forEach(evDoc => {
-          const newRef = doc(db, 'artifacts', targetId, 'private', 'data', 'events', evDoc.id);
-          batch.set(newRef, evDoc.data(), { merge: true });
-          
-          const pubRef = doc(db, 'artifacts', targetId, 'public_calendar', evDoc.id);
-          batch.set(pubRef, {
-             eventName: evDoc.data().eventName,
-             date: evDoc.data().date,
-             venueLocation: evDoc.data().venueLocation,
-             status: evDoc.data().status
-          }, { merge: true });
-        });
-        await batch.commit();
-      }
-      addProgress('✅ 訂單與日曆同步完成');
-
-      // 3. Migrate Users
-      addProgress('正在同步用戶權限 (Users)...');
-      const usersSnap = await getDocs(collection(db, 'artifacts', sourceId, 'private', 'data', 'users'));
-      const userBatch = writeBatch(db);
-      usersSnap.forEach(uDoc => {
-        const newRef = doc(db, 'artifacts', targetId, 'private', 'data', 'users', uDoc.id);
-        userBatch.set(newRef, uDoc.data(), { merge: true });
-      });
-      await userBatch.commit();
-      addProgress('✅ 用戶資料同步完成');
-
-      setStatus('success');
-      addProgress('🎉 同步成功！King Lung Heen 已更新為最新資料。');
-      if (onComplete) onComplete();
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      setError(err.message || "雲端同步失敗");
       setStatus('error');
     }
   };

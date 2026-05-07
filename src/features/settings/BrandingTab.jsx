@@ -34,9 +34,9 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
     <div className="space-y-6 animate-in fade-in" style={brandStyles}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Colors Selection */}
-        <Card className="p-6 border-l-4 border-l-brand-primary">
+        <Card className="p-6 border-l-4 border-l-indigo-600">
           <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <Palette className="text-brand-primary" /> 品牌顏色 (Brand Colors)
+            <Palette className="text-indigo-600" /> 品牌顏色 (Brand Colors)
           </h3>
           
           <div className="space-y-6">
@@ -98,9 +98,9 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
 
         {/* Portal Assets */}
         <div className="space-y-6">
-          <Card className="p-6 border-l-4 border-l-brand-accent">
+          <Card className="p-6 border-l-4 border-l-indigo-500">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <ImageIcon className="text-brand-accent" /> 門戶資源 (Portal Assets)
+              <ImageIcon className="text-indigo-500" /> 門戶資源 (Portal Assets)
             </h3>
             
             <div className="space-y-4">
@@ -141,7 +141,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
 
           <Card className="p-6 bg-slate-900 text-white">
             <h4 className="font-bold mb-2 flex items-center gap-2">
-              <MousePointer2 size={16} className="text-brand-primary" /> 即時預覽 (Live Preview)
+              <MousePointer2 size={16} className="text-indigo-400" /> 即時預覽 (Live Preview)
             </h4>
             <p className="text-[10px] text-slate-400 mb-4">預覽當前顏色在介面上的效果</p>
             
@@ -174,8 +174,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
       <div className="flex justify-end pt-4">
         <button 
           onClick={handleSaveBranding}
-          className="bg-brand-primary text-white px-10 py-3 rounded-xl font-bold shadow-xl transition-all active:scale-95"
-          style={{ backgroundColor: branding.primaryColor }}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl font-bold shadow-xl transition-all active:scale-95"
         >
           儲存視覺設定 (Save Branding)
         </button>

@@ -100,19 +100,19 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
             placeholder="搜尋用戶名稱或電郵..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:bg-white transition-all text-sm"
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-indigo-500 focus:bg-white transition-all text-sm"
           />
         </div>
         <button 
           onClick={() => setIsAddingUser(!isAddingUser)}
-          className="ml-4 flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm text-sm"
+          className="ml-4 flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm text-sm"
         >
           <Plus size={18} /> 新增用戶 (Add User)
         </button>
       </div>
 
       {isAddingUser && (
-        <Card className="p-5 border-l-4 border-l-blue-500 animate-in slide-in-from-top-2">
+        <Card className="p-5 border-l-4 border-l-indigo-500 animate-in slide-in-from-top-2">
           <h3 className="font-bold text-slate-800 mb-4 text-lg">新增系統用戶</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-1">
@@ -121,7 +121,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                 type="text" 
                 value={newUser.name}
                 onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
                 placeholder="例如: Ryan"
               />
             </div>
@@ -131,7 +131,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                 type="email" 
                 value={newUser.email}
                 onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
                 placeholder="ryan@example.com"
               />
             </div>
@@ -140,7 +140,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
               <select 
                 value={newUser.role}
                 onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm appearance-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm appearance-none focus:ring-2 focus:ring-indigo-500 transition-all"
               >
                 {Object.entries(roles).map(([id, config]) => (
                   <option key={id} value={id}>{config.label}</option>
@@ -156,7 +156,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                 <button
                   key={v.id}
                   onClick={() => setNewUser(p => ({ ...p, accessibleVenues: toggleVenue(p.accessibleVenues, v.id) }))}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-2 ${newUser.accessibleVenues.includes(v.id) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-2 ${newUser.accessibleVenues.includes(v.id) ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
                 >
                   <Building2 size={14} /> {v.name}
                 </button>
@@ -175,7 +175,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
             <button 
               onClick={handleInviteUser}
               disabled={isInviting}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 shadow-md transition-all active:scale-95 flex items-center gap-2"
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-md transition-all active:scale-95 flex items-center gap-2"
             >
               {isInviting ? <MoreVertical className="animate-spin" size={16} /> : <Plus size={16} />}
               {isInviting ? '發送中...' : '送出邀請 (Invite)'}
@@ -204,7 +204,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                 <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-100 text-indigo-700 flex items-center justify-center font-bold text-sm shadow-inner shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shadow-inner shrink-0">
                         {u.displayName?.charAt(0).toUpperCase() || <User size={16} />}
                       </div>
                       <div className="min-w-0">
@@ -214,7 +214,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                               type="text" 
                               value={editingName}
                               onChange={e => setEditingName(e.target.value)}
-                              className="px-2 py-1 bg-white border border-blue-500 rounded text-sm font-bold outline-none shadow-sm"
+                              className="px-2 py-1 bg-white border border-indigo-500 rounded text-sm font-bold outline-none shadow-sm"
                               autoFocus
                             />
                             <button onClick={() => handleUpdateName(u.id)} className="text-emerald-600 hover:text-emerald-700 font-bold text-xs uppercase">儲存</button>
@@ -225,7 +225,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                             <span className="font-bold text-slate-800">{u.displayName}</span>
                             <button 
                               onClick={() => { setEditingUserId(u.id); setEditingName(u.displayName || ''); }}
-                              className="p-1 text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all"
+                              className="p-1 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-all"
                             >
                               <Edit2 size={12} />
                             </button>
@@ -240,7 +240,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                       value={u.role || 'staff'}
                       onChange={(e) => handleUpdateRole(u.id, e.target.value)}
                       disabled={(u.role === 'admin' || u.role === 'super_admin') && users.filter(usr => usr.role === 'admin' || usr.role === 'super_admin').length === 1}
-                      className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm"
+                      className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm"
                     >
                       {Object.entries(roles).map(([id, config]) => (
                         <option key={id} value={id}>{config.label}</option>
@@ -260,7 +260,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                             </span>
                           ))}
                           <div className="relative group">
-                            <button className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1">
+                            <button className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center gap-1">
                               <Plus size={10} /> 新增
                             </button>
                             <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-10 hidden group-hover:block min-w-[200px] animate-in fade-in slide-in-from-top-1">
@@ -270,7 +270,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
                                   <button
                                     key={v.id}
                                     onClick={() => handleUpdateVenues(u.id, [...(u.accessibleVenues || []), v.id])}
-                                    className="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors flex items-center gap-2"
+                                    className="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg transition-colors flex items-center gap-2"
                                   >
                                     <Building2 size={12} /> {v.name}
                                   </button>

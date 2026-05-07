@@ -90,14 +90,14 @@ export const LocationSelector = ({ formData, setFormData, className = "", appSet
       <label className="block text-sm font-medium text-slate-700 mb-2">活動位置 (Venue Location)</label>
       <div className="flex flex-wrap gap-3 mb-2">
         {locationCheckboxes.map(loc => (
-          <label key={loc} className={`flex items-center space-x-2 px-3 py-2 rounded border cursor-pointer transition-colors ${isChecked(loc) ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+          <label key={loc} className={`flex items-center space-x-2 px-3 py-2 rounded border cursor-pointer transition-colors ${isChecked(loc) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
             <input
               type="checkbox"
               checked={isChecked(loc)}
               onChange={() => handleCheckboxChange(loc)}
-              className="rounded text-blue-600 focus:ring-blue-500"
+              className="rounded text-indigo-600 focus:ring-indigo-500"
             />
-            <span className={`text-sm ${isChecked(loc) ? 'text-blue-700 font-bold' : 'text-slate-700'}`}>{loc}</span>
+            <span className={`text-sm ${isChecked(loc) ? 'text-indigo-700 font-bold' : 'text-slate-700'}`}>{loc}</span>
           </label>
         ))}
       </div>

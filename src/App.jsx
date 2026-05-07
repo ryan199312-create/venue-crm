@@ -29,7 +29,7 @@ class GlobalErrorBoundary extends React.Component {
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-6 text-center font-sans">
           <h2 className="text-2xl font-bold mb-2">Oops! Something went wrong.</h2>
           <p className="text-slate-500 mb-6">We had trouble loading this page. This often happens after an app update or on poor connections.</p>
-          <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md">Refresh Page</button>
+          <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-md">Refresh Page</button>
         </div>
       );
     }

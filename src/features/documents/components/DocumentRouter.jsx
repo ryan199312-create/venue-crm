@@ -1,7 +1,6 @@
 import React from 'react';
 
 // Import New Sub-Renderers
-import BriefingRenderer from './renderers/BriefingRenderer';
 import ContractRenderer from './renderers/ContractRenderer';
 import EventOrderRenderer from './renderers/EventOrderRenderer';
 import { QuotationRenderer, InvoiceRenderer, ReceiptRenderer } from './renderers/FinancialRenderers';
@@ -9,7 +8,7 @@ import FloorplanRenderer from './renderers/FloorplanRenderer';
 import { AddendumRenderer, InternalNotesRenderer, MenuConfirmRenderer } from './renderers/OtherRenderers';
 
 /**
- * DocumentRenderer (Router)
+ * DocumentRouter (Router)
  * 
  * This component acts as a high-level router that decides which specific document 
  * renderer to use based on the 'printMode'.
@@ -29,8 +28,6 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
   switch (printMode) {
     case 'FLOORPLAN':
       return <FloorplanRenderer data={renderData} appSettings={appSettings} />;
-    case 'BRIEFING':
-      return <BriefingRenderer data={renderData} printMode={printMode} appSettings={appSettings} />;
     case 'QUOTATION':
       return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
     case 'CONTRACT':
@@ -50,6 +47,7 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
       return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} appSettings={appSettings} />;
     case 'INTERNAL_NOTES':
       return <InternalNotesRenderer data={renderData} appSettings={appSettings} />;
+    case 'BRIEFING':
     case 'EO':
     default:
       return <EventOrderRenderer data={renderData} printMode={printMode} appSettings={appSettings} />;

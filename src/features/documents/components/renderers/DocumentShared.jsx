@@ -478,7 +478,7 @@ export const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, da
     <div className={`border-b-2 border-slate-800 h-16 mb-3 relative flex items-end ${alignRight ? 'justify-end' : 'justify-start'} bg-slate-50/30`}>
       {!sigDataUrl ? (
         onSign ? (
-          <button type="button" onClick={onSign} className={`absolute inset-0 flex items-center justify-center w-full h-full transition-colors cursor-pointer border-2 border-dashed z-10 ${isAdmin ? 'bg-blue-50 hover:bg-blue-100 border-blue-400' : 'bg-amber-50 hover:bg-amber-100 border-amber-400'}`}>
+          <button type="button" onClick={onSign} className={`absolute inset-0 flex items-center justify-center w-full h-full transition-colors cursor-pointer border-2 border-dashed z-10 ${isAdmin ? 'bg-[var(--brand-primary)]/5 hover:bg-[var(--brand-primary)]/10 border-[var(--brand-primary)]/40' : 'bg-amber-50 hover:bg-amber-100 border-amber-400'}`}>
           </button>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">

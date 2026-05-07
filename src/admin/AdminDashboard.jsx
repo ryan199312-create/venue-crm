@@ -221,10 +221,10 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
 
       {/* 0. Outlet Performance (HQ ONLY) */}
       {selectedVenueId === 'all' && outletPerformance && (
-        <Card className="overflow-hidden border-t-4 border-t-indigo-600">
+        <Card className="overflow-hidden border-t-4 border-t-indigo-500">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <h3 className="font-bold text-slate-800 flex items-center">
-              <Building2 size={18} className="mr-2 text-indigo-600" /> 分店業績排行 (Outlet Performance)
+              <Building2 size={18} className="mr-2 text-indigo-500" /> 分店業績排行 (Outlet Performance)
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -308,8 +308,8 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
 
       {/* 2. Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-5 flex items-center space-x-4 border-l-4 border-l-blue-500">
-          <div className="p-3 bg-blue-50 rounded-full text-blue-600"><CheckCircle size={24} /></div>
+        <Card className="p-5 flex items-center space-x-4 border-l-4 border-l-indigo-600">
+          <div className="p-3 bg-indigo-50 rounded-full text-indigo-600"><CheckCircle size={24} /></div>
           <div>
             <p className="text-sm text-slate-500 font-bold">已確認單 (Confirmed)</p>
             <h3 className="text-2xl font-black text-slate-800">{stats.confirmedCount}</h3>
@@ -335,10 +335,10 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Upcoming Events List */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-t-4 border-t-blue-500">
+          <Card className="border-t-4 border-t-indigo-500">
             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <h3 className="font-bold text-slate-800 flex items-center">
-                <CalendarIcon size={18} className="mr-2 text-blue-500" /> 近期活動 (Upcoming)
+                <CalendarIcon size={18} className="mr-2 text-indigo-500" /> 近期活動 (Upcoming)
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
@@ -347,7 +347,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
               ) : (
                 upcomingEvents.map(event => (
                   <div key={event.id} className="p-4 bg-white hover:bg-slate-50 flex items-center space-x-4 cursor-pointer transition-all" onClick={() => openEditModal(event)}>
-                    <div className="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-lg flex flex-col items-center justify-center text-blue-600 border border-blue-100">
+                    <div className="flex-shrink-0 w-12 h-12 bg-indigo-50 rounded-lg flex flex-col items-center justify-center text-indigo-600 border border-indigo-100">
                       <span className="text-[10px] font-bold uppercase">{new Date(event.date).toLocaleString('en-US', { month: 'short' })}</span>
                       <span className="text-lg font-bold leading-none">{new Date(event.date).getDate()}</span>
                     </div>
@@ -390,11 +390,11 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
                   const dateKey = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
                   const dayEvents = eventsByDate[dateKey] || [];
                   return (
-                    <div key={i} className={`h-10 rounded border border-slate-100 flex flex-col items-center justify-center relative transition-all ${dayEvents.length > 0 ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}>
-                      <span className={`text-xs font-medium ${dayEvents.length > 0 ? 'text-blue-700' : 'text-slate-600'}`}>{dayNum}</span>
+                    <div key={i} className={`h-10 rounded border border-slate-100 flex flex-col items-center justify-center relative transition-all ${dayEvents.length > 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                      <span className={`text-xs font-medium ${dayEvents.length > 0 ? 'text-indigo-600' : 'text-slate-600'}`}>{dayNum}</span>
                       {dayEvents.length > 0 && (
                         <div className="flex space-x-0.5 mt-1">
-                          {dayEvents.slice(0, 3).map((_, idx) => <div key={idx} className="w-1 h-1 rounded-full bg-blue-500" />)}
+                          {dayEvents.slice(0, 3).map((_, idx) => <div key={idx} className="w-1 h-1 rounded-full bg-indigo-500" />)}
                         </div>
                       )}
                     </div>
@@ -410,12 +410,12 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
                 {currentMonthEvents.map(event => (
                   <div key={event.id} className="p-3 hover:bg-white transition-all cursor-pointer group" onClick={() => openEditModal(event)}>
                     <div className="flex items-center space-x-3 text-xs">
-                      <div className="w-8 h-8 bg-white rounded border border-slate-200 flex flex-col items-center justify-center text-slate-600 group-hover:text-blue-600">
+                      <div className="w-8 h-8 bg-white rounded border border-slate-200 flex flex-col items-center justify-center text-slate-600 group-hover:text-indigo-600">
                         <span className="text-[9px] font-bold uppercase">{new Date(event.date).toLocaleString('en-US', { weekday: 'short' })}</span>
                         <span className="font-bold">{new Date(event.date).getDate()}</span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-700 truncate group-hover:text-blue-600">{event.eventName}</p>
+                        <p className="font-bold text-slate-700 truncate group-hover:text-indigo-600">{event.eventName}</p>
                         <p className="text-[10px] text-slate-400">{event.startTime} • {selectedVenueId === 'all' ? outlets.find(o => o.id === event.venueId)?.name : event.venueLocation}</p>
                       </div>
                     </div>

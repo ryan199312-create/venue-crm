@@ -105,7 +105,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
 
   const docs = [
     { id: 'EO', label: '內部行政單', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
-    { id: 'BRIEFING', label: '樓面工作單', sub: 'Briefing', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
     { id: 'INTERNAL_NOTES', label: '內部備註', sub: 'Internal Notes', clientSignable: false, adminSignable: false, internalOnly: true, icon: PenTool, permission: 'doc_eo' }
   ];
 
@@ -175,7 +174,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
           )}
 
           {doc.adminSignable && !isClientPortal && !hasAdminSig && (
-            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors font-bold shadow-sm flex items-center">
+            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-colors font-bold shadow-sm flex items-center">
               <PenTool size={12} className="mr-1" /> 檢視及簽署
             </button>
           )}
@@ -207,7 +206,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       {previewDoc && createPortal(
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 md:p-8 animate-in fade-in">
           <div className="bg-slate-200 w-full max-w-5xl h-full flex flex-col rounded-2xl overflow-hidden shadow-2xl relative">
-            <div className={`px-4 py-3 flex justify-between items-center shrink-0 shadow-md z-10 transition-colors ${stagedSignature ? 'bg-[#A57C00] text-white' : 'bg-slate-900 text-white'}`}>
+            <div className={`px-4 py-3 flex justify-between items-center shrink-0 shadow-md z-10 transition-colors ${stagedSignature ? 'bg-[var(--brand-primary)] text-white' : 'bg-slate-900 text-white'}`}>
               <div className="flex items-center gap-2">
                 <Eye size={18} className="text-slate-400" />
                 <span className="font-bold text-sm">
@@ -224,7 +223,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                       <X size={14} className="mr-1.5" /> 取消 (Cancel)
                     </button>
                     <div className="w-px h-4 bg-white/30 mx-1"></div>
-                    <button type="button" onClick={handleConfirmSignature} disabled={isSubmittingSignature} className="flex items-center text-sm font-bold bg-white text-[#A57C00] hover:bg-slate-50 px-4 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
+                    <button type="button" onClick={handleConfirmSignature} disabled={isSubmittingSignature} className="flex items-center text-sm font-bold bg-white text-[var(--brand-primary)] hover:bg-slate-50 px-4 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
                       {isSubmittingSignature ? <Loader2 size={16} className="animate-spin mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
                       確認並提交 (Submit)
                     </button>
@@ -232,7 +231,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 ) : (
                   <>
                     {!isClientPortal && onPrint && (
-                      <button type="button" onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc); closePreview(); }} className="flex items-center text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">
+                      <button type="button" onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc); closePreview(); }} className="flex items-center text-xs font-bold bg-[var(--brand-primary)] hover:opacity-90 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                         <Printer size={14} className="mr-1.5" /> 列印 (Print)
                       </button>
                     )}

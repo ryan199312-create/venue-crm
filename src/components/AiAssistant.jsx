@@ -208,7 +208,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
         {/* HEADER */}
         <div className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-gradient-to-tr from-blue-500 to-violet-500 rounded-lg">
+            <div className="p-1.5 bg-gradient-to-tr from-indigo-500 to-violet-500 rounded-lg">
               <Sparkles size={20} className="text-white"/>
             </div>
             <div>
@@ -234,7 +234,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
             <label className="text-sm font-bold text-slate-700">選擇語氣 (Tone):</label>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'professional', label: '專業有禮 (Professional)', color: 'blue' },
+                { id: 'professional', label: '專業有禮 (Professional)', color: 'indigo' },
                 { id: 'friendly', label: '親切熱情 (Friendly)', color: 'emerald' },
                 { id: 'apologetic', label: '誠懇致歉 (Apologetic)', color: 'amber' },
                 { id: 'urgent', label: '緊急堅定 (Urgent)', color: 'red' },
@@ -259,19 +259,19 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
             {/* --- LEFT COLUMN: EMAIL --- */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col h-full">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="font-bold text-blue-800 flex items-center gap-2"><Mail size={18}/> 正式電郵 (Email)</h4>
+                <h4 className="font-bold text-indigo-800 flex items-center gap-2"><Mail size={18}/> 正式電郵 (Email)</h4>
                 <div className="flex gap-2">
-                  <button onClick={() => handleGenerate('EMAIL', 'summary')} disabled={aiLoading} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 border border-blue-200 font-bold disabled:opacity-50">確認信</button>
-                  <button onClick={() => handleGenerate('EMAIL', 'payment')} disabled={aiLoading} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 border border-blue-200 font-bold disabled:opacity-50">追數信</button>
+                  <button onClick={() => handleGenerate('EMAIL', 'summary')} disabled={aiLoading} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-100 border border-indigo-200 font-bold disabled:opacity-50">確認信</button>
+                  <button onClick={() => handleGenerate('EMAIL', 'payment')} disabled={aiLoading} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-100 border border-indigo-200 font-bold disabled:opacity-50">追數信</button>
                 </div>
               </div>
               
-              <input type="text" placeholder="Subject..." value={formData.emailSubject || ""} onChange={(e) => setFormData({...formData, emailSubject: e.target.value})} className="w-full text-sm font-bold border-b border-slate-200 px-2 py-2 mb-2 focus:outline-none focus:border-blue-500 transition-colors"/>
+              <input type="text" placeholder="Subject..." value={formData.emailSubject || ""} onChange={(e) => setFormData({...formData, emailSubject: e.target.value})} className="w-full text-sm font-bold border-b border-slate-200 px-2 py-2 mb-2 focus:outline-none focus:border-indigo-500 transition-colors"/>
               
-              <textarea placeholder="Email content..." value={formData.emailBody || ""} onChange={(e) => setFormData({...formData, emailBody: e.target.value})} className="w-full flex-1 text-sm p-3 bg-blue-50/20 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all leading-relaxed"/>
+              <textarea placeholder="Email content..." value={formData.emailBody || ""} onChange={(e) => setFormData({...formData, emailBody: e.target.value})} className="w-full flex-1 text-sm p-3 bg-indigo-50/20 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all leading-relaxed"/>
               
               <div className="mt-3 pt-3 border-t border-slate-100">
-                 <button onClick={() => window.open(`mailto:${formData.clientEmail}?subject=${encodeURIComponent(formData.emailSubject)}&body=${encodeURIComponent(formData.emailBody)}`)} className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex justify-center items-center gap-2 transition-transform active:scale-[0.98]">
+                 <button onClick={() => window.open(`mailto:${formData.clientEmail}?subject=${encodeURIComponent(formData.emailSubject)}&body=${encodeURIComponent(formData.emailBody)}`)} className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 flex justify-center items-center gap-2 transition-transform active:scale-[0.98]">
                    <Mail size={16}/> 開啟郵件軟體
                  </button>
               </div>
@@ -282,16 +282,16 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
               
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-green-700 flex items-center gap-2"><MessageCircle size={18}/> WhatsApp</h4>
+                  <h4 className="font-bold text-emerald-700 flex items-center gap-2"><MessageCircle size={18}/> WhatsApp</h4>
                   <div className="flex gap-2">
-                    <button onClick={() => handleGenerate('WHATSAPP', 'summary')} disabled={aiLoading} className="text-xs bg-green-50 text-green-600 px-3 py-1.5 rounded-full hover:bg-green-100 border border-green-200 font-bold disabled:opacity-50">活動確認</button>
-                    <button onClick={() => handleGenerate('WHATSAPP', 'payment')} disabled={aiLoading} className="text-xs bg-green-50 text-green-600 px-3 py-1.5 rounded-full hover:bg-green-100 border border-green-200 font-bold disabled:opacity-50">溫馨提示</button>
+                    <button onClick={() => handleGenerate('WHATSAPP', 'summary')} disabled={aiLoading} className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-100 border border-emerald-200 font-bold disabled:opacity-50">活動確認</button>
+                    <button onClick={() => handleGenerate('WHATSAPP', 'payment')} disabled={aiLoading} className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-100 border border-emerald-200 font-bold disabled:opacity-50">溫馨提示</button>
                   </div>
                 </div>
                 
                 <div className="flex-1 relative">
-                  <textarea placeholder="WhatsApp message..." value={formData.whatsappDraft || ""} onChange={(e) => setFormData({...formData, whatsappDraft: e.target.value})} className="w-full h-full text-sm p-4 bg-green-50/30 border border-green-100 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-500 transition-all leading-relaxed"/>
-                  <button onClick={() => copyToClipboard(formData.whatsappDraft)} className="absolute top-2 right-2 p-1.5 bg-white rounded shadow-sm text-slate-400 hover:text-green-600 transition-colors">
+                  <textarea placeholder="WhatsApp message..." value={formData.whatsappDraft || ""} onChange={(e) => setFormData({...formData, whatsappDraft: e.target.value})} className="w-full h-full text-sm p-4 bg-emerald-50/30 border border-emerald-100 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all leading-relaxed"/>
+                  <button onClick={() => copyToClipboard(formData.whatsappDraft)} className="absolute top-2 right-2 p-1.5 bg-white rounded shadow-sm text-slate-400 hover:text-emerald-600 transition-colors">
                     {copied ? <Check size={14}/> : <Copy size={14}/>}
                   </button>
                 </div>

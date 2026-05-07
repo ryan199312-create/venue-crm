@@ -68,7 +68,7 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
             <div className="grid grid-cols-2 gap-6">
               <SignatureBox 
                 labelEn="Authorized Signature" 
-                labelZh={useEn ? "" : "璟瓏軒 簽署及蓋章"} 
+                labelZh={useEn ? "" : `${appSettings?.venueProfile?.nameZh || '管理員'} 簽署及蓋章`} 
                 sigDataUrl={adminSig} 
                 dateStr={data.signatures?.[printMode]?.adminDate}
                 isAdmin={true}

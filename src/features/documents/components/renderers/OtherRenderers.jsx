@@ -116,16 +116,16 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
             {/* Addendum Items */}
             {addendumItems.length > 0 && (
               <>
-                <tr className="bg-blue-50/50 border-t-2 border-blue-200"><td colSpan="4" className="py-2 px-4 font-black uppercase text-blue-800 tracking-widest text-[10px]">Addendum Items (新增項目)</td></tr>
+                <tr className="bg-[var(--brand-primary)]/5 border-t-2 border-[var(--brand-primary)]/20"><td colSpan="4" className="py-2 px-4 font-black uppercase text-[var(--brand-primary)] tracking-widest text-[10px]">Addendum Items (新增項目)</td></tr>
                 {addendumItems.map((item, i) => (
                   <tr key={`add-${i}`} className="bg-white">
-                    <td className="py-2 px-4 font-bold text-blue-700 flex items-center"><Plus size={12} className="mr-2 text-blue-500"/>{item.name}</td>
-                    <td className="py-2 px-4 text-right font-mono text-blue-700">${formatMoney(item.cleanPrice)}</td>
-                    <td className="py-2 px-4 text-center text-blue-700">{item.cleanQty}</td>
-                    <td className="py-2 px-4 text-right font-mono font-bold text-blue-700">+ ${formatMoney(item.amount)}</td>
+                    <td className="py-2 px-4 font-bold text-[var(--brand-primary)] flex items-center"><Plus size={12} className="mr-2 text-[var(--brand-primary)]"/>{item.name}</td>
+                    <td className="py-2 px-4 text-right font-mono text-[var(--brand-primary)]">${formatMoney(item.cleanPrice)}</td>
+                    <td className="py-2 px-4 text-center text-[var(--brand-primary)]">{item.cleanQty}</td>
+                    <td className="py-2 px-4 text-right font-mono font-bold text-[var(--brand-primary)]">+ ${formatMoney(item.amount)}</td>
                   </tr>
                 ))}
-                <tr className="bg-blue-50/50"><td colSpan="3" className="py-2 px-4 text-right font-bold text-blue-800">Additional Cost (新增費用):</td><td className="py-2 px-4 text-right font-mono font-bold text-blue-800">+ ${formatMoney(finalAddendumTotal)}</td></tr>
+                <tr className="bg-[var(--brand-primary)]/5"><td colSpan="3" className="py-2 px-4 text-right font-bold text-[var(--brand-primary)]">Additional Cost (新增費用):</td><td className="py-2 px-4 text-right font-mono font-bold text-[var(--brand-primary)]">+ ${formatMoney(finalAddendumTotal)}</td></tr>
               </>
             )}
           </tbody>
@@ -139,7 +139,7 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
       </div>
 
       <div className="mt-auto pt-12 flex justify-between items-end break-inside-avoid">
-        <SignatureBox titleEn="For and on behalf of" labelEn="KING LUNG HEEN" labelZh="Authorized Signature & Chop" sigDataUrl={adminSig} onSign={onAdminSign} isAdmin={true} dateStr={sigData.adminDate} />
+        <SignatureBox titleEn="For and on behalf of" labelEn={appSettings?.venueProfile?.nameEn || 'Venue Management'} labelZh="Authorized Signature & Chop" sigDataUrl={adminSig} onSign={onAdminSign} isAdmin={true} dateStr={sigData.adminDate} />
         <SignatureBox titleEn="Confirmed & Accepted by" labelEn={data.clientName} labelZh="Client Signature / Company Chop" sigDataUrl={clientSig} onSign={onSign} dateStr={sigData.clientDate} alignRight={true} />
       </div>
     </div>

@@ -1,109 +1,317 @@
 import React from 'react';
 import { Clock, Truck, Trash2, Plus, MapPin, Info, PenTool } from 'lucide-react';
 import { FormTextArea } from '../../../components/ui';
+import { useAuth } from '../../../context/AuthContext';
 
 const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibilityToggles }) => {
+  const { appSettings } = useAuth();
+  const venueName = appSettings?.venueProfile?.nameZh || '場地';
+
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Clock size={18} className="text-blue-600" />
-            <h4 className="font-bold text-slate-800">活動流程 (Event Rundown)</h4>
-          </div>
-          <button type="button" onClick={() => setFormData(prev => ({ ...prev, rundown: [...(prev.rundown || []), { id: Date.now(), time: '18:30', activity: '' }] }))} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 font-bold shadow-sm">+ 新增流程</button>
-        </div>
-        <div className="space-y-2">
-          {(!formData.rundown || formData.rundown.length === 0) && (<div className="text-center py-4 bg-slate-50 border border-slate-100 rounded-lg"><p className="text-sm text-slate-400 font-medium">暫無流程 (No Rundown)</p><p className="text-xs text-slate-400 mt-1">點擊上方按鈕新增活動流程</p></div>)}
-          {(formData.rundown || []).map((item, idx) => (
-            <div key={item.id} className="flex gap-3 items-center group">
-              <input type="text" value={item.time} placeholder="18:30" maxLength={5} onChange={e => { const newList = [...formData.rundown]; newList[idx].time = e.target.value; setFormData(prev => ({ ...prev, rundown: newList })); }} className="w-20 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center font-mono placeholder:text-slate-300" />
-              <input type="text" value={item.activity} placeholder="活動內容 (Activity)..." onChange={e => { const newList = [...formData.rundown]; newList[idx].activity = e.target.value; setFormData(prev => ({ ...prev, rundown: newList })); }} className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500" />
-              <button type="button" onClick={() => setFormData(prev => ({ ...prev, rundown: prev.rundown.filter((_, i) => i !== idx) }))} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+      {/* 1. Bus Arrangement */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Truck size={20} /></div>
+            <div>
+              <h3 className="font-bold text-slate-800">接送巴士安排 (Bus Arrangement)</h3>
+              <p className="text-xs text-slate-500">設置時間、地點與車牌資訊</p>
             </div>
-          ))}
-        </div>
-      </div>
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Truck size={18} className="text-blue-600" />
-            <h4 className="font-bold text-slate-800">旅遊巴安排 (Bus Arrangement)</h4>
           </div>
-          <label className="flex items-center space-x-2 text-xs cursor-pointer select-none"><input type="checkbox" checked={formData.busInfo?.enabled || false} onChange={e => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, enabled: e.target.checked, arrivals: prev.busInfo?.arrivals || [], departures: prev.busInfo?.departures || [] } }))} className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4" /><span className={formData.busInfo?.enabled ? "font-bold text-blue-600" : "text-slate-400"}>啟用 (Enable)</span></label>
+          <label className="flex items-center cursor-pointer">
+            <div className="relative">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={formData.busInfo?.enabled || false}
+                onChange={e => setFormData(prev => ({ ...prev, busInfo: { ...(prev.busInfo || {}), enabled: e.target.checked } }))}
+              />
+              <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+            </div>
+            <span className="ml-3 text-sm font-bold text-slate-700">已啟用 (Enabled)</span>
+          </label>
         </div>
+
         {formData.busInfo?.enabled && (
           <div className="space-y-6 animate-in slide-in-from-top-2">
-            <div>
-              <div className="flex justify-between items-center mb-2"><span className="text-sm font-bold text-slate-700">接載 (Arrival): 出發地 {'>'} 璟瓏軒</span><button type="button" onClick={() => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: [...(prev.busInfo.arrivals || []), { id: Date.now(), time: '18:00', location: '', plate: '', price: '' }] } }))} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 font-bold">+ 新增接載</button></div>
+            {/* Arrivals */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-bold text-slate-700">去程 (Arrival): 各區接送 {'>'} {venueName}</span>
+                <button 
+                  type="button" 
+                  onClick={() => setFormData(prev => ({ 
+                    ...prev, 
+                    busInfo: { 
+                      ...prev.busInfo, 
+                      arrivals: [...(prev.busInfo.arrivals || []), { id: Date.now(), time: '18:00', location: '', plate: '', price: '' }] 
+                    } 
+                  }))} 
+                  className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 font-bold"
+                >
+                  + 新增去程
+                </button>
+              </div>
               <div className="space-y-2">
-                {(!formData.busInfo.arrivals || formData.busInfo.arrivals.length === 0) && (<p className="text-sm text-slate-400 italic py-1">暫無接載安排</p>)}
-                {(formData.busInfo.arrivals || []).map((bus, idx) => (
-                  <div key={bus.id} className="flex gap-3 items-center group">
-                    <input type="text" value={bus.time} placeholder="18:00" maxLength={5} onChange={e => { const newList = [...formData.busInfo.arrivals]; newList[idx].time = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newList } })); }} className="w-20 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center font-mono placeholder:text-slate-300" />
-                    <input type="text" value={bus.location} placeholder="接載地址 (Location)..." onChange={e => { const newList = [...formData.busInfo.arrivals]; newList[idx].location = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newList } })); }} className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500" />
-                    <input type="text" value={bus.plate} placeholder="車牌 (Plate)" onChange={e => { const newList = [...formData.busInfo.arrivals]; newList[idx].plate = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newList } })); }} className="w-24 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 placeholder:text-slate-300" />
-                    <div className="flex items-center w-24 border border-slate-300 rounded px-2 py-1 bg-white focus-within:border-blue-500 overflow-hidden"><span className="text-slate-400 text-xs mr-1">$</span><input type="number" value={bus.price} placeholder="0" onChange={e => { const newList = [...formData.busInfo.arrivals]; newList[idx].price = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newList } })); }} className="w-full text-sm outline-none font-mono bg-transparent" /></div>
-                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: prev.busInfo.arrivals.filter((_, i) => i !== idx) } }))} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                {(formData.busInfo?.arrivals || []).map((bus, idx) => (
+                  <div key={bus.id} className="grid grid-cols-12 gap-2">
+                    <div className="col-span-3 flex items-center bg-white border border-slate-300 rounded px-2">
+                      <Clock size={14} className="text-slate-400 mr-2"/>
+                      <input 
+                        type="text" 
+                        value={bus.time} 
+                        onChange={e => { 
+                          const newArr = [...formData.busInfo.arrivals]; 
+                          newArr[idx].time = e.target.value; 
+                          setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newArr } })); 
+                        }} 
+                        className="w-full bg-transparent text-sm font-bold outline-none" 
+                        placeholder="18:00" 
+                      />
+                    </div>
+                    <div className="col-span-6 flex items-center bg-white border border-slate-300 rounded px-2">
+                      <MapPin size={14} className="text-slate-400 mr-2"/>
+                      <input 
+                        type="text" 
+                        value={bus.location} 
+                        onChange={e => { 
+                          const newArr = [...formData.busInfo.arrivals]; 
+                          newArr[idx].location = e.target.value; 
+                          setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newArr } })); 
+                        }} 
+                        className="w-full bg-transparent text-sm outline-none" 
+                        placeholder="接送地點" 
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center bg-white border border-slate-300 rounded px-2">
+                      <input 
+                        type="text" 
+                        value={bus.plate} 
+                        onChange={e => { 
+                          const newArr = [...formData.busInfo.arrivals]; 
+                          newArr[idx].plate = e.target.value; 
+                          setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newArr } })); 
+                        }} 
+                        className="w-full bg-transparent text-sm outline-none" 
+                        placeholder="車牌" 
+                      />
+                    </div>
+                    <div className="col-span-1 flex justify-center items-center">
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData(prev => ({ 
+                          ...prev, 
+                          busInfo: { ...prev.busInfo, arrivals: prev.busInfo.arrivals.filter(a => a.id !== bus.id) } 
+                        }))} 
+                        className="text-slate-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="border-t border-slate-100 pt-4">
-              <div className="flex justify-between items-center mb-2"><span className="text-sm font-bold text-slate-700">散席 (Departure): 璟瓏軒 {'>'} 目的地</span><button type="button" onClick={() => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: [...(prev.busInfo.departures || []), { id: Date.now(), time: '22:30', location: '', plate: '', price: '' }] } }))} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 font-bold">+ 新增散席</button></div>
+
+            {/* Departures */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-bold text-slate-700">回程 (Departure): {venueName} {'>'} 各區回程</span>
+                <button 
+                  type="button" 
+                  onClick={() => setFormData(prev => ({ 
+                    ...prev, 
+                    busInfo: { 
+                      ...prev.busInfo, 
+                      departures: [...(prev.busInfo.departures || []), { id: Date.now(), time: '22:30', location: '', plate: '', price: '' }] 
+                    } 
+                  }))} 
+                  className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 font-bold"
+                >
+                  + 新增回程
+                </button>
+              </div>
               <div className="space-y-2">
-                {(!formData.busInfo.departures || formData.busInfo.departures.length === 0) && (<p className="text-sm text-slate-400 italic py-1">暫無散席安排</p>)}
-                {(formData.busInfo.departures || []).map((bus, idx) => (
-                  <div key={bus.id} className="flex gap-3 items-center group">
-                    <input type="text" value={bus.time} placeholder="22:30" maxLength={5} onChange={e => { const newList = [...formData.busInfo.departures]; newList[idx].time = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newList } })); }} className="w-20 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center font-mono placeholder:text-slate-300" />
-                    <input type="text" value={bus.location} placeholder="散席地址 (Location)..." onChange={e => { const newList = [...formData.busInfo.departures]; newList[idx].location = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newList } })); }} className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500" />
-                    <input type="text" value={bus.plate} placeholder="車牌 (Plate)" onChange={e => { const newList = [...formData.busInfo.departures]; newList[idx].plate = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newList } })); }} className="w-24 border border-slate-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 placeholder:text-slate-300" />
-                    <div className="flex items-center w-24 border border-slate-300 rounded px-2 py-1 bg-white focus-within:border-blue-500 overflow-hidden"><span className="text-slate-400 text-xs mr-1">$</span><input type="number" value={bus.price} placeholder="0" onChange={e => { const newList = [...formData.busInfo.departures]; newList[idx].price = e.target.value; setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newList } })); }} className="w-full text-sm outline-none font-mono bg-transparent" /></div>
-                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: prev.busInfo.departures.filter((_, i) => i !== idx) } }))} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                {(formData.busInfo?.departures || []).map((bus, idx) => (
+                  <div key={bus.id} className="grid grid-cols-12 gap-2">
+                    <div className="col-span-3 flex items-center bg-white border border-slate-300 rounded px-2">
+                      <Clock size={14} className="text-slate-400 mr-2"/>
+                      <input 
+                        type="text" 
+                        value={bus.time} 
+                        onChange={e => { 
+                          const newDep = [...formData.busInfo.departures]; 
+                          newDep[idx].time = e.target.value; 
+                          setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newDep } })); 
+                        }} 
+                        className="w-full bg-transparent text-sm font-bold outline-none" 
+                        placeholder="22:30" 
+                      />
+                    </div>
+                    <div className="col-span-6 flex items-center bg-white border border-slate-300 rounded px-2">
+                      <MapPin size={14} className="text-slate-400 mr-2"/>
+                      <input 
+                        type="text" 
+                        value={bus.location} 
+                        onChange={e => { 
+                          const newDep = [...formData.busInfo.departures]; 
+                          newDep[idx].location = e.target.value; 
+                          setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newDep } })); 
+                        }} 
+                        className="w-full bg-transparent text-sm outline-none" 
+                        placeholder="回程地點" 
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center bg-white border border-slate-300 rounded px-2">
+                      <input 
+                        type="text" 
+                        value={bus.plate} 
+                        onChange={e => { 
+                          const newDep = [...formData.busInfo.departures]; 
+                          newDep[idx].plate = e.target.value; 
+                          setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newDep } })); 
+                        }} 
+                        className="w-full bg-transparent text-sm outline-none" 
+                        placeholder="車牌" 
+                      />
+                    </div>
+                    <div className="col-span-1 flex justify-center items-center">
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData(prev => ({ 
+                          ...prev, 
+                          busInfo: { ...prev.busInfo, departures: prev.busInfo.departures.filter(a => a.id !== bus.id) } 
+                        }))} 
+                        className="text-slate-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded border border-amber-100 flex items-start"><Info size={12} className="mr-1 flex-shrink-0 mt-0.5" /><span>提示：如需向客戶收費，請至「Tab 3: 收費明細 (Billing)」頁面的「旅遊巴安排」總收費欄位手動輸入總費用。</span></div>
+
+            <div className="flex flex-col md:flex-row gap-6 items-start">
+               <div className="flex-1 w-full">
+                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">接送備註 (Bus/Truck Notes)</label>
+                 <FormTextArea 
+                    name="busNotes" 
+                    rows={3} 
+                    value={formData.busNotes} 
+                    onChange={handleInputChange} 
+                    placeholder="例如: 司機資料、特殊要求、貨車入倉安排..." 
+                 />
+               </div>
+               <div className="w-full md:w-48 pt-6 flex flex-col items-center p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                 <span className="text-[10px] font-bold text-indigo-700 uppercase mb-1">接送總費用</span>
+                 <div className="flex items-center gap-1">
+                   <span className="text-xs text-slate-400 font-bold">$</span>
+                   <input 
+                    type="number" 
+                    name="busCharge" 
+                    value={formData.busCharge} 
+                    onChange={handleInputChange} 
+                    className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 font-mono font-bold text-slate-800" 
+                    placeholder="0" 
+                   />
+                 </div>
+                 <p className="text-[9px] text-slate-400 mt-2 text-center">手動填寫總計費用，<br/>會自動計入訂單總額與餘額中。</p>
+               </div>
+            </div>
           </div>
         )}
       </div>
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <MapPin size={18} className="text-blue-600" />
-          <h4 className="font-bold text-slate-800">其他物流 (Other Logistics)</h4>
-        </div>
-        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-          <div className="flex justify-between items-center mb-3"><label className="text-sm font-bold text-slate-700 flex items-center"><Truck size={16} className="mr-2" /> 送貨/物資安排 (Deliveries)</label><button type="button" onClick={() => setFormData(prev => ({ ...prev, deliveries: [...(prev.deliveries || []), { id: Date.now(), unit: '', date: '', time: '18:30', items: '' }] }))} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:text-blue-600 flex items-center shadow-sm"><Plus size={12} className="mr-1" /> 新增單位</button></div>
-          <div className="space-y-3">
-            {(!formData.deliveries || formData.deliveries.length === 0) && <div className="text-center text-slate-400 text-xs py-2 italic">暫無送貨安排</div>}
-            {(formData.deliveries || []).map((delivery, idx) => (
-              <div key={delivery.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm relative group">
-                <div className="grid grid-cols-12 gap-2 mb-2">
-                  <div className="col-span-4"><input type="text" placeholder="單位 (Unit)" className="w-full text-sm font-bold border-b border-slate-200 outline-none" value={delivery.unit} onChange={e => { const d = [...formData.deliveries]; d[idx].unit = e.target.value; setFormData(prev => ({ ...prev, deliveries: d })); }} /></div>
-                  <div className="col-span-4"><input type="date" className="w-full text-sm border-b border-slate-200 outline-none" value={delivery.date} onChange={e => { const d = [...formData.deliveries]; d[idx].date = e.target.value; setFormData(prev => ({ ...prev, deliveries: d })); }} /></div>
-                  <div className="col-span-3"><input type="text" placeholder="18:30" className="w-full text-sm border-b border-slate-200 outline-none focus:border-blue-500 text-slate-600 text-center font-mono" value={delivery.time} onChange={e => { const d = [...formData.deliveries]; d[idx].time = e.target.value; setFormData(prev => ({ ...prev, deliveries: d })); }} /></div>
-                  <div className="col-span-1 text-right"><button type="button" onClick={() => setFormData(prev => ({ ...prev, deliveries: prev.deliveries.filter((_, i) => i !== idx) }))} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div>
-                </div>
-                <textarea rows={2} placeholder="物資清單..." className="w-full text-sm bg-slate-50 border border-slate-100 rounded p-2 outline-none resize-none" value={delivery.items} onChange={e => { const d = [...formData.deliveries]; d[idx].items = e.target.value; setFormData(prev => ({ ...prev, deliveries: d })); }} />
-              </div>
-            ))}
+
+      {/* 2. Parking */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><MapPin size={20} /></div>
+          <div>
+            <h3 className="font-bold text-slate-800">泊車安排 (Parking)</h3>
+            <p className="text-xs text-slate-500">設置免費泊車與車牌記錄</p>
           </div>
         </div>
-        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-          <label className="text-sm font-bold text-slate-700 flex items-center mb-3"><MapPin size={16} className="mr-2" /> 泊車安排 (Parking)</label>
-          <div className="bg-white p-3 rounded border border-slate-200 mb-3"><span className="text-xs font-bold text-blue-600 uppercase mb-2 block">免費泊車券</span><div className="grid grid-cols-2 gap-4"><div className="flex items-center border rounded px-2 py-1 bg-slate-50"><span className="text-xs text-slate-500 mr-2">數量:</span><input type="number" className="flex-1 bg-transparent outline-none text-sm font-bold" value={formData.parkingInfo?.ticketQty || ''} onChange={e => setFormData(prev => ({ ...prev, parkingInfo: { ...prev.parkingInfo, ticketQty: e.target.value } }))} /><span className="text-xs text-slate-400 ml-1">張</span></div><div className="flex items-center border rounded px-2 py-1 bg-slate-50"><span className="text-xs text-slate-500 mr-2">時數:</span><input type="number" className="flex-1 bg-transparent outline-none text-sm font-bold" value={formData.parkingInfo?.ticketHours || ''} onChange={e => setFormData(prev => ({ ...prev, parkingInfo: { ...prev.parkingInfo, ticketHours: e.target.value } }))} /><span className="text-xs text-slate-400 ml-1">小時</span></div></div></div>
-          <div className="mt-2"><label className="text-xs font-bold text-slate-500 mb-1 block">車牌登記</label><textarea rows={3} value={formData.parkingInfo?.plates || ''} onChange={e => setFormData(prev => ({ ...prev, parkingInfo: { ...prev.parkingInfo, plates: e.target.value } }))} placeholder="請輸入車牌..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none" /></div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase">泊車券數量</label>
+                <input 
+                  type="number" 
+                  value={formData.parkingInfo?.ticketQty || ''} 
+                  onChange={e => setFormData(prev => ({ 
+                    ...prev, 
+                    parkingInfo: { ...(prev.parkingInfo || {}), ticketQty: e.target.value } 
+                  }))} 
+                  className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                  placeholder="0" 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase">每張時數</label>
+                <input 
+                  type="number" 
+                  value={formData.parkingInfo?.ticketHours || ''} 
+                  onChange={e => setFormData(prev => ({ 
+                    ...prev, 
+                    parkingInfo: { ...(prev.parkingInfo || {}), ticketHours: e.target.value } 
+                  }))} 
+                  className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                  placeholder="0" 
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase">車牌記錄 (License Plates)</label>
+              <textarea 
+                value={formData.parkingInfo?.plates || ''} 
+                onChange={e => setFormData(prev => ({ 
+                  ...prev, 
+                  parkingInfo: { ...(prev.parkingInfo || {}), plates: e.target.value } 
+                }))} 
+                rows={4} 
+                className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none" 
+                placeholder="輸入車牌號碼..." 
+              />
+            </div>
+          </div>
+
+          <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+             <div className="flex gap-2 text-indigo-700 mb-2">
+               <Info size={16} className="mt-0.5" />
+               <span className="text-xs font-bold uppercase tracking-wider">泊車須知 (Notice)</span>
+             </div>
+             <p className="text-xs text-slate-600 leading-relaxed">
+               1. 泊車券僅限當日於場地停泊時使用。<br/>
+               2. 免費泊車時數若超過，需按時付費。<br/>
+               3. 具體泊車位置與車牌資訊，請依場地同事現場指引為準。
+             </p>
+             <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-500">總計免費小時：</span>
+                <span className="text-sm font-black text-indigo-700">{(formData.parkingInfo?.ticketQty || 0) * (formData.parkingInfo?.ticketHours || 0)} 小時</span>
+             </div>
+          </div>
         </div>
-        <div>
-          <FormTextArea 
-            label={
-              <span className="flex items-center gap-1.5">
-                物流備註 (Logistics Notes)
-                <Info size={14} className="text-blue-400 cursor-help hover:text-blue-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing)&#10;• 報價單 / 合約 / 發票 / 收據 (Client Docs) - 若勾選" />
-              </span>
-            } 
-            name="otherNotes" rows={3} value={formData.otherNotes} onChange={handleInputChange} 
+      </div>
+
+      {/* 3. Operational Notes */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><PenTool size={20} /></div>
+          <div>
+            <h3 className="font-bold text-slate-800">營運備註 (Operational Notes)</h3>
+            <p className="text-xs text-slate-500">活動執行细節與特殊要求提醒</p>
+          </div>
+        </div>
+        <div className="space-y-4">
+          <FormTextArea
+            label="特殊提醒 (Special Reminders)"
+            name="otherNotes"
+            rows={5}
+            value={formData.otherNotes} onChange={handleInputChange}
           />
           <DocumentVisibilityToggles field="otherNotes" defaultClient={true} defaultInternal={true} />
         </div>

@@ -18,9 +18,9 @@ import { ConfirmationModal, Toast, Card } from '../components/ui';
 import AdminSidebar from './AdminSidebar';
 import AdminMobileHeader from './AdminMobileHeader';
 import AdminLogin from './AdminLogin';
-import OnboardingWizard from '../features/onboarding/OnboardingWizard';
 
 // Lazy Components
+const OnboardingWizard = React.lazy(() => import('../features/onboarding/OnboardingWizard'));
 const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
 const EventsListView = React.lazy(() => import('../features/events/components/EventsListView'));
 const SettingsView = React.lazy(() => import('../features/settings/SettingsView'));
@@ -213,7 +213,7 @@ export default function AdminLayout() {
   if (!hasInitialized) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-500">
-        <Loader2 className="animate-spin mb-4 text-brand-primary" size={48} />
+        <Loader2 className="animate-spin mb-4 text-indigo-600" size={48} />
         <p className="font-bold text-xs uppercase tracking-widest text-slate-400">正在啟動 VowsOS (Loading)...</p>
       </div>
     );
@@ -232,11 +232,11 @@ export default function AdminLayout() {
     return (
       <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-6 text-white text-center z-[4900]">
          <div className="max-w-md w-full space-y-8 animate-in zoom-in-95">
-            <Rocket size={80} className="text-brand-primary mx-auto animate-bounce" />
+            <Rocket size={80} className="text-indigo-500 mx-auto animate-bounce" />
             <h1 className="text-3xl font-black">正在初始化工作區</h1>
             <p className="text-slate-400 font-medium">請稍候，我們正在為您配置管理權限...</p>
             <div className="flex justify-center">
-              <Loader2 className="animate-spin text-brand-primary" size={32} />
+              <Loader2 className="animate-spin text-indigo-500" size={32} />
             </div>
          </div>
       </div>
@@ -274,16 +274,18 @@ export default function AdminLayout() {
       {/* 🌟 Senior Strategy: Render inside the main tree to maintain component identity and state. */}
       {needsOnboarding && (
         <div className="fixed inset-0 bg-slate-50 overflow-hidden z-[5000]">
-           <OnboardingWizard 
-             appSettings={appSettings} 
-             onSave={handleSaveSettings} 
-             onUploadProof={async (f) => {
-                const sRef = ref(storage, `receipts/${Date.now()}_${f.name}`);
-                await uploadBytes(sRef, f);
-                return await getDownloadURL(sRef);
-             }} 
-             addToast={addToast} 
-           />
+          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>}>
+            <OnboardingWizard 
+              appSettings={appSettings} 
+              onSave={handleSaveSettings} 
+              onUploadProof={async (f) => {
+                  const sRef = ref(storage, `receipts/${Date.now()}_${f.name}`);
+                  await uploadBytes(sRef, f);
+                  return await getDownloadURL(sRef);
+              }} 
+              addToast={addToast} 
+            />
+          </React.Suspense>
         </div>
       )}
 

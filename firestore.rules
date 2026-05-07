@@ -34,37 +34,15 @@ service cloud.firestore {
       }
       
       // Private data path
-      match /private/data/{document=**} {
-        
-        // Settings (RBAC, outlets, etc)
-        match /settings/config {
-          allow read: if true; 
-          allow write: if isAdmin();
-        }
-        
-        // Users: Allow reading list for headless check & teammates
-        // Allow creating own profile for first-time login
-        match /users/{userId} {
-          allow read: if isAuthenticated();
-          allow create: if isAuthenticated() && request.auth.uid == userId;
-          allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
-        }
-        
-        // Events: Allow read for all authenticated to prevent init hang
-        match /events/{eventId} {
-          allow read: if isAuthenticated();
-          allow update, delete: if isStaff();
-          allow create: if isStaff() || (
-            request.resource.data.status == 'tentative' && 
-            request.resource.data.source == 'website_inquiry'
-          );
-        }
-        
-        // PDF Jobs
-        match /pdf_jobs/{jobId} {
-          allow read: if isAuthenticated();
-          allow write: if isAuthenticated();
-        }
+      match /private/data/{collection}/{document=**} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+
+      // Specific override for settings config (since it's a deep path)
+      match /private/data/settings/config {
+        allow read: if true; 
+        allow write: if isAdmin();
       }
 
       // Public Calendar

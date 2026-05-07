@@ -103,7 +103,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
 
   // Editing States
   const [isUploadingBg, setIsUploadingBg] = useState(false);
-  const [editingOutlet, setEditingOutlet] = useState({ id: null, name: '', color: 'blue' });
+  const [editingOutlet, setEditingOutlet] = useState({ id: null, name: '', color: 'indigo' });
   const [editingZone, setEditingZone] = useState({ id: null, nameZh: '', nameEn: '', color: 'rgba(96, 165, 250, 0.3)' });
   const [editingRule, setEditingRule] = useState({ id: null, locations: [], prices: { Mon: { lunch: '', dinner: '' }, Tue: { lunch: '', dinner: '' }, Wed: { lunch: '', dinner: '' }, Thu: { lunch: '', dinner: '' }, Fri: { lunch: '', dinner: '' }, Sat: { lunch: '', dinner: '' }, Sun: { lunch: '', dinner: '' } } });
   const [editingMenu, setEditingMenu] = useState({ id: null, title: '', content: '', type: 'food', priceWeekday: '', priceWeekend: '', allocation: {} });
@@ -119,7 +119,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       newOutlets.push({ ...editingOutlet, id: `outlet_${Date.now()}` });
     }
     onSave({ ...settings, outlets: newOutlets });
-    setEditingOutlet({ id: null, name: '', color: 'blue' });
+    setEditingOutlet({ id: null, name: '', color: 'indigo' });
     addToast("分店清單已更新", "success");
   };
 
@@ -214,7 +214,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
   // Helper for static Tailwind classes to ensure JIT compiler includes them
   const getOutletColorClasses = (color) => {
     const map = {
-      blue: { bg: 'bg-blue-500', bgLight: 'bg-blue-100', text: 'text-blue-600' },
+      indigo: { bg: 'bg-indigo-500', bgLight: 'bg-indigo-100', text: 'text-indigo-600' },
       emerald: { bg: 'bg-emerald-500', bgLight: 'bg-emerald-100', text: 'text-emerald-600' },
       purple: { bg: 'bg-purple-500', bgLight: 'bg-purple-100', text: 'text-purple-600' },
       indigo: { bg: 'bg-indigo-500', bgLight: 'bg-indigo-100', text: 'text-indigo-600' },
@@ -222,7 +222,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       amber: { bg: 'bg-amber-500', bgLight: 'bg-amber-100', text: 'text-amber-600' },
       slate: { bg: 'bg-slate-500', bgLight: 'bg-slate-100', text: 'text-slate-600' },
     };
-    return map[color] || map.blue;
+    return map[color] || map.indigo;
   };
 
   // Helper for rendering
@@ -240,7 +240,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            {selectedVenueId === 'all' ? <Globe className="text-blue-600" /> : <Building2 className="text-emerald-600" />}
+            {selectedVenueId === 'all' ? <Globe className="text-indigo-600" /> : <Building2 className="text-indigo-600" />}
             {selectedVenueId === 'all' ? '集團全域設定 (Global)' : `分店專屬設定: ${outlets.find(o => o.id === selectedVenueId)?.name || '---'}`}
           </h2>
           <p className="text-slate-500">
@@ -253,19 +253,19 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       <div className="flex space-x-1 border-b border-slate-200 overflow-x-auto scrollbar-hide">
         {selectedVenueId === 'all' ? (
           <>
-            <button onClick={() => setActiveSubTab('outlets')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'outlets' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店管理</button>
-            <button onClick={() => setActiveSubTab('companyInfo')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>品牌與標誌</button>
-            <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>視覺風格 (Branding)</button>
-            <button onClick={() => setActiveSubTab('users')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>用戶管理</button>
-            <button onClick={() => setActiveSubTab('roles')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'roles' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>角色權限</button>
+            <button onClick={() => setActiveSubTab('outlets')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'outlets' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店管理</button>
+            <button onClick={() => setActiveSubTab('companyInfo')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>品牌與標誌</button>
+            <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>視覺風格 (Branding)</button>
+            <button onClick={() => setActiveSubTab('users')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>用戶管理</button>
+            <button onClick={() => setActiveSubTab('roles')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'roles' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>角色權限</button>
           </>
         ) : (
           <>
-            <button onClick={() => setActiveSubTab('venueProfile')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'venueProfile' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店資料</button>
-            <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>視覺風格 (Branding)</button>
-            <button onClick={() => setActiveSubTab('minSpend')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>低消規則</button>
-            <button onClick={() => setActiveSubTab('menus')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>菜單預設</button>
-            <button onClick={() => setActiveSubTab('floorplan')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'floorplan' ? 'bg-white border-x border-t border-slate-200 text-blue-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>平面圖預設</button>
+            <button onClick={() => setActiveSubTab('venueProfile')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'venueProfile' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店資料</button>
+            <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>視覺風格 (Branding)</button>
+            <button onClick={() => setActiveSubTab('minSpend')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>低消規則</button>
+            <button onClick={() => setActiveSubTab('menus')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>菜單預設</button>
+            <button onClick={() => setActiveSubTab('floorplan')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'floorplan' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>平面圖預設</button>
           </>
         )}
       </div>
@@ -275,14 +275,14 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       {activeSubTab === 'outlets' && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in">
           <div className="md:col-span-5">
-            <Card className="p-6 border-l-4 border-l-blue-600">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Building2 size={20} className="text-blue-600" /> {editingOutlet.id ? '編輯分店' : '新增分店'}</h3>
+            <Card className="p-6 border-l-4 border-l-indigo-600">
+              <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Building2 size={20} className="text-indigo-600" /> {editingOutlet.id ? '編輯分店' : '新增分店'}</h3>
               <div className="space-y-4">
                 <FormInput label="分店名稱" placeholder="例如: 璟瓏軒 (故宮)" value={editingOutlet.name} onChange={e => setEditingOutlet(p => ({ ...p, name: e.target.value }))} />
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2">主題顏色</label>
                   <div className="flex flex-wrap gap-2">
-                    {['blue', 'emerald', 'purple', 'indigo', 'rose', 'amber', 'slate'].map(color => {
+                    {['indigo', 'emerald', 'purple', 'indigo', 'rose', 'amber', 'slate'].map(color => {
                       const colors = getOutletColorClasses(color);
                       return (
                         <button key={color} onClick={() => setEditingOutlet(p => ({ ...p, color }))} className={`w-10 h-10 rounded-xl border-2 transition-all flex items-center justify-center ${editingOutlet.color === color ? 'border-slate-900 scale-110 shadow-lg' : 'border-transparent hover:scale-105 opacity-60'}`}>
@@ -293,8 +293,8 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                   </div>
                 </div>
                 <div className="pt-4 flex gap-2">
-                  <button onClick={handleSaveOutlet} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-100 active:scale-95">儲存分店</button>
-                  {editingOutlet.id && <button onClick={() => setEditingOutlet({ id: null, name: '', color: 'blue' })} className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">取消</button>}
+                  <button onClick={handleSaveOutlet} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-100 active:scale-95">儲存分店</button>
+                  {editingOutlet.id && <button onClick={() => setEditingOutlet({ id: null, name: '', color: 'indigo' })} className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">取消</button>}
                 </div>
               </div>
             </Card>
@@ -312,7 +312,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                         <div><p className="font-bold text-slate-800">{o.name}</p><p className="text-[10px] text-slate-400 font-mono">ID: {o.id}</p></div>
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                        <button onClick={() => setEditingOutlet(o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
+                        <button onClick={() => setEditingOutlet(o)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit2 size={16} /></button>
                         <button onClick={() => handleDeleteOutlet(o.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                       </div>
                     </div>
@@ -325,7 +325,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       )}
 
       {activeSubTab === 'companyInfo' && (
-        <Card className="p-6 border-l-4 border-l-blue-500 animate-in fade-in">
+        <Card className="p-6 border-l-4 border-l-indigo-500 animate-in fade-in">
           <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><ImageIcon size={20} /> 集團標誌 (Organization Logo)</h3>
           <div className="flex gap-8 items-center">
             <div className="w-40 h-32 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center bg-slate-50 relative overflow-hidden group">
@@ -342,7 +342,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                   ) : <span className="text-xs text-slate-400 font-bold">No Logo</span>}            </div>
             <div className="flex-1">
               <p className="text-sm text-slate-500 mb-4 leading-relaxed font-medium">此標誌將作為集團品牌，預設顯示於所有分店的文件中。</p>
-              <label className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl cursor-pointer hover:bg-blue-700 transition-all font-bold text-sm shadow-lg">
+              <label className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl cursor-pointer hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg">
                 <Plus size={18} /> {isUploadingBg ? '上傳中...' : '更換標誌'}
                 <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
                   const file = e.target.files[0]; if (!file) return;
@@ -381,21 +381,21 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-6 mt-4">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                     <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                      <CreditCard size={18} className="text-blue-600" /> 付款方式設定 (Payment Methods Configuration)
+                      <CreditCard size={18} className="text-indigo-600" /> 付款方式設定 (Payment Methods Configuration)
                     </h4>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
-                      <input type="checkbox" id="showInQuotation" checked={localSettings.venueProfile?.paymentConfig?.showInQuotation} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInQuotation: e.target.checked } } }))} className="rounded text-blue-600" />
+                      <input type="checkbox" id="showInQuotation" checked={localSettings.venueProfile?.paymentConfig?.showInQuotation} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInQuotation: e.target.checked } } }))} className="rounded text-indigo-600" />
                       <label htmlFor="showInQuotation" className="text-xs font-bold text-slate-700">顯示於報價單 (Quotation)</label>
                     </div>
                     <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
-                      <input type="checkbox" id="showInInvoice" checked={localSettings.venueProfile?.paymentConfig?.showInInvoice} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInInvoice: e.target.checked } } }))} className="rounded text-blue-600" />
+                      <input type="checkbox" id="showInInvoice" checked={localSettings.venueProfile?.paymentConfig?.showInInvoice} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInInvoice: e.target.checked } } }))} className="rounded text-indigo-600" />
                       <label htmlFor="showInInvoice" className="text-xs font-bold text-slate-700">顯示於發票 (Invoice)</label>
                     </div>
                     <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
-                      <input type="checkbox" id="showInContract" checked={localSettings.venueProfile?.paymentConfig?.showInContract} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInContract: e.target.checked } } }))} className="rounded text-blue-600" />
+                      <input type="checkbox" id="showInContract" checked={localSettings.venueProfile?.paymentConfig?.showInContract} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentConfig: { ...(p.venueProfile?.paymentConfig || {}), showInContract: e.target.checked } } }))} className="rounded text-indigo-600" />
                       <label htmlFor="showInContract" className="text-xs font-bold text-slate-700">顯示於合約 (Contract)</label>
                     </div>
                   </div>
@@ -557,12 +557,12 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
 
       {activeSubTab === 'minSpend' && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in">
-          <div className="md:col-span-5"><Card className="p-5 border-l-4 border-l-blue-500">
+          <div className="md:col-span-5"><Card className="p-5 border-l-4 border-l-indigo-500">
             <h3 className="font-bold text-lg text-slate-800 mb-4">{editingRule.id ? "編輯" : "新增"}低消規則</h3>
             <div className="space-y-4">
               <label className="block text-sm font-bold text-slate-700">選擇區域</label>
               <div className="flex flex-wrap gap-2">{LOCATION_LABELS.map(loc => (
-                <button key={loc} onClick={() => setEditingRule(p => ({...p, locations: p.locations.includes(loc) ? p.locations.filter(l=>l!==loc) : [...p.locations, loc]}))} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${editingRule.locations.includes(loc) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>{loc}</button>
+                <button key={loc} onClick={() => setEditingRule(p => ({...p, locations: p.locations.includes(loc) ? p.locations.filter(l=>l!==loc) : [...p.locations, loc]}))} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${editingRule.locations.includes(loc) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{loc}</button>
               ))}</div>
               <div className="grid grid-cols-7 gap-1 pt-2">
                 {DAYS_OF_WEEK.map(day => (
@@ -573,19 +573,19 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                       placeholder="L" 
                       value={editingRule.prices[day]?.lunch || ''} 
                       onChange={e=>setEditingRule(p=>({...p, prices: {...p.prices, [day]: {...p.prices[day], lunch: e.target.value}}}))} 
-                      className="w-full px-1 py-1 text-[10px] border rounded text-center focus:border-blue-500 outline-none transition-colors" 
+                      className="w-full px-1 py-1 text-[10px] border rounded text-center focus:border-indigo-500 outline-none transition-colors" 
                     />
                     <input 
                       type="number" 
                       placeholder="D" 
                       value={editingRule.prices[day]?.dinner || ''} 
                       onChange={e=>setEditingRule(p=>({...p, prices: {...p.prices, [day]: {...p.prices[day], dinner: e.target.value}}}))} 
-                      className="w-full px-1 py-1 text-[10px] border rounded bg-blue-50/30 text-center focus:border-blue-500 outline-none transition-colors" 
+                      className="w-full px-1 py-1 text-[10px] border rounded bg-indigo-50/30 text-center focus:border-indigo-500 outline-none transition-colors" 
                     />
                   </div>
                 ))}
               </div>
-              <button onClick={handleSaveRule} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold shadow-lg shadow-blue-100">儲存規則</button>
+              <button onClick={handleSaveRule} className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-100">儲存規則</button>
             </div>
           </Card></div>
           <div className="md:col-span-7"><div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -593,8 +593,8 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
             <div className="divide-y max-h-[500px] overflow-y-auto">{localSettings.minSpendRules.map(rule=>(
               <div key={rule.id} className="p-4 hover:bg-slate-50 transition-all group">
                 <div className="flex justify-between items-start mb-2"><div className="flex flex-wrap gap-1">{rule.locations.map(l=><span key={l} className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold">{l}</span>)}</div>
-                <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-all"><button onClick={()=>setEditingRule(rule)} className="p-1 text-blue-600"><Edit2 size={14}/></button><button onClick={()=>handleDeleteRule(rule.id)} className="p-1 text-red-500"><Trash2 size={14}/></button></div></div>
-                <div className="grid grid-cols-7 gap-1">{DAYS_OF_WEEK.map(day=><div key={day} className="text-[8px] border p-1 rounded text-center"><p className="font-bold">{day}</p><p className="text-blue-600">${parseInt(getPriceVal(rule, day, 'dinner')/1000)}k</p></div>)}</div>
+                <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-all"><button onClick={()=>setEditingRule(rule)} className="p-1 text-indigo-600"><Edit2 size={14}/></button><button onClick={()=>handleDeleteRule(rule.id)} className="p-1 text-red-500"><Trash2 size={14}/></button></div></div>
+                <div className="grid grid-cols-7 gap-1">{DAYS_OF_WEEK.map(day=><div key={day} className="text-[8px] border p-1 rounded text-center"><p className="font-bold">{day}</p><p className="text-indigo-600">${parseInt(getPriceVal(rule, day, 'dinner')/1000)}k</p></div>)}</div>
               </div>
             ))}</div>
           </div></div>
@@ -638,7 +638,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                     <div className="flex justify-between font-bold text-slate-800">
                       <span>{m.title}</span>
                       <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-all">
-                        <button onClick={()=>setEditingMenu(m)} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit2 size={14}/></button>
+                        <button onClick={()=>setEditingMenu(m)} className="text-indigo-600 hover:bg-indigo-50 p-1 rounded"><Edit2 size={14}/></button>
                         <button onClick={()=>handleDeleteMenu(m.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={14}/></button>
                       </div>
                     </div>
@@ -657,8 +657,8 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
 
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                <span className="font-bold text-blue-800">酒水套餐 (Beverage Packages)</span>
-                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                <span className="font-bold text-indigo-800">酒水套餐 (Beverage Packages)</span>
+                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
                   {localSettings.defaultMenus.filter(m => m.type === 'drink').length} Items
                 </span>
               </div>
@@ -668,7 +668,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                     <div className="flex justify-between font-bold text-slate-800">
                       <span>{m.title}</span>
                       <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-all">
-                        <button onClick={()=>setEditingMenu(m)} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit2 size={14}/></button>
+                        <button onClick={()=>setEditingMenu(m)} className="text-indigo-600 hover:bg-indigo-50 p-1 rounded"><Edit2 size={14}/></button>
                         <button onClick={()=>handleDeleteMenu(m.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={14}/></button>
                       </div>
                     </div>
@@ -822,7 +822,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                       </div>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                      <button onClick={() => setEditingZone(zone)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
+                      <button onClick={() => setEditingZone(zone)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit2 size={14} /></button>
                       <button onClick={() => handleDeleteZone(zone.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                     </div>
                   </div>
@@ -834,9 +834,9 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
             </Card>
 
             {/* Object Scale Settings */}
-            <Card className="p-6 border-l-4 border-l-blue-500 flex flex-col">
+            <Card className="p-6 border-l-4 border-l-indigo-500 flex flex-col">
               <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
-                <Maximize size={20} className="text-blue-500" /> 預設物件比例 (Default Scale)
+                <Maximize size={20} className="text-indigo-500" /> 預設物件比例 (Default Scale)
               </h3>
               
               <div className="flex-1 flex flex-col justify-center space-y-8">
@@ -866,7 +866,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                         defaultFloorplan: { ...(p.defaultFloorplan || {}), itemScale: newScale }
                       }));
                     }} 
-                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" 
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
                   />
                   <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <span>10px (Small)</span>

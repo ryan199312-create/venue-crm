@@ -7,7 +7,7 @@ export const FormCheckbox = ({ label, name, checked, onChange }) => (
       name={name}
       checked={checked || false}
       onChange={onChange}
-      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 transition-colors"
     />
     <span className="text-sm text-slate-700">{label}</span>
   </label>

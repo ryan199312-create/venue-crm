@@ -1,27 +1,32 @@
 import React from 'react';
-import { PenTool } from 'lucide-react';
 import { FormTextArea } from '../../../components/ui';
 
-const RemarksTab = ({ formData, setFormData, handleInputChange }) => {
-
+const InternalNotesTab = ({ formData, handleInputChange }) => {
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <PenTool size={18} className="text-blue-600" />
-          <h4 className="font-bold text-slate-800">內部備註 (Internal Notes)</h4>
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-2">
+          <div className="p-2 bg-slate-100 text-slate-600 rounded-lg">
+            <span className="font-black text-xs">LOG</span>
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-800">內部操作備註 (Internal Remarks)</h3>
+            <p className="text-xs text-slate-500 italic">這些備註僅限內部人員查看，不會顯示於客戶合約或網頁。</p>
+          </div>
         </div>
-        <p className="text-sm text-slate-500 mb-4">此備註僅供內部使用，可獨立列印，不會顯示於任何客戶文件上。</p>
-        <FormTextArea 
-          name="generalRemarks" 
-          rows={15} 
-          value={formData.generalRemarks} 
+
+        <FormTextArea
+          label="內部記錄 (Only for staff)"
+          name="remarks"
+          rows={12}
+          value={formData.remarks}
           onChange={handleInputChange}
-          placeholder="輸入任何其他備註..."
+          placeholder="在此輸入僅限內部查看的執行細節、付款備註或其他敏感資訊..."
+          className="bg-slate-50/50 border-slate-200"
         />
       </div>
     </div>
   );
 };
 
-export default RemarksTab;
+export default InternalNotesTab;

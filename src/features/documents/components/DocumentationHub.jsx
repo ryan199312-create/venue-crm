@@ -37,7 +37,7 @@ const HELP_ARTICLES = [
     title: '訂單管理 (EO Creation)',
     description: '建立活動、編輯流程與管理菜單的詳細步驟。',
     icon: FileText,
-    color: 'text-blue-500',
+    color: 'text-indigo-500',
     content: '點擊「訂單管理」->「新增訂單」。填寫基本資料後，您可以接著設定菜單、物流與備註。'
   },
   {
@@ -97,8 +97,8 @@ const DocumentationHub = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 pb-8">
         <div>
           <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-            <div className="p-2 bg-brand-primary/10 rounded-xl">
-              <BookOpen className="text-brand-primary" size={28} />
+            <div className="p-2 bg-indigo-600/10 rounded-xl">
+              <BookOpen className="text-indigo-600" size={28} />
             </div>
             使用指南 (Support Hub)
           </h2>
@@ -112,7 +112,7 @@ const DocumentationHub = () => {
             placeholder="搜尋教學文章..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-brand-primary/10 focus:border-brand-primary transition-all shadow-sm font-medium"
+            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600 transition-all shadow-sm font-medium"
           />
         </div>
       </div>
@@ -125,7 +125,7 @@ const DocumentationHub = () => {
             onClick={() => setActiveTab(cat.id)}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all ${
               activeCategory === cat.id 
-                ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20 scale-105' 
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-105' 
                 : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -143,10 +143,10 @@ const DocumentationHub = () => {
             className="p-6 hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group border-slate-200"
             onClick={() => setSelectedArticle(art)}
           >
-            <div className={`p-3 rounded-2xl bg-slate-50 group-hover:bg-brand-primary/5 transition-colors inline-block mb-4`}>
+            <div className={`p-3 rounded-2xl bg-slate-50 group-hover:bg-indigo-600/5 transition-colors inline-block mb-4`}>
                <art.icon size={24} className={art.color} />
             </div>
-            <h4 className="text-lg font-black text-slate-800 mb-2 group-hover:text-brand-primary transition-colors">{art.title}</h4>
+            <h4 className="text-lg font-black text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">{art.title}</h4>
             <p className="text-sm text-slate-500 leading-relaxed font-medium mb-6">
               {art.description}
             </p>
@@ -154,7 +154,7 @@ const DocumentationHub = () => {
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Clock size={12} /> 閱讀時間 2 分鐘
                </span>
-               <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 group-hover:text-brand-primary transition-all" />
+               <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 group-hover:text-indigo-600 transition-all" />
             </div>
           </Card>
         ))}
@@ -219,7 +219,7 @@ const DocumentationHub = () => {
                     <selectedArticle.icon size={32} className={selectedArticle.color} />
                  </div>
                  <div>
-                    <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em]">{selectedArticle.category}</span>
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">{selectedArticle.category}</span>
                     <h3 className="text-3xl font-black text-slate-800">{selectedArticle.title}</h3>
                  </div>
               </div>

@@ -1,138 +1,183 @@
-import React from 'react';
-import {
-  Utensils, Save, Plus, History, Eye, Trash2, ChevronLeft, ChevronRight,
-  Languages, Loader2, PieChart, AlertCircle, AlertTriangle, CheckCircle, Coffee, Info
+import React, { useState } from 'react';
+import { 
+  Utensils, Coffee, Wine, Info, Trash2, Plus, Sparkles, ChevronDown, ChevronUp, 
+  Clock, CheckCircle2, AlertCircle, ShoppingCart 
 } from 'lucide-react';
-import { FormSelect, MoneyInput, FormTextArea } from '../../../components/ui';
-import {
-  SERVING_STYLES, DEFAULT_DRINK_PACKAGES, DEPARTMENTS,
-  FOOD_DEPTS, DRINK_DEPTS, formatMoney
-} from '../../../services/billingService';
+import { FormTextArea, FormInput, FormSelect, FormCheckbox } from '../../../components/ui';
+import { DEFAULT_DRINK_PACKAGES } from '../../../services/billingService';
 
-const FoodAndBeverageTab = ({
-  formData, setFormData, appSettings,
-  saveMenuSnapshot, addMenu, setPreviewVersion, deleteMenuSnapshot,
-  moveMenu, handleMenuChange, handleApplyMenuPreset, removeMenu,
-  translatingMenuId, handleTranslateMenu, toggleMenuAllocation, handleMenuAllocationChange,
-  updateFinanceState, handlePriceChange, drinkPackageType, handleDrinkTypeChange,
-  isTranslatingDrinks, handleTranslateDrinks, handleInputChange, DocumentVisibilityToggles
-}) => {
+const FoodAndBeverageTab = ({ formData, setFormData, handleInputChange, DocumentVisibilityToggles }) => {
+  const [activePackageTab, setActivePackageTab] = useState('drinks');
+
+  const updateDrinkPackage = (packageId, field, value) => {
+    const currentPackages = formData.drinkPackages || [];
+    const idx = currentPackages.findIndex(p => p.id === packageId);
+    
+    if (idx === -1) {
+      const template = DEFAULT_DRINK_PACKAGES.find(p => p.id === packageId);
+      const newPackage = { ...template, [field]: value };
+      setFormData(prev => ({ ...prev, drinkPackages: [...currentPackages, newPackage] }));
+    } else {
+      const newPackages = [...currentPackages];
+      newPackages[idx] = { ...newPackages[idx], [field]: value };
+      setFormData(prev => ({ ...prev, drinkPackages: newPackages }));
+    }
+  };
+
+  const isPackageEnabled = (packageId) => {
+    return (formData.drinkPackages || []).some(p => p.id === packageId && p.enabled);
+  };
+
+  const getPackageData = (packageId) => {
+    return (formData.drinkPackages || []).find(p => p.id === packageId) || 
+           DEFAULT_DRINK_PACKAGES.find(p => p.id === packageId);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-3 mb-4 gap-4">
-          <div>
-            <h4 className="font-bold text-slate-800 flex items-center gap-2"><Utensils size={18} className="text-blue-600"/> 餐單設定 (Menus)</h4>
-            <p className="text-xs text-slate-500 mt-1">Corporate Mode: Save versions before major edits.</p>
-          </div>
-          <div className="flex space-x-2">
-            <button type="button" onClick={addMenu} className="text-sm bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-bold flex items-center transition-colors border border-blue-200"><Plus size={16} className="mr-1" /> 新增菜單</button>
+      {/* 1. Menu Selection */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Utensils size={20} /></div>
+            <div>
+              <h3 className="font-bold text-slate-800">菜單選擇 (Menu Selection)</h3>
+              <p className="text-xs text-slate-500">設置活動主菜單內容與備註</p>
+            </div>
           </div>
         </div>
-        
+
         <div className="space-y-4">
-          {formData.menus && formData.menus.map((menu, index) => {
-            const price = parseFloat(menu.price) || 0;
-            const allocSum = Object.values(menu.allocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
-            const diff = price - allocSum;
-            let statusBadge = null;
-            if (price > 0) {
-              if (allocSum === 0) statusBadge = <span className="ml-2 text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold border border-red-200 flex items-center animate-pulse"><AlertCircle size={10} className="mr-1" /> 未分拆 (Unallocated)</span>;
-              else if (Math.abs(diff) > 1) statusBadge = <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold border border-amber-200 flex items-center"><AlertTriangle size={10} className="mr-1" /> 剩餘 ${formatMoney(diff)}</span>;
-              else statusBadge = <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold border border-emerald-200 flex items-center"><CheckCircle size={10} className="mr-1" /> OK</span>;
-            }
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <FormInput 
+              label="菜單名稱 (Menu Name)" 
+              name="menuName" 
+              value={formData.menuName} 
+              onChange={handleInputChange} 
+              placeholder="例如: 璟瓏軒喜慶晚宴 A" 
+             />
+             <div className="flex items-end gap-2">
+               <div className="flex-1">
+                 <FormInput 
+                  label="每席價格 (Price per Table)" 
+                  name="pricePerTable" 
+                  type="number" 
+                  value={formData.pricePerTable} 
+                  onChange={handleInputChange} 
+                  placeholder="0" 
+                 />
+               </div>
+               <div className="bg-slate-100 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 mb-1">HKD</div>
+             </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-500 uppercase ml-1">菜單內容 (Menu Items)</label>
+              <span className="text-[10px] text-slate-400 font-medium">每行一項菜式 (One item per line)</span>
+            </div>
+            <FormTextArea 
+              name="menuItems" 
+              rows={12} 
+              value={formData.menuItems} 
+              onChange={handleInputChange} 
+              placeholder="鴻運乳豬全體&#10;翡翠花枝玉帶&#10;..." 
+              className="font-medium leading-relaxed"
+            />
+            <DocumentVisibilityToggles field="menuItems" defaultClient={true} defaultInternal={true} />
+          </div>
+
+          <div className="pt-2">
+            <label className="text-xs font-bold text-slate-500 uppercase ml-1 block mb-2">菜單備註 (Menu Notes)</label>
+            <FormTextArea 
+              name="menuNotes" 
+              rows={3} 
+              value={formData.menuNotes} 
+              onChange={handleInputChange} 
+              placeholder="例如: 更改個別菜式、素食安排等..." 
+            />
+            <DocumentVisibilityToggles field="menuNotes" defaultClient={true} defaultInternal={true} />
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Drink Packages */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Wine size={20} /></div>
+            <div>
+              <h3 className="font-bold text-slate-800">酒水套餐 (Drink Packages)</h3>
+              <p className="text-xs text-slate-500">設置無限供應或單點酒水</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {DEFAULT_DRINK_PACKAGES.map(pkg => {
+            const data = getPackageData(pkg.id);
+            const enabled = isPackageEnabled(pkg.id);
+            
             return (
-              <div key={menu.id || index} id={`menu-item-${menu.id}`} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all hover:border-blue-200 hover:shadow-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center flex-1 gap-2">
-                    <div className="flex flex-col mr-2"><button type="button" onClick={() => moveMenu(index, 'up')} disabled={index === 0} className="text-slate-400 hover:text-blue-600 disabled:opacity-30"><ChevronLeft size={14} className="rotate-90" /></button><button type="button" onClick={() => moveMenu(index, 'down')} disabled={index === formData.menus.length - 1} className="text-slate-400 hover:text-blue-600 disabled:opacity-30"><ChevronRight size={14} className="rotate-90" /></button></div>
-                    <input type="text" placeholder="菜單標題 (e.g. Main Menu)" value={menu.title} onChange={(e) => handleMenuChange(menu.id, 'title', e.target.value)} className="font-bold text-slate-700 bg-transparent border-b border-dashed border-slate-400 focus:border-blue-500 focus:outline-none flex-1" />
-                    <select className="text-xs bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-500 outline-none w-32" onChange={(e) => handleApplyMenuPreset(menu.id, e.target.value)} value=""><option value="" disabled>📂 載入預設...</option>{appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'food').map(m => (<option key={m.id} value={m.id}>{m.title}</option>))}</select>
-                    {formData.menus.length > 1 && <button type="button" onClick={() => removeMenu(menu.id)} className="text-slate-400 hover:text-red-500 p-1 rounded ml-2"><Trash2 size={16} /></button>}
+              <div 
+                key={pkg.id} 
+                className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden ${
+                  enabled ? 'border-amber-500 bg-amber-50/30' : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                }`}
+                onClick={() => updateDrinkPackage(pkg.id, 'enabled', !enabled)}
+              >
+                {enabled && (
+                  <div className="absolute top-0 right-0 bg-amber-500 text-white p-1 rounded-bl-lg">
+                    <CheckCircle2 size={12} />
                   </div>
-                </div>
-                <div className="flex justify-between items-end mb-1"><label className="text-xs font-bold text-slate-500">菜單內容 (一行一項)</label><div className="flex gap-2"><button type="button" onClick={() => saveMenuSnapshot(menu.id)} className="flex items-center text-[10px] bg-violet-50 text-violet-600 px-2 py-1 rounded hover:bg-violet-100 transition-colors border border-violet-200"><Save size={12} className="mr-1" /> 儲存版本</button><button type="button" onClick={() => handleTranslateMenu(menu.id, menu.content)} disabled={translatingMenuId === menu.id || !menu.content} className="flex items-center text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 disabled:opacity-50 transition-colors">{translatingMenuId === menu.id ? <><Loader2 size={12} className="animate-spin mr-1" /> 翻譯中...</> : <><Languages size={12} className="mr-1" /> AI 中英對照翻譯</>}</button></div></div>
-                <textarea rows={8} placeholder="輸入詳細菜色..." value={menu.content} onChange={(e) => handleMenuChange(menu.id, 'content', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white mb-3 font-mono leading-relaxed" />
-                {menu.versions && menu.versions.length > 0 && (
-                  <div className="bg-slate-100/50 p-2 rounded border border-slate-200 mb-3">
-                    <div className="text-[10px] font-bold text-slate-500 mb-2 flex items-center"><History size={12} className="mr-1" /> 版本紀錄 ({menu.versions.length})</div>
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200">
-                      {menu.versions.map(v => (
-                        <div key={v.id} className="flex-shrink-0 bg-white border border-slate-200 rounded p-2 text-[10px] flex flex-col gap-1.5 shadow-sm min-w-[120px] group hover:border-blue-300 transition-colors">
-                          <div><div className="font-bold text-slate-700 truncate" title={v.name}>{v.name}</div><div className="text-[9px] text-slate-400 mt-0.5">{new Date(v.id).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>
-                          <div className="flex gap-1 mt-auto pt-1.5 border-t border-slate-100"><button type="button" onClick={() => setPreviewVersion({ menuId: menu.id, ...v })} className="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded py-1 font-bold transition-colors flex items-center justify-center"><Eye size={10} className="mr-1" /> 查看</button><button type="button" onClick={(e) => { e.stopPropagation(); if (window.confirm('確定刪除此版本?')) deleteMenuSnapshot(menu.id, v.id); }} className="px-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={10} /></button></div>
-                        </div>
-                      ))}
+                )}
+                <div className="flex flex-col h-full">
+                  <h4 className="font-bold text-slate-800 text-sm mb-1">{pkg.name}</h4>
+                  <p className="text-[10px] text-slate-500 mb-3 flex-1">{pkg.description}</p>
+                  <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
+                    <span className="text-xs font-black text-amber-700">${pkg.price}/{pkg.unit}</span>
+                    <div className="text-[10px] font-bold px-2 py-0.5 rounded bg-white border border-slate-200">
+                      {enabled ? '已選擇' : '點擊選擇'}
                     </div>
                   </div>
-                )}
-                <div className="border-t border-slate-200 pt-2 flex justify-between items-center"><button type="button" onClick={() => toggleMenuAllocation(menu.id)} className={`flex items-center text-xs font-bold px-3 py-1.5 rounded transition-colors ${menu.showAllocation ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:text-blue-600 hover:bg-blue-50'}`}><PieChart size={14} className="mr-1.5" />{menu.showAllocation ? "隱藏拆帳 (Hide)" : "設定拆帳 (Allocation)"}{!menu.showAllocation && statusBadge}</button><div className="text-xs text-slate-400 flex items-center"><span className="mr-2">{menu.priceType === 'perTable' ? '每席' : menu.priceType === 'perPerson' ? '每位' : '固定'}價:</span><span className="font-mono text-slate-700 font-bold text-sm bg-slate-100 px-2 py-0.5 rounded border border-slate-200">${formatMoney(menu.price)}</span>{menu.showAllocation && statusBadge}</div></div>
-                {menu.showAllocation && (
-                  <div className="mt-3 bg-white p-3 rounded border border-slate-200 animate-in slide-in-from-top-2 shadow-sm">
-                    <div className="flex justify-between text-[10px] text-slate-400 mb-2 border-b border-slate-100 pb-1"><span>總金額 (Total): ${formatMoney(price)}</span><span className={Math.abs(diff) > 1 ? "text-amber-600 font-bold" : "text-emerald-600 font-bold"}>{Math.abs(diff) < 1 ? "✅ 平衡 (Balanced)" : `⚠️ 剩餘未分: $${formatMoney(diff)}`}</span></div>
-                    <div className="grid grid-cols-3 gap-3">{DEPARTMENTS.filter(d => FOOD_DEPTS.includes(d.key)).map(dept => (<div key={dept.key}><label className="block text-[9px] font-bold text-slate-500 mb-0.5">{dept.label}</label><div className="relative"><span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 text-[10px]">$</span><input type="number" value={menu.allocation?.[dept.key] || ''} onChange={e => handleMenuAllocationChange(menu.id, dept.key, e.target.value)} className={`w-full border rounded pl-4 pr-1 py-1 text-xs outline-none focus:ring-1 transition-colors ${menu.allocation?.[dept.key] ? 'border-emerald-300 bg-emerald-50 font-bold text-emerald-700' : 'border-slate-200 text-slate-600'}`} placeholder="0" /></div></div>))}</div>
-                  </div>
-                )}
+                </div>
               </div>
             );
           })}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-100">
-          <div className="space-y-4">
-            <FormSelect label="上菜方式 (Serving Style)" name="servingStyle" options={SERVING_STYLES} value={formData.servingStyle} onChange={(e) => { const newStyle = e.target.value; setFormData(prev => updateFinanceState({ ...prev, servingStyle: newStyle, platingFee: newStyle === '位上' ? (prev.platingFee || '') : '' })); }} />
-            {formData.servingStyle === '位上' && (
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 animate-in fade-in slide-in-from-top-2 shadow-sm"><MoneyInput label="位上服務費 (每席計算)" name="platingFee" value={formData.platingFee} onChange={handlePriceChange} required /><div className="text-right text-xs text-blue-600 font-mono mt-1 font-bold">= ${formatMoney((parseFloat(formData.platingFee) || 0) * (parseFloat(formData.tableCount) || 0))}</div></div>
-            )}
+
+        {(formData.drinkPackages || []).some(p => p.enabled) && (
+          <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in slide-in-from-top-2">
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-2">酒水服務備註 (Beverage Service Notes)</label>
+            <FormTextArea 
+              name="drinkNotes" 
+              rows={3} 
+              value={formData.drinkNotes} 
+              onChange={handleInputChange} 
+              placeholder="例如: 開始供應時間、特定酒類要求..." 
+            />
+            <DocumentVisibilityToggles field="drinkNotes" defaultClient={true} defaultInternal={true} />
           </div>
-          <div id="drinks-section">
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">酒水安排 (Drinks)</label>
-            <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-2" value={drinkPackageType} onChange={handleDrinkTypeChange}><option value="">請選擇套餐 (載入預設)</option>{DEFAULT_DRINK_PACKAGES.map(p => <option key={p} value={p}>{p}</option>)}{appSettings.defaultMenus && appSettings.defaultMenus.filter(m => m.type === 'drink').map(m => (<option key={m.id} value={m.title}>📂 {m.title}</option>))}<option value="Other">自訂 / 其他</option></select>
-            <div className="flex justify-end mb-1"><button type="button" onClick={handleTranslateDrinks} disabled={isTranslatingDrinks || !formData.drinksPackage} className="flex items-center text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 disabled:opacity-50 transition-colors">{isTranslatingDrinks ? <><Loader2 size={12} className="animate-spin mr-1" /> 翻譯中...</> : <><Languages size={12} className="mr-1" /> AI 中英翻譯</>}</button></div>
-            <textarea name="drinksPackage" rows={4} value={formData.drinksPackage || ''} onChange={handleInputChange} placeholder="酒水內容詳細描述..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
-            <div className="mt-2">
-              <button type="button" onClick={() => setFormData(prev => ({ ...prev, showDrinkAllocation: !prev.showDrinkAllocation }))} className={`w-full flex justify-center items-center text-xs font-bold px-3 py-1.5 rounded transition-colors border ${formData.showDrinkAllocation ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}><PieChart size={14} className="mr-1.5" />{formData.showDrinkAllocation ? "隱藏酒水拆帳" : "設定酒水拆帳 (Allocation)"}</button>
-              {formData.showDrinkAllocation && (
-                <div className="mt-2 bg-blue-50/50 p-3 rounded border border-blue-100 animate-in slide-in-from-top-1">
-                  {(() => {
-                    const dPrice = parseFloat(formData.drinksPrice) || 0;
-                    const dAllocSum = Object.values(formData.drinkAllocation || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0);
-                    const dDiff = dPrice - dAllocSum;
-                    return (
-                      <>
-                        <div className="flex justify-between text-[10px] text-slate-500 mb-2 border-b border-blue-100 pb-1"><span>單價: ${formatMoney(dPrice)}</span><span className={Math.abs(dDiff) > 1 ? "text-amber-600 font-bold" : "text-emerald-600 font-bold"}>{Math.abs(dDiff) < 1 ? "✅ 平衡" : `⚠️ 剩餘: $${formatMoney(dDiff)}`}</span></div>
-                        <div className="grid grid-cols-3 gap-2">{DEPARTMENTS.filter(d => DRINK_DEPTS.includes(d.key)).map(dept => (<div key={dept.key}><label className="block text-[9px] font-bold text-slate-500 mb-0.5">{dept.label.split(' ')[0]}</label><div className="relative"><span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[9px]">$</span><input type="number" value={formData.drinkAllocation?.[dept.key] || ''} onChange={e => setFormData(prev => ({ ...prev, drinkAllocation: { ...prev.drinkAllocation, [dept.key]: e.target.value } }))} className={`w-full border rounded pl-3 pr-1 py-1 text-[10px] outline-none focus:ring-1 transition-colors ${formData.drinkAllocation?.[dept.key] ? 'border-blue-400 bg-white font-bold text-blue-700' : 'border-slate-300 bg-slate-50 text-slate-600'}`} placeholder="0" /></div></div>))}</div>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
+        )}
+      </div>
+
+      {/* 3. Special Requests */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-4 border-b border-slate-100 pb-4">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Sparkles size={20} /></div>
+          <div>
+            <h3 className="font-bold text-slate-800">特別餐飲要求 (Special F&B Requests)</h3>
+            <p className="text-xs text-slate-500">過敏、素食或其他客製化安排</p>
           </div>
         </div>
-        <div>
-          <FormTextArea 
-            label={
-              <span className="flex items-center gap-1.5">
-                特殊餐單需求 (Special Req)
-                <Info size={14} className="text-blue-400 cursor-help hover:text-blue-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing, Kitchen)&#10;• 客戶合約 (Contract) - 若勾選" />
-              </span>
-            } 
-            name="specialMenuReq" value={formData.specialMenuReq} onChange={handleInputChange} 
-          />
-          <DocumentVisibilityToggles field="specialMenuReq" defaultClient={false} defaultInternal={true} />
-        </div>
-        <div>
-          <FormTextArea 
-            label={
-              <span className="flex items-center gap-1.5">
-                食物過敏 (Allergies)
-                <Info size={14} className="text-blue-400 cursor-help hover:text-blue-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing, Kitchen)&#10;• 客戶合約 (Contract) - 若勾選" />
-              </span>
-            } 
-            name="allergies" rows={2} className="bg-red-50 p-2 rounded-lg" value={formData.allergies} onChange={handleInputChange} 
-          />
-          <DocumentVisibilityToggles field="allergies" defaultClient={false} defaultInternal={true} />
-        </div>
+        <FormTextArea 
+          name="fbSpecialRequests" 
+          rows={4} 
+          value={formData.fbSpecialRequests} 
+          onChange={handleInputChange} 
+          placeholder="例如: 素食者姓名及數量、食物過敏提醒..." 
+        />
+        <DocumentVisibilityToggles field="fbSpecialRequests" defaultClient={true} defaultInternal={true} />
       </div>
     </div>
   );

@@ -45,7 +45,6 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
     try {
       await onSave(finalSettings);
       addToast("恭喜！系統設定已完成 (Onboarding Complete)!", "success");
-      // Note: AdminLayout will handle the transition
     } catch (err) {
       addToast("儲存失敗，請重試", "error");
       setIsFinishing(false);
@@ -71,7 +70,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
       {/* Top Progress Bar */}
       <div className="h-1.5 w-full bg-slate-200">
         <div 
-          className="h-full bg-brand-primary transition-all duration-500 ease-out"
+          className="h-full bg-indigo-600 transition-all duration-500 ease-out"
           style={{ width: `${(step / totalSteps) * 100}%` }}
         />
       </div>
@@ -82,7 +81,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
           {/* STEP 1: WELCOME */}
           {step === 1 && (
             <div className="text-center space-y-8 animate-in fade-in zoom-in-95">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-brand-primary/10 rounded-3xl text-brand-primary mb-4">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-indigo-600/10 rounded-3xl text-indigo-600 mb-4">
                 <Rocket size={48} className="animate-bounce" />
               </div>
               <div className="space-y-2">
@@ -91,7 +90,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
               </div>
               <Card className="p-8 bg-white border-2 border-slate-100 shadow-xl text-left space-y-6">
                 <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  <Sparkles className="text-brand-primary" size={20} /> 啟程準備 (Getting Started)
+                  <Sparkles className="text-indigo-600" size={20} /> 啟程準備 (Getting Started)
                 </h2>
                 <p className="text-slate-600 leading-relaxed">
                   感謝您選擇 VowsOS！在開始管理您的活動之前，我們需要花 3 分鐘時間完成基礎品牌與場地設定。這將確保您的客戶門戶與合約文件展現出一致的品牌形象。
@@ -104,7 +103,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
                     { icon: Heart, text: "自訂品牌標誌" },
                   ].map((item, idx) => (
                     <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                      <item.icon size={18} className="text-brand-primary" />
+                      <item.icon size={18} className="text-indigo-600" />
                       <span className="text-sm font-bold text-slate-700">{item.text}</span>
                     </div>
                   ))}
@@ -113,7 +112,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
               <button 
                 type="button"
                 onClick={handleNext}
-                className="group px-12 py-4 bg-brand-primary text-white rounded-2xl font-black text-lg shadow-xl shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto"
+                className="group px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto"
               >
                 立即開始 (Start Setup) <ChevronRight />
               </button>
@@ -178,7 +177,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
                 <button 
                   onClick={handleNext}
                   disabled={!localSettings.venueProfile.nameZh}
-                  className="bg-brand-primary text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-brand-primary/20 active:scale-95 disabled:opacity-50"
+                  className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
                 >
                   下一步 (Colors)
                 </button>
@@ -244,7 +243,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
                 </Card>
 
                 <Card className="p-6 bg-slate-900 text-white space-y-6">
-                  <h4 className="font-bold flex items-center gap-2"><Sparkles size={16} className="text-brand-primary" /> 預覽效果</h4>
+                  <h4 className="font-bold flex items-center gap-2"><Sparkles size={16} className="text-indigo-400" /> 預覽效果</h4>
                   <div className="space-y-4 pt-2">
                     <button 
                       className="w-full py-3 rounded-xl font-black text-sm shadow-lg transition-transform"
@@ -277,7 +276,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
                 <button onClick={handlePrev} className="flex items-center gap-2 text-slate-500 font-bold px-6 py-3 hover:text-slate-800 transition-all"><ChevronLeft /> 上一步</button>
                 <button 
                   onClick={handleNext}
-                  className="bg-brand-primary text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-brand-primary/20 active:scale-95"
+                  className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95"
                 >
                   下一步 (Presence)
                 </button>
@@ -324,7 +323,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
                 <button onClick={handlePrev} className="flex items-center gap-2 text-slate-500 font-bold px-6 py-3 hover:text-slate-800 transition-all"><ChevronLeft /> 上一步</button>
                 <button 
                   onClick={handleNext}
-                  className="bg-brand-primary text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-brand-primary/20 active:scale-95"
+                  className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95"
                 >
                   最後一步 (Final)
                 </button>
@@ -346,7 +345,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
               <Card className="p-6 bg-white border border-slate-100 shadow-xl overflow-hidden relative">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -mr-16 -mt-16"></div>
                 <div className="flex items-center gap-4 text-left">
-                  <div className="w-16 h-16 bg-brand-primary rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
+                  <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
                     {localSettings.companyLogoUrl ? (
                       <img src={localSettings.companyLogoUrl} className="w-10 h-10 object-contain" />
                     ) : (
@@ -354,7 +353,7 @@ const OnboardingWizard = ({ appSettings, onSave, onUploadProof, addToast }) => {
                     )}
                   </div>
                   <div>
-                    <p className="text-xs font-black text-brand-primary uppercase tracking-widest">{localSettings.venueProfile.nameEn || 'Venue Management'}</p>
+                    <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">{localSettings.venueProfile.nameEn || 'Venue Management'}</p>
                     <h4 className="text-2xl font-black text-slate-800">{localSettings.venueProfile.nameZh}</h4>
                   </div>
                 </div>

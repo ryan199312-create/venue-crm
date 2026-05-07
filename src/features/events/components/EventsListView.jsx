@@ -7,7 +7,6 @@ import { useAuth } from '../../../context/AuthContext';
 const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete }) => {
   const { hasPermission, userProfile, selectedVenueId } = useAuth();
   const [filter, setFilter] = useState('');
-  // ...
   const [statusFilter, setStatusFilter] = useState('incomplete'); // 'incomplete', 'completed', 'all'
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 30;
@@ -86,7 +85,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
           <input
             type="text"
             placeholder="搜尋訂單編號、活動名稱或客戶..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -98,26 +97,26 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
           <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 w-full sm:w-auto">
             <button
               onClick={() => setStatusFilter('incomplete')}
-              className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'incomplete' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'incomplete' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               未完成
             </button>
             <button
               onClick={() => setStatusFilter('completed')}
-              className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'completed' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'completed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               已完成
             </button>
             <button
               onClick={() => setStatusFilter('all')}
-              className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               全部
             </button>
           </div>
 
           {hasPermission('tab_save') && (
-            <button onClick={openNewEventModal} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center font-medium shadow-sm whitespace-nowrap w-full sm:w-auto justify-center">
+            <button onClick={openNewEventModal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center font-medium shadow-sm whitespace-nowrap w-full sm:w-auto justify-center">
               <Plus size={18} className="mr-2" /> 新增訂單 (New EO)
             </button>
           )}
@@ -180,9 +179,9 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                               唯讀 (View Only)
                             </span>
                           )}
-                          <span className="font-bold text-slate-800 text-base group-hover:text-blue-600 transition-colors">{event.eventName}</span>
+                          <span className="font-bold text-slate-800 text-base group-hover:text-indigo-600 transition-colors">{event.eventName}</span>
                         </div>
-                        <span className="text-xs text-blue-600 font-mono">{event.orderId}</span>
+                        <span className="text-xs text-indigo-600 font-mono">{event.orderId}</span>
                         {isVisionLead && (
                           <div className="flex items-center gap-3 mt-2">
                             {event.vision?.occasion?.includes('Wedding') && <Badge status="confirmed" className="!bg-pink-100 !text-pink-700"><Heart size={12} className="mr-1"/> 婚宴</Badge>}
@@ -216,7 +215,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => openEditModal(event)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title={canManage ? "編輯" : "檢視"}>
+                        <button onClick={() => openEditModal(event)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors" title={canManage ? "編輯" : "檢視"}>
                           <Edit2 size={16} />
                         </button>
                         {hasPermission('delete_eo') && canManage && (

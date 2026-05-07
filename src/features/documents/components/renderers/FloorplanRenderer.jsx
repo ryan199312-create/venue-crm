@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { TOOL_GROUPS } from '../../../../components/FloorplanTools';
+import { DocumentHeader } from './DocumentShared';
 
 export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {  
   const fp = data.floorplan || {};
@@ -52,15 +53,12 @@ export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) =
   return (
     <div className="print-page">
       {!isStandalone && <div className="page-break h-8"></div>}
-      <div className="flex justify-between items-end border-b-2 border-[var(--brand-primary)] pb-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight leading-none uppercase">場地平面圖 (Floorplan)</h1>
-          <p className="text-slate-500 text-xs mt-1">Order ID: {data.orderId}</p>
-        </div>
-        <div className="text-right">
-          <div className="inline-block bg-[var(--brand-primary)] text-white px-3 py-1 text-[10px] font-bold rounded mb-1 uppercase tracking-widest">APPENDIX</div>
-        </div>
-      </div>
+      <DocumentHeader 
+        data={data} 
+        typeEn="Floor Plan" 
+        typeZh="場地平面圖" 
+        appSettings={appSettings} 
+      />
       <div className="w-full bg-slate-50/50 border border-slate-200 rounded-xl overflow-hidden mt-4 relative shadow-sm flex items-center justify-center" style={{ height: `${containerHeight}px`, breakInside: 'avoid' }}>
         <div className="absolute origin-top-left" style={{ 
             transform: `scale(${scale})`, 

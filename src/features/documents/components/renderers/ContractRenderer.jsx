@@ -243,8 +243,8 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
         <SignatureBox 
            titleEn={isCn ? "" : "For and on behalf of"}
            titleZh={isCn ? "承辦方簽署" : ""}
-           labelEn={isCn ? "" : "KING LUNG HEEN"} 
-           labelZh={isCn ? "璟瓏軒 簽署及蓋章" : "Authorized Signature & Chop"} 
+           labelEn={isCn ? "" : (appSettings?.venueProfile?.nameEn || 'Venue Management')} 
+           labelZh={isCn ? `${appSettings?.venueProfile?.nameZh || '管理員'} 簽署及蓋章` : "Authorized Signature & Chop"} 
            sigDataUrl={adminSig} 
            onSign={onAdminSign ? () => onAdminSign(printMode) : null}
            dateStr={sigData.adminDate}

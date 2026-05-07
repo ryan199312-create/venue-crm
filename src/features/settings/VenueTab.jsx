@@ -16,29 +16,105 @@ const VenueTab = ({
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <Monitor size={18} className="text-blue-600" />
+          <Monitor size={18} className="text-indigo-600" />
           <h4 className="font-bold text-slate-800">場地佈置 (Main Setup)</h4>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><FormSelect label="檯布顏色 (Table Cloth)" name="tableClothColor" options={DECOR_COLORS} value={formData.tableClothColor} onChange={handleInputChange} /><FormSelect label="椅套顏色 (Chair Cover)" name="chairCoverColor" options={DECOR_COLORS} value={formData.chairCoverColor} onChange={handleInputChange} /></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FormSelect 
+            label="檯布顏色 (Table Cloth)" 
+            name="tableClothColor" 
+            options={DECOR_COLORS} 
+            value={formData.tableClothColor} 
+            onChange={handleInputChange} 
+          />
+          <FormSelect 
+            label="椅套顏色 (Chair Cover)" 
+            name="chairCoverColor" 
+            options={DECOR_COLORS} 
+            value={formData.chairCoverColor} 
+            onChange={handleInputChange} 
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2 pt-4 border-t border-slate-100">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1.5">主家席顏色 (Head Table Color)</label><div className="flex gap-4 mb-2"><label className="flex items-center space-x-2 text-sm cursor-pointer"><input type="radio" name="headTableColorType" value="same" checked={formData.headTableColorType === 'same'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500" /><span>同客席 (Same as Guest)</span></label><label className="flex items-center space-x-2 text-sm cursor-pointer"><input type="radio" name="headTableColorType" value="custom" checked={formData.headTableColorType === 'custom'} onChange={handleInputChange} className="text-blue-600 focus:ring-blue-500" /><span>自訂 (Custom)</span></label></div>{formData.headTableColorType === 'custom' && (<input type="text" name="headTableCustomColor" value={formData.headTableCustomColor} onChange={handleInputChange} placeholder="請輸入主家席顏色" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />)}</div>
-          <div className="bg-pink-50 p-4 rounded-lg border border-pink-100"><div className="flex justify-between items-center mb-2"><label className="font-bold text-slate-700 text-sm">新娘房 / 更衣室</label><label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" name="bridalRoom" checked={formData.bridalRoom} onChange={e => setFormData(prev => ({ ...prev, bridalRoom: e.target.checked }))} className="rounded text-pink-500" /><span className="text-xs text-slate-500">使用</span></label></div>{formData.bridalRoom && (<input type="text" name="bridalRoomHours" value={formData.bridalRoomHours} onChange={handleInputChange} placeholder="使用時間 e.g. 17:00 - 23:00" className="w-full px-3 py-2 border border-pink-200 rounded-lg text-sm bg-white" />)}</div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">主家席顏色 (Head Table Color)</label>
+            <div className="flex gap-4 mb-2">
+              <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="headTableColorType" 
+                  value="same" 
+                  checked={formData.headTableColorType === 'same'} 
+                  onChange={handleInputChange} 
+                  className="text-indigo-600 focus:ring-indigo-500" 
+                />
+                <span>同客席 (Same as Guest)</span>
+              </label>
+              <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="headTableColorType" 
+                  value="custom" 
+                  checked={formData.headTableColorType === 'custom'} 
+                  onChange={handleInputChange} 
+                  className="text-indigo-600 focus:ring-indigo-500" 
+                />
+                <span>自訂 (Custom)</span>
+              </label>
+            </div>
+            {formData.headTableColorType === 'custom' && (
+              <input 
+                type="text" 
+                name="headTableCustomColor" 
+                value={formData.headTableCustomColor} 
+                onChange={handleInputChange} 
+                placeholder="請輸入主家席顏色" 
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            )}
+          </div>
+          <div className="bg-pink-50 p-4 rounded-lg border border-pink-100">
+            <div className="flex justify-between items-center mb-2">
+              <label className="font-bold text-slate-700 text-sm">新娘房 / 更衣室</label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  name="bridalRoom" 
+                  checked={formData.bridalRoom} 
+                  onChange={e => setFormData(prev => ({ ...prev, bridalRoom: e.target.checked }))} 
+                  className="rounded text-pink-500" 
+                />
+                <span className="text-xs text-slate-500">使用</span>
+              </label>
+            </div>
+            {formData.bridalRoom && (
+              <input 
+                type="text" 
+                name="bridalRoomHours" 
+                value={formData.bridalRoomHours} 
+                onChange={handleInputChange} 
+                placeholder="使用時間 e.g. 17:00 - 23:00" 
+                className="w-full px-3 py-2 border border-pink-200 rounded-lg text-sm bg-white" 
+              />
+            )}
+          </div>
         </div>
       </div>
+
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <Layout size={18} className="text-blue-600" />
+          <Layout size={18} className="text-indigo-600" />
           <h4 className="font-bold text-slate-800">設備與佈置清單 (Equipment & Packages)</h4>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <h4 className="text-xs font-bold text-blue-800 uppercase tracking-widest border-b border-blue-200 pb-1 mb-2 flex items-center gap-1"><Users size={14} /> 舞台與接待設備</h4>
+            <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-widest border-b border-indigo-200 pb-1 mb-2 flex items-center gap-1"><Users size={14} /> 舞台與接待設備</h4>
             <div className="grid grid-cols-1 gap-2">
               <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14} /></div><FormCheckbox label="禮堂舞台 (7.2x2.5m)" name="equipment.stage" checked={formData.equipment?.stage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, stage: e.target.checked } }))} /></div>
               <div className="flex items-center gap-2"><div className="text-slate-400"><Mic2 size={14} /></div><FormCheckbox label="講台" name="equipment.podium" checked={formData.equipment?.podium} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, podium: e.target.checked } }))} /></div>
               <div className="flex items-center gap-2"><div className="text-slate-400"><Coffee size={14} /></div><FormCheckbox label="接待桌 (180x60cm)" name="equipment.receptionTable" checked={formData.equipment?.receptionTable} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, receptionTable: e.target.checked } }))} /></div>
               <div className="flex items-center gap-2"><div className="text-slate-400"><Info size={14} /></div><FormCheckbox label="標示牌 (2個)" name="equipment.signage" checked={formData.equipment?.signage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, signage: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Type size={14} /></div><FormCheckbox label="禮堂字牌" name="equipment.nameSign" checked={formData.equipment?.nameSign} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, nameSign: e.target.checked } }))} />{formData.equipment?.nameSign && (<input className="flex-1 text-[10px] border rounded px-2 py-1 bg-white outline-none focus:border-blue-400 transition-all" placeholder="輸入字牌內容..." value={formData.nameSignText || ''} onChange={(e) => setFormData(prev => ({ ...prev, nameSignText: e.target.value }))} />)}</div>
+              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Type size={14} /></div><FormCheckbox label="禮堂字牌" name="equipment.nameSign" checked={formData.equipment?.nameSign} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, nameSign: e.target.checked } }))} />{formData.equipment?.nameSign && (<input className="flex-1 text-[10px] border rounded px-2 py-1 bg-white outline-none focus:border-indigo-400 transition-all" placeholder="輸入字牌內容..." value={formData.nameSignText || ''} onChange={(e) => setFormData(prev => ({ ...prev, nameSignText: e.target.value }))} />)}</div>
               <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Cake size={14} /></div><FormCheckbox label="婚宴蛋糕" name="equipment.hasCake" checked={formData.equipment?.hasCake} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, hasCake: e.target.checked } }))} />{formData.equipment?.hasCake && (<div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200"><input type="number" className="w-10 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" placeholder="0" value={formData.cakePounds || ''} onChange={(e) => setFormData(prev => ({ ...prev, cakePounds: e.target.value }))} /><span className="text-[9px] text-slate-400 font-bold ml-1">Lbs</span></div>)}</div>
             </div>
           </div>
@@ -78,7 +154,7 @@ const VenueTab = ({
       
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <MapPin size={18} className="text-blue-600" />
+          <MapPin size={18} className="text-indigo-600" />
           <h4 className="font-bold text-slate-800">互動平面圖 (Interactive Floorplan)</h4>
         </div>
         <FloorplanEditor 
@@ -96,17 +172,17 @@ const VenueTab = ({
 
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <ImageIcon size={18} className="text-blue-600" />
+          <ImageIcon size={18} className="text-indigo-600" />
           <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
             佈置參考圖與備註 (Decor References & Notes)
-            <Info size={16} className="text-blue-400 cursor-help hover:text-blue-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing)&#10;• 客戶合約 (Contract) - 若勾選" />
+            <Info size={16} className="text-indigo-400 cursor-help hover:text-indigo-600 transition-colors" title="顯示於 (Displayed in):&#10;• 內部單據 (Internal EO, Briefing)&#10;• 客戶合約 (Contract) - 若勾選" />
           </h4>
         </div>
         <textarea rows={2} placeholder="文字描述 (Description)..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none mb-1" value={formData.venueDecor || ''} onChange={(e) => setFormData(prev => ({ ...prev, venueDecor: e.target.value }))} />
         <DocumentVisibilityToggles field="venueDecor" defaultClient={false} defaultInternal={true} />
         <div className="flex flex-wrap gap-3 mt-3">
           {(formData.venueDecorPhotos || []).map((url, idx) => (<div key={idx} className="relative w-24 h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group"><a href={url} target="_blank" rel="noreferrer" className="block w-full h-full cursor-zoom-in" title="點擊放大"><img src={url} alt="Venue Decor" className="w-full h-full object-cover" /></a><button type="button" onClick={() => setFormData(prev => ({ ...prev, venueDecorPhotos: prev.venueDecorPhotos.filter((_, i) => i !== idx) }))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"><X size={12} /></button></div>))}
-          <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-colors"><ImageIcon size={20} className="mb-1" /><span className="text-[10px] font-bold">新增照片 (多選)</span><input type="file" multiple className="hidden" accept="image/*" onChange={(e) => onMultiImageUpload(e.target.files, 'venueDecorPhotos')} /></label>
+          <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"><ImageIcon size={20} className="mb-1" /><span className="text-[10px] font-bold">新增照片 (多選)</span><input type="file" multiple className="hidden" accept="image/*" onChange={(e) => onMultiImageUpload(e.target.files, 'venueDecorPhotos')} /></label>
         </div>
       </div>
     </div>

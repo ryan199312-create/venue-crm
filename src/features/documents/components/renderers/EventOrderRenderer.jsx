@@ -21,8 +21,9 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
 
   const COPIES = [
     { name: '行政存檔 (Manager Copy)', type: 'STD', showBilling: false, showOps: true, showAllocation: false, color: 'bg-slate-800' },
-    { name: '會計帳務單 (Finance Copy)', type: 'FIN', showBilling: true, showOps: false, showAllocation: true, color: 'bg-emerald-700' },
-    { name: '樓面工作單 (Banquet Copy)', type: 'BQT', showBilling: false, showOps: true, showAllocation: false, color: 'bg-indigo-600' }
+    { name: '會計帳務單 (Finance Copy)', type: 'FIN', showBilling: true, showOps: false, showAllocation: true, color: 'bg-slate-600' },
+    { name: '樓面工作單 (Staff Copy)', type: 'BQT', showBilling: false, showOps: true, showAllocation: false, color: 'bg-[var(--brand-primary)]' },
+    { name: '場地平面圖 (Floor Plan)', type: 'FP', showBilling: false, showOps: false, showAllocation: false, color: 'bg-slate-500' }
   ];
 
   // Unified Allocation Logic
@@ -158,15 +159,20 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
         <React.Fragment key={idx}>
           {idx > 0 && <div className="page-break"></div>}
           <div className="print-page">
-            {copy.type === 'BQT' ? (
+            {copy.type === 'FP' ? (
+              <div className="p-[10mm] print:p-0">
+                <FloorplanAppendix data={data} appSettings={appSettings} isStandalone={true} />
+              </div>
+            ) : copy.type === 'BQT' ? (
               <div className="relative p-[10mm] print:p-0">
                 <DocumentHeader data={data} typeEn="Event Order" typeZh={copy.name} appSettings={appSettings} />
+
 
                 <div className="grid grid-cols-4 gap-3 mb-4 text-center">
                   <div className="bg-slate-100 p-2 rounded border-l-4 border-slate-800"><span className="block text-[10px] font-bold text-slate-500 uppercase">Tables (席數)</span><span className="block text-3xl font-black">{data.tableCount}</span></div>
                   <div className="bg-slate-100 p-2 rounded border-l-4 border-slate-600"><span className="block text-[10px] font-bold text-slate-500 uppercase">Guests (人數)</span><span className="block text-3xl font-black">{data.guestCount}</span></div>
-                  <div className="bg-slate-100 p-2 rounded border-l-4 border-indigo-600"><span className="block text-[10px] font-bold text-slate-500 uppercase">Style (上菜)</span><span className="block text-xl font-bold mt-1">{data.servingStyle || 'Standard'}</span></div>
-                  <div className="bg-slate-100 p-2 rounded border-l-4 border-amber-600"><span className="block text-[10px] font-bold text-slate-500 uppercase">Serving (起菜)</span><span className="block text-xl font-bold mt-1">{data.servingTime || 'TBC'}</span></div>
+                  <div className="bg-slate-100 p-2 rounded border-l-4 border-[var(--brand-primary)]"><span className="block text-[10px] font-bold text-slate-500 uppercase">Style (上菜)</span><span className="block text-xl font-bold mt-1">{data.servingStyle || 'Standard'}</span></div>
+                  <div className="bg-slate-100 p-2 rounded border-l-4 border-[var(--brand-accent)]"><span className="block text-[10px] font-bold text-slate-500 uppercase">Serving (起菜)</span><span className="block text-xl font-bold mt-1">{data.servingTime || 'TBC'}</span></div>
                 </div>
 
                 {( (data.specialMenuReq && shouldShowField(data, printMode, 'specialMenuReq', false, true)) || (data.allergies && shouldShowField(data, printMode, 'allergies', false, true)) ) && (
@@ -195,10 +201,10 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                         ))}
                       </div>
                     </div>
-                    <div className="bg-blue-50 p-4 border-t border-blue-100">
+                    <div className="bg-[var(--brand-primary)]/5 p-4 border-t border-[var(--brand-primary)]/10">
                       <div className="flex items-start gap-3">
-                        <Coffee size={20} className="text-blue-600 mt-0.5" />
-                        <div><span className="block text-xs font-bold text-blue-800 uppercase">Beverage Package</span><span className="block text-base font-bold text-slate-800">{data.drinksPackage || 'None'}</span></div>
+                        <Coffee size={20} className="text-[var(--brand-primary)] mt-0.5" />
+                        <div><span className="block text-xs font-bold text-[var(--brand-primary)] uppercase">Beverage Package</span><span className="block text-base font-bold text-slate-800">{data.drinksPackage || 'None'}</span></div>
                       </div>
                     </div>
                   </div>
@@ -217,8 +223,8 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                       <div className="p-3 space-y-3">
                         {data.busInfo && data.busInfo.enabled ? (
                           <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-indigo-50 p-2 rounded border border-indigo-100"><span className="block font-bold text-indigo-800 mb-1">Arrival (接載)</span>{data.busInfo.arrivals && data.busInfo.arrivals.length > 0 ? data.busInfo.arrivals.map((b, i) => (<div key={i} className="font-mono font-bold">{b.time} <span className="font-sans font-normal text-[10px]">({b.location})</span></div>)) : <span className="text-slate-400">-</span>}</div>
-                            <div className="bg-indigo-50 p-2 rounded border border-indigo-100"><span className="block font-bold text-indigo-800 mb-1">Departure (散席)</span>{data.busInfo.departures && data.busInfo.departures.length > 0 ? data.busInfo.departures.map((b, i) => (<div key={i} className="font-mono font-bold">{b.time} <span className="font-sans font-normal text-[10px]">({b.location})</span></div>)) : <span className="text-slate-400">-</span>}</div>
+                            <div className="bg-[var(--brand-primary)]/5 p-2 rounded border border-[var(--brand-primary)]/10"><span className="block font-bold text-[var(--brand-primary)] mb-1">Arrival (接載)</span>{data.busInfo.arrivals && data.busInfo.arrivals.length > 0 ? data.busInfo.arrivals.map((b, i) => (<div key={i} className="font-mono font-bold">{b.time} <span className="font-sans font-normal text-[10px]">({b.location})</span></div>)) : <span className="text-slate-400">-</span>}</div>
+                            <div className="bg-[var(--brand-primary)]/5 p-2 rounded border border-[var(--brand-primary)]/10"><span className="block font-bold text-[var(--brand-primary)] mb-1">Departure (散席)</span>{data.busInfo.departures && data.busInfo.departures.length > 0 ? data.busInfo.departures.map((b, i) => (<div key={i} className="font-mono font-bold">{b.time} <span className="font-sans font-normal text-[10px]">({b.location})</span></div>)) : <span className="text-slate-400">-</span>}</div>
                           </div>
                         ) : <div className="text-xs text-slate-400 text-center italic">No Bus Arrangement</div>}
                         <div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{(data.parkingInfo?.ticketQty) || 0} 張 x {(data.parkingInfo?.ticketHours) || 0} 小時</span></div>
@@ -237,13 +243,13 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                           </div>
                         </div>
                         {data.venueDecor && shouldShowField(data, printMode, 'venueDecor', false, true) && <div className="col-span-2 mt-2 p-2 bg-slate-50 rounded italic text-[10px] border border-slate-100"><span className="font-bold not-italic">佈置備註:</span> {data.venueDecor}</div>}
-                        {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-red-500 font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
+                        {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-[var(--brand-accent)] font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
                       </div>
                     </div>
                     {data.generalRemarks && shouldShowField(data, printMode, 'generalRemarks', true, true) && (
-                      <div className="border-2 border-amber-200 bg-amber-50 rounded-xl overflow-hidden">
-                        <div className="bg-amber-100 px-3 py-1.5 font-bold text-sm text-amber-800 uppercase border-b border-amber-200">通用備註 (General Remarks)</div>
-                        <div className="p-3 text-xs font-bold text-amber-900 whitespace-pre-wrap">{data.generalRemarks}</div>
+                      <div className="border-2 border-[var(--brand-accent)]/30 bg-[var(--brand-accent)]/5 rounded-xl overflow-hidden">
+                        <div className="bg-[var(--brand-accent)]/10 px-3 py-1.5 font-bold text-sm text-[var(--brand-accent)] uppercase border-b border-[var(--brand-accent)]/20">通用備註 (General Remarks)</div>
+                        <div className="p-3 text-xs font-bold text-[var(--brand-accent)] whitespace-pre-wrap">{data.generalRemarks}</div>
                       </div>
                     )}
                   </div>
@@ -271,9 +277,9 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                           <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 rounded text-slate-600">{data.servingStyle}</span>
                         </div>
                         <div className="p-3">
-                          <div className="bg-blue-50 border border-blue-100 rounded p-2 mb-3 text-xs flex gap-2">
-                            <Coffee size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                            <div><span className="font-bold text-blue-700 block text-[10px] uppercase">酒水套餐</span><span className="font-medium text-slate-700">{data.drinksPackage || '標準 / 無'}</span></div>
+                          <div className="bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/10 rounded p-2 mb-3 text-xs flex gap-2">
+                            <Coffee size={14} className="text-[var(--brand-primary)] mt-0.5 flex-shrink-0" />
+                            <div><span className="font-bold text-[var(--brand-primary)] block text-[10px] uppercase">酒水套餐</span><span className="font-medium text-slate-700">{data.drinksPackage || '標準 / 無'}</span></div>
                           </div>
                           <div className="space-y-3">
                             {data.menus && data.menus.length > 0 ? (
@@ -322,18 +328,18 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                         <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-xs">物流與泊車</div>
                         <div className="p-3 text-xs space-y-3">
                           {data.busInfo && data.busInfo.enabled && (
-                            <div className="bg-indigo-50 border border-indigo-100 rounded p-2 text-[10px] mb-2">
-                              <span className="font-bold text-indigo-700 block mb-1 border-b border-indigo-200 pb-0.5">🚌 旅遊巴安排</span>
+                            <div className="bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/10 rounded p-2 text-[10px] mb-2">
+                              <span className="font-bold text-[var(--brand-primary)] block mb-1 border-b border-[var(--brand-primary)]/20 pb-0.5">🚌 旅遊巴安排</span>
                               <div className="grid grid-cols-2 gap-3">
-                                <div><span className="font-bold text-indigo-600 block text-[9px] mb-0.5">接載:</span>{(!data.busInfo.arrivals || data.busInfo.arrivals.length === 0) ? <span className="text-slate-400 italic text-[9px]">-</span> : data.busInfo.arrivals.map((bus, i) => (<div key={i} className="mb-1 leading-tight"><div className="flex gap-1 items-baseline"><span className="font-mono font-bold text-black">{bus.time}</span>{bus.plate && <span className="text-slate-500 text-[9px]">({bus.plate})</span>}</div><div className="text-slate-700 break-words">{bus.location || '---'}</div></div>))}</div>
-                                <div><span className="font-bold text-indigo-600 block text-[9px] mb-0.5">散席:</span>{(!data.busInfo.departures || data.busInfo.departures.length === 0) ? <span className="text-slate-400 italic text-[9px]">-</span> : data.busInfo.departures.map((bus, i) => (<div key={i} className="mb-1 leading-tight"><div className="flex gap-1 items-baseline"><span className="font-mono font-bold text-black">{bus.time}</span>{bus.plate && <span className="text-slate-500 text-[9px]">({bus.plate})</span>}</div><div className="text-slate-700 break-words">{bus.location || '---'}</div></div>))}</div>
+                                <div><span className="font-bold text-[var(--brand-primary)] block text-[9px] mb-0.5">接載:</span>{(!data.busInfo.arrivals || data.busInfo.arrivals.length === 0) ? <span className="text-slate-400 italic text-[9px]">-</span> : data.busInfo.arrivals.map((bus, i) => (<div key={i} className="mb-1 leading-tight"><div className="flex gap-1 items-baseline"><span className="font-mono font-bold text-black">{bus.time}</span>{bus.plate && <span className="text-slate-500 text-[9px]">({bus.plate})</span>}</div><div className="text-slate-700 break-words">{bus.location || '---'}</div></div>))}</div>
+                                <div><span className="font-bold text-[var(--brand-primary)] block text-[9px] mb-0.5">散席:</span>{(!data.busInfo.departures || data.busInfo.departures.length === 0) ? <span className="text-slate-400 italic text-[9px]">-</span> : data.busInfo.departures.map((bus, i) => (<div key={i} className="mb-1 leading-tight"><div className="flex gap-1 items-baseline"><span className="font-mono font-bold text-black">{bus.time}</span>{bus.plate && <span className="text-slate-500 text-[9px]">({bus.plate})</span>}</div><div className="text-slate-700 break-words">{bus.location || '---'}</div></div>))}</div>
                               </div>
                             </div>
                           )}
                           <div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{(data.parkingInfo?.ticketQty) || 0} 張 x {(data.parkingInfo?.ticketHours) || 0} 小時</span></div>
                         </div>
                       </div>
-                      {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-red-500 font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
+                      {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-[var(--brand-accent)] font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
                     </div>
                   </div>
                 )}
@@ -413,7 +419,6 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
           </div>
         </div>
       )}
-      <FloorplanAppendix data={data} appSettings={appSettings} />
     </div>
   );
 };

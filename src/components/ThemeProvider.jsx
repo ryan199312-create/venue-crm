@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -10,19 +10,15 @@ import { useAuth } from '../context/AuthContext';
 export const ThemeProvider = ({ children }) => {
   const { appSettings } = useAuth();
 
-  const brandStyles = useMemo(() => {
-    const branding = appSettings?.branding || {};
-    
-    return {
-      '--brand-primary': branding.primaryColor || '#4F46E5',
-      '--brand-secondary': branding.secondaryColor || '#1e293b',
-      '--brand-accent': branding.accentColor || '#8b5cf6',
-    };
-  }, [appSettings?.branding]);
-
   useEffect(() => {
     const branding = appSettings?.branding || {};
     
+    // Apply Global Brand Colors
+    const root = document.documentElement;
+    root.style.setProperty('--brand-primary', branding.primaryColor || '#4F46E5');
+    root.style.setProperty('--brand-secondary', branding.secondaryColor || '#1e293b');
+    root.style.setProperty('--brand-accent', branding.accentColor || '#8b5cf6');
+
     // Update Document Title
     if (branding.portalTitle) {
       document.title = branding.portalTitle;
@@ -40,10 +36,10 @@ export const ThemeProvider = ({ children }) => {
       }
       link.href = branding.faviconUrl;
     }
-  }, [appSettings?.branding?.portalTitle, appSettings?.branding?.faviconUrl]);
+  }, [appSettings?.branding]);
 
   return (
-    <div style={brandStyles} className="min-h-screen">
+    <div className="min-h-screen">
       {children}
     </div>
   );

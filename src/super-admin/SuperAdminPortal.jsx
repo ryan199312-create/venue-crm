@@ -4,7 +4,7 @@ import { Card, Modal } from '../components/ui';
 import { db, functions } from '../core/firebase';
 import { collection, doc, setDoc, onSnapshot, serverTimestamp, getDoc, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { Shield, Users, Building2, LayoutDashboard, Globe, Settings, LogOut, Plus, Search, Loader2, ChevronRight, ExternalLink, Clock } from 'lucide-react';
+import { Shield, Users, Building2, LayoutDashboard, Globe, Settings, LogOut, Plus, Search, Loader2, ChevronRight, ExternalLink, Clock, AlertTriangle } from 'lucide-react';
 import AdminLogin from '../admin/AdminLogin';
 import DataMigrationTool from './DataMigrationTool';
 

@@ -75,9 +75,17 @@ const SuperAdminPortal = () => {
   }, [activeTab, tenants]);
 
   const handleJump = (tid) => {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
     const port = window.location.port ? `:${window.location.port}` : '';
-    const newUrl = `${window.location.protocol}//${tid}.localhost${port}`;
-    window.location.href = newUrl;
+    
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+      window.location.href = `${protocol}//${tid}.localhost${port}/admin`;
+    } else {
+      // Production (Vercel or Custom Domain)
+      // Note: This will result in [tenant].[project].vercel.app
+      window.location.href = `${protocol}//${tid}.${hostname}${port}/admin`;
+    }
   };
 
   const handleCreateTenant = async (e) => {

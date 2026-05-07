@@ -53,21 +53,24 @@ export default function App() {
       <GlobalErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {rootDomain ? (
-              <>
-                {/* SUPER ADMIN CONSOLE (Root Domain) */}
-                <Route path="/super-admin" element={<SuperAdminPortal />} />
-                <Route path="*" element={<Navigate to="/super-admin" replace />} />
-              </>
-            ) : (
-              <>
-                {/* TENANT ADMIN & PORTAL (Subdomain) */}
-                <Route path="/admin" element={<AdminLayout />} />
-                <Route path="/portal" element={<ClientPortal />} />
-                <Route path="/portal/:eventId" element={<ClientPortal />} />
-                <Route path="*" element={<Navigate to="/admin" replace />} />
-              </>
-            )}
+            {/* SUPER ADMIN CONSOLE - Always available at this path */}
+            <Route path="/super-admin" element={<SuperAdminPortal />} />
+
+            {/* TENANT ADMIN & PORTAL */}
+            {/* These routes now work on both Subdomains AND Root Domain (defaulting to my-venue-crm) */}
+            <Route path="/admin" element={<AdminLayout />} />
+            <Route path="/portal" element={<ClientPortal />} />
+            <Route path="/portal/:eventId" element={<ClientPortal />} />
+
+            {/* Fallback Logic */}
+            <Route 
+              path="*" 
+              element={
+                rootDomain 
+                  ? <Navigate to="/admin" replace /> 
+                  : <Navigate to="/admin" replace />
+              } 
+            />
           </Routes>
         </Suspense>
       </GlobalErrorBoundary>

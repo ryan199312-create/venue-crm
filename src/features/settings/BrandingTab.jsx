@@ -24,8 +24,14 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
     addToast("Branding settings saved successfully!", "success");
   };
 
+  const brandStyles = {
+    '--brand-primary': branding.primaryColor,
+    '--brand-secondary': branding.secondaryColor,
+    '--brand-accent': branding.accentColor,
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in">
+    <div className="space-y-6 animate-in fade-in" style={brandStyles}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Colors Selection */}
         <Card className="p-6 border-l-4 border-l-brand-primary">

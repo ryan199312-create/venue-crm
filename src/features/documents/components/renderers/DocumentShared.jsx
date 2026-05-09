@@ -36,9 +36,15 @@ export const shouldShowField = (data, printMode, field, defaultClient, defaultIn
 
 export const onlyChinese = (text) => {
   if (!text) return '';
-  // Legacy behavior: Keep lines that have Chinese characters OR are just numbers/punctuation/whitespace (common in menus)
   return text.split('\n').filter(line => 
     /[\u4e00-\u9fa5]/.test(line) || (line.trim().length > 0 && /^[0-9\s.,()\-:：]*$/.test(line.trim()))
+  ).join('\n');
+};
+
+export const onlyEnglish = (text) => {
+  if (!text) return '';
+  return text.split('\n').filter(line => 
+    !/[\u4e00-\u9fa5]/.test(line)
   ).join('\n');
 };
 
@@ -298,7 +304,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           <tr key={`m-${i}`} className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
-              <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">
+              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">
                 {m.content}
               </p>
             </td>
@@ -321,7 +327,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Beverage Package' : '酒水套餐'}</p>
-              <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">{billing.drinks.label}</p>
+              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">{billing.drinks.label}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.drinks.price)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">{billing.drinks.qty}</td>
@@ -332,7 +338,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Setup & Reception Package' : '舞台與接待設備套票'}</p>
-              <p className="text-[10px] text-slate-500 leading-snug">{setupStr}</p>
+              <p className="text-xs text-slate-700 leading-snug">{setupStr}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.setupPackagePrice)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">1</td>
@@ -343,7 +349,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'AV Equipment Package' : '影音設備套票'}</p>
-              <p className="text-[10px] text-slate-500 leading-snug">{avStr}</p>
+              <p className="text-xs text-slate-700 leading-snug">{avStr}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.avPackagePrice)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">1</td>
@@ -354,7 +360,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Venue Decoration Package' : '場地佈置套票'}</p>
-              <p className="text-[10px] text-slate-500 leading-snug">{decorStr}</p>
+              <p className="text-xs text-slate-700 leading-snug">{decorStr}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.decorPackagePrice)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">1</td>

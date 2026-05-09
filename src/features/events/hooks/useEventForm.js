@@ -109,9 +109,10 @@ export const useEventForm = (formData, setFormData, appSettings, editingEvent, a
 STRICT RULES: 
 1. Culinary Accuracy: Chinese banquet dishes often use poetic or auspicious prefixes (e.g., '鴻運', '喜慶', '翡翠', '富貴'). Focus the translation ONLY on the actual ingredients and preparation method (e.g., translate '鴻運金豬全體' as 'Whole Roasted Suckling Pig'). Avoid literal translations of idioms or poetic adjectives.
 2. Brand Names: ALWAYS translate '璟瓏軒' as 'King Lung Heen' and '璟瓏' as 'King Lung'. 
-3. Format: Output the original Chinese line, followed immediately by the English translation on the next line. 
-4. Spacing: Remove ALL empty lines between items. 
-5. Punctuation: Do NOT add full stops. Do not add bullet points. Use Title Case for English translations.`;
+3. Soft Drinks: ALWAYS translate '汽水' as 'Soft Drinks'.
+4. Format: Output the original Chinese line, followed immediately by the English translation on the next line. 
+5. Spacing: Remove ALL empty lines between items. 
+6. Punctuation: Do NOT add full stops. Do not add bullet points. Use Title Case for English translations.`;
       let translatedText = await generate(content, systemPrompt);
       if (!translatedText) throw new Error("Translation API Failed");
       handleMenuChange(menuId, 'content', translatedText.replace(/\n\s*\n/g, '\n').trim());
@@ -130,9 +131,10 @@ STRICT RULES:
       const systemPrompt = `You are a professional Cantonese banquet translator. Task: Translate the beverage list from Chinese to English line by line. 
 STRICT RULES: 
 1. Culinary Accuracy: Focus on the actual beverage names. Avoid literal translations of auspicious prefixes.
-2. Format: Output original Chinese line, followed immediately by English translation on the next line. 
-3. Spacing: Remove ALL empty lines. 
-4. Punctuation: Do NOT add full stops. Use Title Case for English translations.`;
+2. Soft Drinks: ALWAYS translate '汽水' as 'Soft Drinks'.
+3. Format: Output original Chinese line, followed immediately by English translation on the next line. 
+4. Spacing: Remove ALL empty lines. 
+5. Punctuation: Do NOT add full stops. Use Title Case for English translations.`;
       let translatedText = await generate(formData.drinksPackage, systemPrompt);
       if (!translatedText) throw new Error("Translation API Failed");
       setFormData(prev => ({ ...prev, drinksPackage: translatedText.replace(/\n\s*\n/g, '\n').trim() }));

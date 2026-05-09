@@ -14,13 +14,24 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const [stagedSignature, setStagedSignature] = useState(null);
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [isSubmittingSignature, setIsSubmittingSignature] = useState(false);
+  const [menuLangSelection, setMenuLangSelection] = useState(null);
   
   const { generatePdf } = usePdfGenerator();
 
-  const openPreview = (docId, menuId = null) => {
+  const openPreview = (docId, menuId = null, language = null) => {
+    if (docId === 'MENU_CONFIRM' && menuId && !language) {
+      setMenuLangSelection({ docId, menuId });
+      return;
+    }
+    
     setStagedSignature(null);
-    setPreviewDoc(docId);
+    if (language) {
+      setPreviewDoc(`MENU_CONFIRM_${language}_${menuId}`);
+    } else {
+      setPreviewDoc(docId);
+    }
     setSelectedMenuId(menuId);
+    setMenuLangSelection(null);
   };
 
   const closePreview = () => {
@@ -201,6 +212,71 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       )}
       
       {externalDocs.map(renderDocRow)}
+
+      {/* Language Selection Modal */}
+      {menuLangSelection && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-white/20">
+            <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Utensils size={18} className="text-amber-400" />
+                <span className="text-white font-bold text-sm uppercase tracking-wider">選擇列印語言 (Language)</span>
+              </div>
+              <button onClick={() => setMenuLangSelection(null)} className="text-slate-400 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-3">
+              <button 
+                onClick={() => openPreview('MENU_CONFIRM', menuLangSelection.menuId, 'CHINESE')}
+                className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-100 hover:border-[var(--brand-primary)] hover:bg-slate-50 transition-all group"
+              >
+                <div className="text-left">
+                  <p className="font-bold text-slate-800">中文 (Chinese)</p>
+                  <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">Chinese characters only</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[var(--brand-primary)] group-hover:text-white transition-colors">
+                  <CheckCircle size={16} />
+                </div>
+              </button>
+
+              <button 
+                onClick={() => openPreview('MENU_CONFIRM', menuLangSelection.menuId, 'ENGLISH')}
+                className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-100 hover:border-[var(--brand-primary)] hover:bg-slate-50 transition-all group"
+              >
+                <div className="text-left">
+                  <p className="font-bold text-slate-800">英文 (English)</p>
+                  <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">English translation only</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[var(--brand-primary)] group-hover:text-white transition-colors">
+                  <CheckCircle size={16} />
+                </div>
+              </button>
+
+              <button 
+                onClick={() => openPreview('MENU_CONFIRM', menuLangSelection.menuId, 'BILINGUAL')}
+                className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-[var(--brand-primary)] bg-indigo-50/30 hover:bg-indigo-50 transition-all group"
+              >
+                <div className="text-left">
+                  <p className="font-bold text-slate-800">中英對照 (Bilingual)</p>
+                  <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">Both Chinese & English</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white transition-colors shadow-md">
+                  <CheckCircle size={16} />
+                </div>
+              </button>
+            </div>
+            
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+               <button onClick={() => setMenuLangSelection(null)} className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
+                 取消 (Cancel)
+               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Document Preview & Interactive Sign Modal */}
       {previewDoc && createPortal(

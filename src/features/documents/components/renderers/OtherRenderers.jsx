@@ -5,6 +5,7 @@ import {
   SignatureBox,
   getSignatures,
   onlyChinese,
+  onlyEnglish,
   formatMoney,
   formatDateEn,
   formatDateWithDay,
@@ -165,13 +166,17 @@ export const InternalNotesRenderer = ({ data, appSettings }) => {
   );
 };
 
-export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings }) => {
+export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, language = 'BILINGUAL' }) => {
   if (!data) return null;
   const menu = data.menus && data.menus.find(m => String(m.id) === String(menuId)) ? data.menus.find(m => String(m.id) === String(menuId)) : (data.menus?.[0] || null);
   if (!menu) return <div className="p-10 text-center text-red-500 font-bold">Error: Menu Data Not Found</div>;
 
   const docType = `MENU_CONFIRM_${menu.id}`;
   const { clientSig, adminSig } = getSignatures(data, docType);
+
+  let displayContent = menu.content;
+  if (language === 'CHINESE') displayContent = onlyChinese(menu.content);
+  if (language === 'ENGLISH') displayContent = onlyEnglish(menu.content);
 
   return (
     <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative">
@@ -184,12 +189,14 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings }) => {
         <div className="w-full max-w-lg">
            <div className="text-center border-b-2 border-slate-200 pb-4 mb-8">
               <h3 className="text-2xl font-black text-slate-800 tracking-tight">{menu.title || 'Wedding Menu'}</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Selected Course Arrangement</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">
+                {language === 'CHINESE' ? '已選擇菜譜內容' : (language === 'ENGLISH' ? 'Selected Course Arrangement' : 'Selected Course Arrangement (已選擇菜譜內容)')}
+              </p>
            </div>
            
            <div className="space-y-6">
               <p className="text-lg font-bold text-slate-800 leading-loose text-center whitespace-pre-wrap font-serif">
-                {onlyChinese(menu.content)}
+                {displayContent}
               </p>
            </div>
         </div>

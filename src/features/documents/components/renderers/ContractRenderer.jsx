@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { 
   DocumentHeader, 
+  BrandedFooter,
   ClientInfoGrid, 
   ItemTable, 
   SignatureBox, 
@@ -67,9 +68,18 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
   };
 
   return (
-    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative">
-      <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
-      
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative">
+      <style>{`
+        @media print { 
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+            background: white;
+          }
+          .page-break { page-break-after: always !important; break-after: page !important; display: block; height: 0; width: 100%; clear: both; }
+        }
+      `}</style>
+
       <DocumentHeader data={data} typeEn="Service Agreement" typeZh={isCn ? "服務合約" : "合約"} appSettings={appSettings} />
       
       <div className="bg-slate-50 border border-slate-200 px-8 py-10 rounded-[2rem] mb-8 text-center relative overflow-hidden">
@@ -146,8 +156,6 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
         />
       </div>
 
-      <div className="page-break"></div>
-      
       <div className="page-break"></div>
       
       {/* PAGE 2: TERMS & CONDITIONS */}

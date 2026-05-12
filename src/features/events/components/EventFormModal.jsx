@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  FileText, CreditCard, Monitor, Truck, PenTool, Printer, Sparkles, ChevronUp, Send, MessageCircle, Mail, Utensils
+  FileText, CreditCard, Monitor, Truck, PenTool, Printer, Sparkles, ChevronUp, Send, MessageCircle, Mail, Utensils, Info
 } from 'lucide-react';
 
 import { Modal, VersionPreviewModal } from '../../../components/ui';
@@ -21,9 +21,7 @@ import { getScopedSettings } from '../../../services/helpers';
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings, users,
   onSubmit, onSaveSignature, onUploadProof, onMultiImageUpload, onRemoveProof, addToast,
-  onOpenAi, onPrintEO, onPrintBriefing, onPrintQuotation, onPrintInvoice, onPrintReceipt, onPrintInternalNotes,
-  onPrintContractEN, onPrintContractCN, onOpenMenuPrint, onPrint,
-  onSendSleekFlow, onSendEmail, events
+  onOpenAi, onPrint, events
 }) {
   const { hasPermission, userProfile } = useAuth();
   const { generate } = useAI();
@@ -224,21 +222,35 @@ export default function EventFormModal({
     });
   };
 
-  const DocumentVisibilityToggles = ({ field, defaultClient, defaultInternal }) => {
+  const DocumentVisibilityToggles = ({ field, defaultClient, defaultInternal, clientDocs, internalDocs }) => {
     const clientKey = `${field}ShowClient`;
     const internalKey = `${field}ShowInternal`;
     const showClient = formData[clientKey] !== undefined ? formData[clientKey] : defaultClient;
     const showInternal = formData[internalKey] !== undefined ? formData[internalKey] : defaultInternal;
 
+    const defaultClientDocs = "報價單、合約、發票、收據、附加協議";
+    const defaultInternalDocs = "宴會通知單 (EO)";
+
+    const cDocs = clientDocs || defaultClientDocs;
+    const iDocs = internalDocs || defaultInternalDocs;
+
     return (
       <div className="flex items-center gap-4 mt-2 mb-3 ml-1">
-        <label className="flex items-center text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none">
+        <label 
+          className="flex items-center text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none group/tooltip"
+          title={`此項目將顯示在以下客戶文件：\n${cDocs}`}
+        >
           <input type="checkbox" checked={showClient} onChange={e => setFormData(prev => ({ ...prev, [clientKey]: e.target.checked }))} className="mr-1.5 rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
-          顯示於客戶文件 (Client Docs)
+          <span>顯示於客戶文件 (Client Docs)</span>
+          <Info size={12} className="ml-1 opacity-40 group-hover/tooltip:opacity-100 transition-opacity" />
         </label>
-        <label className="flex items-center text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none">
+        <label 
+          className="flex items-center text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none group/tooltip"
+          title={`此項目將顯示在以下內部文件：\n${iDocs}`}
+        >
           <input type="checkbox" checked={showInternal} onChange={e => setFormData(prev => ({ ...prev, [internalKey]: e.target.checked }))} className="mr-1.5 rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
-          顯示於內部文件 (Internal Docs)
+          <span>顯示於內部文件 (Internal Docs)</span>
+          <Info size={12} className="ml-1 opacity-40 group-hover/tooltip:opacity-100 transition-opacity" />
         </label>
       </div>
     );
@@ -437,6 +449,7 @@ export default function EventFormModal({
               formData={formData} 
               setFormData={setFormData} 
               handleInputChange={handleInputChange}
+              DocumentVisibilityToggles={DocumentVisibilityToggles}
             />
           )}
 
@@ -483,6 +496,7 @@ export default function EventFormModal({
                         isClientPortal={false} 
                         onPrint={onPrint}
                         onSign={handleAdminSign}
+                        onUpdateData={setFormData}
                       />
                     </div>
                   </div>
@@ -490,55 +504,6 @@ export default function EventFormModal({
               </div>
             )}
 
-            {/* Send Menu */}
-            {editingEvent && (
-              <div className="relative">
-                {showSendMenu && <div className="fixed inset-0 z-40" onClick={() => setShowSendMenu(false)}></div>}
-                <button 
-                  type="button" 
-                  onClick={() => { setShowSendMenu(!showSendMenu); setShowDocManager(false); }}
-                  className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showSendMenu ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'}`}
-                >
-                  <Send size={16} />
-                  <span>發送文件 (Send)</span>
-                  <ChevronUp size={14} className={`transition-transform duration-200 ${showSendMenu ? 'rotate-180' : ''}`} />
-                </button>
-                {showSendMenu && (
-                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-slate-200 shadow-2xl rounded-xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">WhatsApp (SleekFlow API)</div>
-                    <button type="button" onClick={() => onSendSleekFlow(false, 'INVOICE')} className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors flex items-start group">
-                      <MessageCircle size={16} className="mr-3 text-emerald-600 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="block text-sm font-bold text-slate-700 group-hover:text-emerald-700">發送 Invoice (普通訊息)</span>
-                        <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">適合對話中手動發送，<br />需客戶在 24 小時內曾回覆。</span>
-                      </div>
-                    </button>
-                    <button type="button" onClick={() => onSendSleekFlow(true, 'CONTRACT')} className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-start group border-t border-slate-100 mb-1">
-                      <MessageCircle size={16} className="mr-3 text-slate-400 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="block text-sm font-bold text-slate-700">發送 Contract (HSM 範本)</span>
-                        <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">主動觸發官方範本，<br />不受 24 小時回覆視窗限制。</span>
-                      </div>
-                    </button>
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-t border-slate-100 mb-1 mt-1 bg-slate-50">電子郵件 (Email)</div>
-                    <button type="button" onClick={() => onSendEmail('QUOTATION')} className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start group">
-                      <Mail size={16} className="mr-3 text-blue-500 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="block text-sm font-bold text-slate-700 group-hover:text-blue-700">發送 Quotation (電子郵件)</span>
-                        <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">以系統郵件發送文件連結。</span>
-                      </div>
-                    </button>
-                    <button type="button" onClick={() => onSendEmail('INVOICE')} className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start group border-t border-slate-100">
-                      <Mail size={16} className="mr-3 text-blue-500 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="block text-sm font-bold text-slate-700 group-hover:text-blue-700">發送 Invoice (電子郵件)</span>
-                        <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">以系統郵件發送文件連結。</span>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">

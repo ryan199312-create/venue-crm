@@ -6,7 +6,7 @@ import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { getScopedSettings } from '../services/helpers';
 import { getTenantId } from '../core/tenantResolver';
-import { Card, Badge } from '../components/ui';
+import { Card, Badge, TimeInput } from '../components/ui';
 const DocumentManager = React.lazy(() => import('../components/DocumentManager'));
 const FloorplanViewer = React.lazy(() => import('../components/FloorplanViewer'));
 
@@ -709,11 +709,17 @@ export default function ClientPortal() {
                          <button onClick={() => { if (idx === 0) return; const newR = [...editedRundown]; [newR[idx-1], newR[idx]] = [newR[idx], newR[idx-1]]; setEditedRundown(newR); }} disabled={idx===0} className="text-slate-400 hover:text-brand-primary disabled:opacity-30"><ChevronUp size={14}/></button>
                          <button onClick={() => { if (idx === editedRundown.length - 1) return; const newR = [...editedRundown]; [newR[idx+1], newR[idx]] = [newR[idx], newR[idx+1]]; setEditedRundown(newR); }} disabled={idx===editedRundown.length-1} className="text-slate-400 hover:text-brand-primary disabled:opacity-30"><ChevronDown size={14}/></button>
                       </div>
-                      <input value={item.time} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, time: e.target.value} : it))} className="w-16 p-2 border border-slate-200 rounded bg-white text-xs text-center font-mono focus:border-brand-primary outline-none" placeholder="18:00" />
-                      <input value={item.activity} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, activity: e.target.value} : it))} className="flex-1 p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none" placeholder="活動內容 (Activity)" />
+                      <div className="w-24">
+                       <TimeInput 
+                         name={`rundown_time_${idx}`}
+                         value={item.time} 
+                         onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, time: e.target.value} : it))} 
+                         inputClassName="h-9 py-1 px-3 text-center"
+                       />
+                      </div>
+                      <input value={item.activity} onChange={e => setEditedRundown(prev => prev.map((it, i) => i === idx ? {...it, activity: e.target.value} : it))} className="flex-1 p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none h-9" placeholder="活動內容 (Activity)" />
                       <button onClick={() => setEditedRundown(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 p-1"><X size={16}/></button>
-                   </div>
-                ))}
+                   </div>                ))}
                 
                 {showDishSelector && (
                   <div className="mt-4 p-3 bg-white border border-brand-primary/30 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2">

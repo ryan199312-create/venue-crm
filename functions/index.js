@@ -13,10 +13,13 @@ const crypto = require("crypto");
 
 // 1. INITIALIZE ADMIN SDK
 admin.initializeApp();
+const db = admin.firestore();
+db.settings({ ignoreUndefinedProperties: true });
 
 // 2. SET GLOBAL REGION
 setGlobalOptions({ 
-  region: "asia-east2"
+  region: "asia-east2",
+  cors: true
 });
 
 // Define Secrets
@@ -34,8 +37,7 @@ let cachedBrowser = null;
 // ==========================================
 exports.migrateTenantData = onCall({ 
   memory: "1GiB", 
-  timeoutSeconds: 300,
-  cors: true 
+  timeoutSeconds: 300
 }, async (request) => {
   if (!request.auth || request.auth.token.role !== 'super_admin') {
     throw new HttpsError('permission-denied', 'Only super admins can migrate data.');
@@ -71,33 +73,20 @@ exports.migrateTenantData = onCall({
 
 exports.deleteTenant = onCall({ 
   memory: "1GiB", 
-  timeoutSeconds: 300,
-  cors: true 
+  timeoutSeconds: 300
 }, async (request) => {
   if (!request.auth || request.auth.token.role !== 'super_admin') {
     throw new HttpsError('permission-denied', 'Only super admins can delete tenants.');
   }
-
   const { tenantId } = request.data;
   if (!tenantId) throw new HttpsError('invalid-argument', 'Tenant ID is required.');
-
   const db = admin.firestore();
-
   try {
-    console.log(`[DeleteTenant] Starting deletion for: ${tenantId}`);
-    
-    // 1. Delete the global tenant record
     await db.collection('tenants').doc(tenantId).delete();
-    console.log(`[DeleteTenant] Global record deleted`);
-
-    // 2. Recursively delete artifacts
     const artifactRef = db.collection('artifacts').doc(tenantId);
     await db.recursiveDelete(artifactRef);
-    console.log(`[DeleteTenant] Artifacts recursively deleted`);
-
     return { success: true };
   } catch (error) {
-    console.error(`[DeleteTenant] FATAL ERROR:`, error);
     throw new HttpsError('internal', error.message || 'Unknown deletion error');
   }
 });
@@ -105,7 +94,7 @@ exports.deleteTenant = onCall({
 // ==========================================
 // 2. SLEEKFLOW & PING
 // ==========================================
-exports.sendSleekFlow = onCall({ secrets: [sleekflowKey], cors: true }, async (request) => {
+exports.sendSleekFlow = onCall({ secrets: [sleekflowKey] }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "User must be logged in.");
     const { to, messageContent, pdfUrl, fileName, isTemplate, appId: requestAppId } = request.data;
     const API_KEY = sleekflowKey.value();
@@ -127,48 +116,173 @@ exports.sendSleekFlow = onCall({ secrets: [sleekflowKey], cors: true }, async (r
     } catch (error) { throw new HttpsError("internal", error.message); }
 });
 
-exports.ping = onCall({ cors: true }, () => ({ message: "Pong!" }));
+exports.ping = onCall(() => ({ message: "Pong!" }));
 
 // ==========================================
 // 3. PDF GENERATION SYSTEM
 // ==========================================
-exports.enqueuePdfJob = onCall({ cors: true }, async (request) => {
-    const { html, fileName, docType, jobId, appId: requestAppId } = request.data;
-    const db = admin.firestore();
-    const appId = requestAppId || APP_ID; 
-    await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId).set({ status: 'pending', html, fileName, docType, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-    const queue = getFunctions().taskQueue("generatePdfTask", "asia-east2");
-    await queue.enqueue({ jobId, appId }, { dispatchDeadlineSeconds: 60 * 5 });
-    return { jobId };
+exports.enqueuePdfJob = onRequest({ 
+  memory: "2GiB",
+  timeoutSeconds: 120,
+  invoker: "public"
+}, async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+
+    try {
+      const { htmlPath, fileName, docType, jobId, appId: requestAppId, orderId, eventName } = req.body.data || req.body;
+      const appId = requestAppId || APP_ID; 
+      
+      if (!jobId) return res.status(400).send("Missing jobId");
+      if (!htmlPath) return res.status(400).send("Missing htmlPath");
+
+      console.log(`[PDF] Processing synchronous job ${jobId} for tenant ${appId}.`);
+
+      const jobRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId);
+      
+      await jobRef.set({ 
+        status: 'processing', 
+        htmlPath, 
+        fileName: fileName || 'document.pdf', 
+        docType: docType || 'DOCUMENT', 
+        orderId: orderId || '', 
+        eventName: eventName || '', 
+        createdAt: admin.firestore.FieldValue.serverTimestamp() 
+      });
+
+      let page = null;
+      try {
+        // 1. Download HTML from Storage
+        const bucket = admin.storage().bucket();
+        const htmlFile = bucket.file(htmlPath);
+        const [htmlContent] = await htmlFile.download();
+        const htmlString = htmlContent.toString();
+
+        // 2. Launch Puppeteer
+        if (!cachedBrowser || !cachedBrowser.isConnected()) { 
+          cachedBrowser = await puppeteer.launch({ 
+            args: chromium.args, 
+            defaultViewport: chromium.defaultViewport, 
+            executablePath: await chromium.executablePath(), 
+            headless: chromium.headless, 
+            ignoreHTTPSErrors: true 
+          }); 
+        }
+        
+        page = await cachedBrowser.newPage();
+        await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
+        await page.setContent(htmlString, { waitUntil: "networkidle0", timeout: 60000 });
+        await page.evaluateHandle('document.fonts.ready');
+        
+        // 3. Generate PDF
+        const pdfBuffer = await page.pdf({ 
+          format: "A4", 
+          printBackground: true, 
+          preferCSSPageSize: false, 
+          displayHeaderFooter: true,
+          headerTemplate: '<span></span>',
+          footerTemplate: `
+            <style>
+              #footer { padding: 0 !important; margin: 0 !important; -webkit-print-color-adjust: exact; }
+            </style>
+            <div style="width: 100%; font-size: 10px; padding: 0 15mm; display: flex; justify-content: space-between; align-items: center; color: #1e293b; font-family: 'Helvetica', 'Arial', sans-serif; border-top: 0.5px solid #cbd5e1; padding-top: 3mm; font-weight: bold;">
+              <div style="text-transform: uppercase; letter-spacing: 0.02em;">
+                ORDER: ${orderId || ''} | ${eventName || ''}
+              </div>
+              <div style="color: #64748b;">PAGE <span class="pageNumber"></span> OF <span class="totalPages"></span></div>
+            </div>
+          `,
+          margin: { top: '10mm', bottom: '15mm', left: '10mm', right: '10mm' }
+        });
+
+        await page.close();
+
+        // 4. Save to Storage
+        const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : "document.pdf";
+        const uniquePath = `generated_pdfs/${Date.now()}_${safeFileName}`;
+        const pdfFile = bucket.file(uniquePath);
+        const token = crypto.randomUUID();
+        
+        await pdfFile.save(pdfBuffer, { 
+          metadata: { 
+            contentType: 'application/pdf', 
+            metadata: { firebaseStorageDownloadTokens: token } 
+          } 
+        });
+        
+        const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniquePath)}?alt=media&token=${token}`;
+        
+        // 5. Cleanup
+        await htmlFile.delete().catch(err => console.error("[PDF] Cleanup Error:", err));
+
+        await jobRef.update({ status: 'completed', url: publicUrl, htmlPath: admin.firestore.FieldValue.delete() });
+        
+        res.status(200).json({ data: { jobId, url: publicUrl } });
+
+      } catch (error) { 
+        if (page) await page.close().catch(() => {}); 
+        await jobRef.update({ status: 'error', error: error.message }); 
+        throw error; 
+      }
+
+    } catch (error) { 
+      console.error("[PDF] Enqueue/Generation Error:", error);
+      res.status(500).send(error.message);
+    }
 });
 
-exports.generatePdfTask = onTaskDispatched({ memory: "2GiB", timeoutSeconds: 120 }, async (request) => {
+exports.generatePdfTask = onTaskDispatched({ 
+  memory: "2GiB", 
+  timeoutSeconds: 300,
+  taskQueueName: "pdf-gen-queue" 
+}, async (request) => {
     const { jobId, appId: taskAppId } = request.data;
     const db = admin.firestore();
     const appId = taskAppId || APP_ID;
     const jobRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pdf_jobs').doc(jobId);
     const jobSnap = await jobRef.get();
     if (!jobSnap.exists) return;
-    const { html, fileName } = jobSnap.data();
+    const { htmlPath, fileName, docType, orderId, eventName } = jobSnap.data();
     await jobRef.update({ status: 'processing' });
     let page = null;
     try {
+      // Download HTML from Storage
+      const bucket = admin.storage().bucket();
+      const htmlFile = bucket.file(htmlPath);
+      const [htmlContent] = await htmlFile.download();
+      const htmlString = htmlContent.toString();
+
       if (!cachedBrowser || !cachedBrowser.isConnected()) { cachedBrowser = await puppeteer.launch({ args: chromium.args, defaultViewport: chromium.defaultViewport, executablePath: await chromium.executablePath(), headless: chromium.headless, ignoreHTTPSErrors: true }); }
       page = await cachedBrowser.newPage();
       await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 4 });
-      await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+      await page.setContent(htmlString, { waitUntil: "networkidle0", timeout: 60000 });
       await page.evaluateHandle('document.fonts.ready');
       
       const pdfBuffer = await page.pdf({ 
         format: "A4", 
         printBackground: true, 
-        preferCSSPageSize: false, // Force our margins for the footer to show correctly
+        preferCSSPageSize: false, 
         displayHeaderFooter: true,
-        headerTemplate: '<div></div>',
+        headerTemplate: '<span></span>',
         footerTemplate: `
-          <div style="width: 100%; font-size: 8px; padding: 0 10mm; display: flex; justify-content: space-between; color: #94a3b8; font-family: sans-serif; -webkit-print-color-adjust: exact;">
-            <div style="font-weight: bold;">${fileName.replace('.pdf', '').replace(/_/g, ' | ')}</div>
-            <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+          <style>
+            #footer { 
+              padding: 0 !important; 
+              margin: 0 !important; 
+              -webkit-print-color-adjust: exact;
+            }
+          </style>
+          <div style="width: 100%; font-size: 10px; padding: 0 15mm; display: flex; justify-content: space-between; align-items: center; color: #1e293b; font-family: 'Helvetica', 'Arial', sans-serif; border-top: 0.5px solid #cbd5e1; padding-top: 3mm; font-weight: bold;">
+            <div style="text-transform: uppercase; letter-spacing: 0.02em;">
+              ORDER: ${orderId || ''} | ${eventName || ''}
+            </div>
+            <div style="color: #64748b;">PAGE <span class="pageNumber"></span> OF <span class="totalPages"></span></div>
           </div>
         `,
         margin: {
@@ -179,22 +293,24 @@ exports.generatePdfTask = onTaskDispatched({ memory: "2GiB", timeoutSeconds: 120
         }
       });
       await page.close();
-      const bucket = admin.storage().bucket();
       const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : "document.pdf";
       const uniquePath = `generated_pdfs/${Date.now()}_${safeFileName}`;
       const file = bucket.file(uniquePath);
       const token = crypto.randomUUID();
       await file.save(pdfBuffer, { metadata: { contentType: 'application/pdf', metadata: { firebaseStorageDownloadTokens: token } } });
       const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniquePath)}?alt=media&token=${token}`;
-      await jobRef.update({ status: 'completed', url: publicUrl, html: admin.firestore.FieldValue.delete() });
+      
+      // Cleanup: Delete the temp HTML payload
+      await htmlFile.delete().catch(err => console.error("[PDF] Cleanup Error:", err));
+
+      await jobRef.update({ status: 'completed', url: publicUrl, htmlPath: admin.firestore.FieldValue.delete() });
     } catch (error) { if (page) await page.close().catch(() => {}); await jobRef.update({ status: 'error', error: error.message }); throw error; }
 });
 
 // ==========================================
 // 4. CLIENT PORTAL OPERATIONS (CRITICAL)
 // ==========================================
-
-exports.verifyClientAccess = onCall({ invoker: "public", cors: true }, async (request) => {
+exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
   const { eventId, phone, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID; 
   const db = admin.firestore();
@@ -217,7 +333,7 @@ exports.verifyClientAccess = onCall({ invoker: "public", cors: true }, async (re
   } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
-exports.uploadClientPaymentProof = onCall({ memory: "512MiB", cors: true }, async (request) => {
+exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) => {
   const { eventId, phone, fileName, fileBase64, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID; 
   const db = admin.firestore();
@@ -237,7 +353,7 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB", cors: true }, asyn
   } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
-exports.signClientContract = onCall({ invoker: "public", cors: true }, async (request) => {
+exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
     const { eventId, phone, signatureBase64, docType, appId: requestAppId } = request.data;
     const appId = requestAppId || APP_ID;
     const db = admin.firestore();
@@ -252,7 +368,7 @@ exports.signClientContract = onCall({ invoker: "public", cors: true }, async (re
     return { success: true };
 });
 
-exports.updateClientRundown = onCall({ invoker: "public", cors: true }, async (request) => {
+exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   const { eventId, phone, rundown, appId: requestAppId } = request.data;
   const db = admin.firestore();
   const appId = requestAppId || APP_ID;
@@ -263,7 +379,7 @@ exports.updateClientRundown = onCall({ invoker: "public", cors: true }, async (r
   return { success: true };
 });
 
-exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], invoker: "public", cors: true }, async (request) => {
+exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();
@@ -277,7 +393,9 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
 // ==========================================
 // 5. USER MANAGEMENT (RBAC)
 // ==========================================
-exports.inviteUser = onCall({ cors: true }, async (request) => {
+exports.inviteUser = onCall({ 
+  memory: "256MiB"
+}, async (request) => {
   const { email, displayName, role, accessibleVenues, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();
@@ -295,38 +413,23 @@ exports.inviteUser = onCall({ cors: true }, async (request) => {
   } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
-exports.updateUserRoleSecure = onCall({ cors: true }, async (request) => {
+exports.updateUserRoleSecure = onCall({ 
+  memory: "256MiB"
+}, async (request) => {
   const { uid, newRole, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();
-
-  // 🌟 Senior Security: Only allow promotion if:
-  // 1. Requester is Super Admin
-  // 2. Requester is already an Admin in this tenant
-  // 3. The tenant has NO admins (Bootstrap case)
   const requester = request.auth;
   if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
-
   const isSuperAdmin = requester.token.role === 'super_admin';
-
   if (!isSuperAdmin) {
-    // Check if requester is admin
     const requesterDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).get();
     const requesterRole = requesterDoc.data()?.role;
-    const isTenantAdmin = requesterRole === 'admin';
-
-    if (!isTenantAdmin) {
-       // Check for bootstrap case: are there ANY admins?
-       const adminsSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users')
-         .where('role', 'in', ['admin', 'super_admin']).limit(1).get();
-
-       if (!adminsSnap.empty) {
-         throw new HttpsError('permission-denied', 'Only admins can manage roles.');
-       }
-       // If snap is empty, we allow the promotion (Bootstrap)
+    if (requesterRole !== 'admin') {
+       const adminsSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').where('role', 'in', ['admin', 'super_admin']).limit(1).get();
+       if (!adminsSnap.empty) throw new HttpsError('permission-denied', 'Only admins can manage roles.');
     }
   }
-
   try {
     await admin.auth().setCustomUserClaims(uid, { role: newRole });
     await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(uid).set({ 
@@ -345,59 +448,12 @@ exports.callAiAssistant = onRequest({
   timeoutSeconds: 120,
   memory: "256MiB"
 }, async (req, res) => {
-  // 🌟 Bulletproof Manual CORS
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-
-  const { messages, response_format } = req.body.data || req.body; 
-  const API_KEY = deepseekKey.value();
-  
-  console.log(`[callAiAssistant] Calling DeepSeek API... (Key configured: ${!!API_KEY})`);
-  
-  if (!API_KEY) {
-    console.error("[callAiAssistant] ERROR: DeepSeek API Key is missing.");
-    return res.status(400).json({ error: { message: "DeepSeek API Key is not configured." } });
-  }
-
+  if (req.method === 'OPTIONS') { res.set('Access-Control-Allow-Methods', 'POST'); res.set('Access-Control-Allow-Headers', 'Content-Type'); res.status(204).send(''); return; }
+  const { prompt } = req.body;
+  if (!prompt) return res.status(400).send('Missing prompt');
   try {
-    const response = await axios.post("https://api.deepseek.com/chat/completions", {
-      model: "deepseek-chat",
-      messages: messages,
-      response_format: response_format || { type: "text" },
-      temperature: 0.7
-    }, {
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 110000
-    });
-
-    return res.json({ data: response.data });
-  } catch (error) {
-    console.error("DeepSeek API Error:", error.response?.data || error.message);
-    return res.status(500).json({ 
-      error: { 
-        message: error.response?.data?.error?.message || error.message,
-        details: error.response?.data 
-      } 
-    });
-  }
-});
-
-// Cleanup
-exports.cleanupOldPdfs = onSchedule("every day 00:00", async (event) => {
-  const bucket = admin.storage().bucket();
-  const [files] = await bucket.getFiles({ prefix: 'generated_pdfs/' });
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  await Promise.all(files.map(async (file) => {
-    const [metadata] = await file.getMetadata();
-    if (Date.now() - new Date(metadata.timeCreated).getTime() > THIRTY_DAYS_MS) await file.delete();
-  }));
+    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', { model: "deepseek-chat", messages: [{ role: "user", content: prompt }] }, { headers: { 'Authorization': `Bearer ${deepseekKey.value()}`, 'Content-Type': 'application/json' } });
+    res.status(200).json(response.data);
+  } catch (error) { res.status(500).send(error.message); }
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { FormTextArea } from '../../../components/ui';
 
-const InternalNotesTab = ({ formData, handleInputChange }) => {
+const InternalNotesTab = ({ formData, handleInputChange, DocumentVisibilityToggles }) => {
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -18,12 +18,30 @@ const InternalNotesTab = ({ formData, handleInputChange }) => {
         <FormTextArea
           label="內部記錄 (Only for staff)"
           name="remarks"
-          rows={12}
+          rows={6}
           value={formData.remarks}
           onChange={handleInputChange}
           placeholder="在此輸入僅限內部查看的執行細節、付款備註或其他敏感資訊..."
           className="bg-slate-50/50 border-slate-200"
         />
+
+        <div className="pt-4 border-t border-slate-100">
+          <FormTextArea
+            label="通用備註 (General Remarks - Shown on EO)"
+            name="generalRemarks"
+            rows={6}
+            value={formData.generalRemarks}
+            onChange={handleInputChange}
+            placeholder="在此輸入會顯示在確認單上的通用條款或提醒..."
+          />
+          <DocumentVisibilityToggles 
+            field="generalRemarks" 
+            defaultClient={true} 
+            defaultInternal={true} 
+            clientDocs="報價單、合約、附加協議"
+            internalDocs="宴會通知單 (EO)、管理備註"
+          />
+        </div>
       </div>
     </div>
   );

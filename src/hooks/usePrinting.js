@@ -5,7 +5,7 @@ export const usePrinting = () => {
   const [printMode, setPrintMode] = useState('EO');
   const [isPreparingPrint, setIsPreparingPrint] = useState(false);
 
-  const triggerLocalPrint = (data, mode) => {
+  const triggerLocalPrint = (data, mode = 'EO') => {
     setIsPreparingPrint(true);
     setPrintData(data);
     setPrintMode(mode);
@@ -16,13 +16,14 @@ export const usePrinting = () => {
       const handleAfterPrint = () => {
         setPrintData(null);
         setIsPreparingPrint(false);
+        
+        // Cleanup iframe
+        const existingFrame = document.getElementById('print-iframe');
+        if (existingFrame) existingFrame.remove();
+        
         window.removeEventListener('afterprint', handleAfterPrint);
       };
       window.addEventListener('afterprint', handleAfterPrint);
-
-      requestAnimationFrame(() => {
-        setTimeout(() => window.print(), 50);
-      });
     }
   }, [isPreparingPrint, printData]);
 

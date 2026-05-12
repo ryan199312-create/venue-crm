@@ -179,7 +179,13 @@ const VenueTab = ({
           </h4>
         </div>
         <textarea rows={2} placeholder="文字描述 (Description)..." className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none mb-1" value={formData.venueDecor || ''} onChange={(e) => setFormData(prev => ({ ...prev, venueDecor: e.target.value }))} />
-        <DocumentVisibilityToggles field="venueDecor" defaultClient={false} defaultInternal={true} />
+        <DocumentVisibilityToggles 
+          field="venueDecor" 
+          defaultClient={false} 
+          defaultInternal={true} 
+          clientDocs="合約、附加協議"
+          internalDocs="宴會通知單 (EO)"
+        />
         <div className="flex flex-wrap gap-3 mt-3">
           {(formData.venueDecorPhotos || []).map((url, idx) => (<div key={idx} className="relative w-24 h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group"><a href={url} target="_blank" rel="noreferrer" className="block w-full h-full cursor-zoom-in" title="點擊放大"><img src={url} alt="Venue Decor" className="w-full h-full object-cover" /></a><button type="button" onClick={() => setFormData(prev => ({ ...prev, venueDecorPhotos: prev.venueDecorPhotos.filter((_, i) => i !== idx) }))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"><X size={12} /></button></div>))}
           <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"><ImageIcon size={20} className="mb-1" /><span className="text-[10px] font-bold">新增照片 (多選)</span><input type="file" multiple className="hidden" accept="image/*" onChange={(e) => onMultiImageUpload(e.target.files, 'venueDecorPhotos')} /></label>

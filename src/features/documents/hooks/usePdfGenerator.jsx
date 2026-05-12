@@ -1,90 +1,148 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { functions, db } from '../../../core/firebase';
+import { functions, db, storage } from '../../../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { useAuth } from '../../../context/AuthContext';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import DocumentRouter from '../components/DocumentRouter';
-
-let cachedTailwindCss = null;
+import { useAuth } from '../../../context/AuthContext';
 
 export function usePdfGenerator() {
   const { appId } = useAuth();
   
-  const generatePdf = async ({ docType, data, appSettings, download = false, includeSignature = true }) => {
-    const pdfData = includeSignature ? data : { 
-      ...data, 
-      clientSignature: null, 
-      clientSignatureDate: null,
-      signatures: null 
-    };
+  const generatePdf = async ({ docType, data, appSettings, download = false }) => {
+    const jobId = Math.random().toString(36).substring(7);
+    const fileName = `${data.orderId}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
     
-    const htmlContent = renderToString(<DocumentRouter data={pdfData} printMode={docType} appSettings={appSettings} />);
-    
-    if (!cachedTailwindCss) {
-      try {
-        const cssResponse = await fetch(`${window.location.origin}/tailwind-print.css`);
-        if (cssResponse.ok) cachedTailwindCss = await cssResponse.text();
-      } catch (err) {
-        console.warn("Error fetching tailwind-print.css:", err);
-      }
-    }
+    // 1. Render HTML
+    const html = renderToString(
+      <DocumentRouter data={data} printMode={docType} appSettings={appSettings} />
+    );
 
-    const branding = appSettings?.branding || {};
-    const brandVars = `
+    // Extract Theme Variables for the PDF
+    const rootStyle = getComputedStyle(document.documentElement);
+    const themeVars = `
       :root {
-        --brand-primary: ${branding.primaryColor || '#4F46E5'};
-        --brand-secondary: ${branding.secondaryColor || '#1e293b'};
-        --brand-accent: ${branding.accentColor || '#8b5cf6'};
+        --brand-primary: ${rootStyle.getPropertyValue('--brand-primary') || '#4F46E5'};
+        --brand-secondary: ${rootStyle.getPropertyValue('--brand-secondary') || '#1e293b'};
+        --brand-accent: ${rootStyle.getPropertyValue('--brand-accent') || '#8b5cf6'};
       }
     `;
 
-    const fullHtml = `
+    // Add styles and Paged.js logic for the PDF (Matching Native Printer)
+    const styledHtml = `
       <!DOCTYPE html>
       <html>
         <head>
-          <meta charset="utf-8">
-          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+          <meta charset="UTF-8">
+          <script src="https://cdn.tailwindcss.com"></script>
           <style>
-            ${brandVars}
-            ${cachedTailwindCss || ''}
-            body { font-family: 'Noto Sans TC', 'PingFang HK', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            @media print { 
-              html, body, #root { height: auto !important; min-height: auto !important; overflow: visible !important; position: static !important; display: block !important; } 
+            ${themeVars}
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+            
+            body { 
+              font-family: 'Noto Sans TC', sans-serif !important; 
+              margin: 0 !important; padding: 0 !important; background: white !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
+
+            /* PAGED.JS ENGINE CONFIGURATION (MATCHING NATIVE) */
+            @page {
+              size: A4;
+              margin: 15mm 15mm 15mm 15mm;
+
+              @bottom-left {
+                content: element(footerLeft);
+                font-size: 8px; color: #64748b; font-family: sans-serif;
+                text-transform: uppercase; border-top: 0.5pt solid #cbd5e1;
+                padding-top: 1.5mm; white-space: nowrap;
+              }
+
+              @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8px; color: #0f172a; font-family: sans-serif; font-weight: bold;
+                border-top: 0.5pt solid #cbd5e1; padding-top: 1.5mm; text-align: right;
+              }
+            }
+
+            .running-footer-left { position: running(footerLeft); }
+            .pagedjs-footer-source { position: absolute; top: 0; left: 0; visibility: hidden; height: 0; width: 0; overflow: hidden; }
+            .page-break { page-break-after: always !important; break-after: page !important; }
+            .break-inside-avoid { break-inside: avoid !important; }
+            
+            /* PDF Specific Tweaks */
+            .print-page { box-shadow: none !important; margin: 0 !important; border: none !important; }
+            @page:blank { display: none !important; }
           </style>
         </head>
-        <body>${htmlContent}</body>
+        <body class="bg-white">
+          <div class="print-container">
+            ${html}
+          </div>
+          
+          <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"></script>
+          <script>
+            // Signal to Puppeteer that we use Paged.js
+            window.PagedConfig = {
+              auto: true,
+              after: (flow) => {
+                // Set a flag that the Cloud Function can wait for
+                window.status = 'ready_to_print';
+                console.log('Paged.js layout complete');
+              }
+            };
+          </script>
+        </body>
       </html>
     `;
 
-    const sigData = data.signatures?.[docType] || {};
-    const legacySig = ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType) ? data.clientSignature : null;
-    const hasClientSig = !!(sigData.client || legacySig);
-    const sigTag = (includeSignature && hasClientSig && ['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'MENU_CONFIRM'].includes(docType)) ? '_Signed' : '';
-    
-    const safeName = (data.orderId || data.eventName || 'Document').replace(/[/\\]/g, '-');
-    const fileName = `${safeName}_${docType}${sigTag}.pdf`;
-    
-    const enqueueApi = httpsCallable(functions, 'enqueuePdfJob');
-    const { data: { jobId } } = await enqueueApi({ appId, html: fullHtml, fileName, docType });
+    // 2. Upload HTML to Storage (Avoid Firestore 1MB limit)
+    const htmlPath = `pdf_payloads/${appId}/${jobId}.html`;
+    const htmlRef = ref(storage, htmlPath);
+    await uploadString(htmlRef, styledHtml, 'raw', { contentType: 'text/html' });
 
+    // 3. Call Enqueue Function (Manual fetch for CORS stability)
+    const response = await fetch('https://asia-east2-event-management-system-9f764.cloudfunctions.net/enqueuePdfJob', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        appId, 
+        htmlPath, 
+        fileName, 
+        docType, 
+        jobId,
+        orderId: data.orderId,
+        eventName: data.eventName
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to enqueue PDF job: ${await response.text()}`);
+    }
+
+    const { data: { jobId: confirmedJobId } } = await response.json();
+
+    // 4. Listen for completion
     return new Promise((resolve, reject) => {
-      const jobRef = doc(db, 'artifacts', appId, 'private', 'data', 'pdf_jobs', jobId);
-      const unsubscribe = onSnapshot(jobRef, (snap) => {
+      const unsub = onSnapshot(doc(db, 'artifacts', appId, 'private', 'data', 'pdf_jobs', jobId), (snap) => {
         const jobStatus = snap.data();
         if (jobStatus?.status === 'completed') {
-          unsubscribe();
+          unsub();
           if (download) {
-            // Because this executes asynchronously after Firebase replies, 
-            // browser popup blockers often block a.click() or window.open().
-            // But since the Cloud Function sets Content-Disposition to 'attachment', 
-            // navigating to the URL safely forces a download without replacing the page.
-            window.location.href = jobStatus.url;
+            const link = document.createElement('a');
+            link.href = jobStatus.url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } else {
+            // Open in new tab
+            window.open(jobStatus.url, '_blank');
           }
           resolve({ url: jobStatus.url, fileName });
         } else if (jobStatus?.status === 'error') {
-          unsubscribe();
+          unsub();
           reject(new Error(jobStatus.error));
         }
       });

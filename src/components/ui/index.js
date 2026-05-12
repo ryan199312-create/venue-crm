@@ -14,4 +14,5 @@ export * from './SignaturePad';
 export * from './LocationSelector';
 export * from './PendingProofCard';
 export * from './DepositField';
+export * from './TimeInput';
 export * from './VersionPreviewModal';

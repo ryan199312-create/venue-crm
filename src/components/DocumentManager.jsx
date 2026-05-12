@@ -6,7 +6,7 @@ import { SignaturePad } from './ui';
 import { usePdfGenerator } from "../features/documents/hooks/usePdfGenerator";
 import { useAuth } from '../context/AuthContext';
 
-export default function DocumentManager({ eventData, appSettings, onSign, onPrint, isClientPortal = false }) {
+export default function DocumentManager({ eventData, appSettings, onSign, onPrint, onUpdateData, isClientPortal = false }) {
   const { hasPermission } = useAuth();
   const [isDownloading, setIsDownloading] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -17,6 +17,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const [menuLangSelection, setMenuLangSelection] = useState(null);
   
   const { generatePdf } = usePdfGenerator();
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const openPreview = (docId, menuId = null, language = null) => {
     if (docId === 'MENU_CONFIRM' && menuId && !language) {
@@ -46,6 +47,8 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       if (e.key === 'Escape') {
         if (isSigningModalOpen) {
           setIsSigningModalOpen(false);
+        } else if (menuLangSelection) {
+          setMenuLangSelection(null);
         } else if (previewDoc) {
           closePreview();
         }
@@ -53,7 +56,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewDoc, isSigningModalOpen]);
+  }, [previewDoc, isSigningModalOpen, menuLangSelection]);
 
   const handleConfirmSignature = async () => {
     setIsSubmittingSignature(true);
@@ -290,6 +293,24 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 </span>
               </div>
               <div className="flex items-center gap-3">
+                {previewDoc?.startsWith('MENU_CONFIRM') && !stagedSignature && !isClientPortal && onUpdateData && (
+                  <div className="flex items-center gap-3 px-3 py-1 bg-white/10 rounded-lg border border-white/20 mr-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Font Size:</span>
+                    <input 
+                      type="range" min="12" max="30" step="1" 
+                      value={eventData.printSettings?.menu?.fontSizeOverride || 18} 
+                      onChange={(e) => onUpdateData({ 
+                        ...eventData, 
+                        printSettings: { 
+                          ...eventData.printSettings, 
+                          menu: { ...eventData.printSettings?.menu, fontSizeOverride: parseInt(e.target.value) } 
+                        } 
+                      })} 
+                      className="w-24 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-amber-400" 
+                    />
+                    <span className="text-xs font-mono font-bold text-amber-400 w-8">{eventData.printSettings?.menu?.fontSizeOverride || 18}px</span>
+                  </div>
+                )}
                 {stagedSignature ? (
                   <>
                     <button type="button" onClick={() => setIsSigningModalOpen(true)} disabled={isSubmittingSignature} className="flex items-center text-xs font-bold bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
@@ -306,10 +327,35 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                   </>
                 ) : (
                   <>
-                    {!isClientPortal && onPrint && (
-                      <button type="button" onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc); closePreview(); }} className="flex items-center text-xs font-bold bg-[var(--brand-primary)] hover:opacity-90 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">
-                        <Printer size={14} className="mr-1.5" /> 列印 (Print)
-                      </button>
+                    {!isClientPortal && (
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          type="button" 
+                          disabled={isGenerating}
+                          onClick={async () => { 
+                            setIsGenerating(true);
+                            try {
+                              const docType = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
+                              await generatePdf({ docType, data: dataToRender, appSettings });
+                            } finally {
+                              setIsGenerating(false);
+                            }
+                          }} 
+                          className="flex items-center text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          {isGenerating ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Printer size={14} className="mr-1.5" />}
+                          {isGenerating ? '雲端列印 (PDF)' : 'PDF 列印'}
+                        </button>
+
+                        <button 
+                          type="button" 
+                          onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc); closePreview(); }} 
+                          className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                        >
+                          <Printer size={14} className="mr-1.5" />
+                          原生列印 (Native)
+                        </button>
+                      </div>
                     )}
                     <div className="w-px h-4 bg-slate-700 mx-1"></div>
                     <button type="button" onClick={closePreview} className="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 p-1.5 rounded-lg">

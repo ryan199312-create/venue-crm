@@ -11,16 +11,21 @@ export const DAY_LABELS = { Mon: '一', Tue: '二', Wed: '三', Thu: '四', Fri:
 
 export const DEPARTMENTS = [
   { key: 'kitchen', label: '廚房 (Kitchen)' },
-  { key: 'dimsum', label: '點心 (Dim Sum)' },
   { key: 'roast', label: '燒味 (Roast)' },
-  { key: 'bar', label: '水吧 (Bar)' },
+  { key: 'dimsum', label: '點心 (Dim Sum)' },
+  { key: 'seafood', label: '海鮮 (Seafood)' },
   { key: 'tea', label: '茶芥 (Tea)' },
+  { key: 'drinks', label: '酒水 (Drinks)' },
+  { key: 'bar', label: '吧 (Bar)' },
   { key: 'wine', label: '紅酒 (Wine)' },
-  { key: 'other', label: '其他 (Other)' }
+  { key: 'sc', label: '加一 (S.C.)' },
+  { key: 'other1', label: '其他 (Other 1)', isCustom: true },
+  { key: 'other2', label: '其他 (Other 2)', isCustom: true },
+  { key: 'other3', label: '其他 (Other 3)', isCustom: true }
 ];
 
-export const FOOD_DEPTS = ['kitchen', 'dimsum', 'roast'];
-export const DRINK_DEPTS = ['bar', 'tea', 'wine'];
+export const FOOD_DEPTS = ['kitchen', 'roast', 'dimsum', 'seafood', 'tea', 'drinks', 'bar', 'wine', 'sc', 'other1', 'other2', 'other3'];
+export const DRINK_DEPTS = ['bar', 'tea', 'wine', 'drinks', 'sc', 'other1', 'other2', 'other3'];
 
 export const equipmentMap = {
   stage: '禮堂舞台 W7.2 x L2.5m (Stage)',

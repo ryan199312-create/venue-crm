@@ -252,7 +252,7 @@ const FoodAndBeverageTab = ({
 
                          <div className="pt-4 border-t border-slate-200">
                             <div className="flex items-center justify-between mb-2">
-                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">成本拆分 (Revenue Allocation)</label>
+                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">撇數項目 (Allocation)</label>
                                <button 
                                 type="button" 
                                 onClick={() => toggleMenuAllocation(menu.id)}
@@ -266,9 +266,27 @@ const FoodAndBeverageTab = ({
                               <div className="space-y-2 animate-in slide-in-from-top-1">
                                  {FOOD_DEPTS.map(key => {
                                    const dept = DEPARTMENTS.find(d => d.key === key);
+                                   const isCustom = dept?.isCustom;
+                                   const customLabel = formData.customDeptLabels?.[key] || '';
+                                   
                                    return (
                                      <div key={key} className="flex items-center gap-2">
-                                        <span className="w-12 text-[10px] font-bold text-slate-400">{dept?.label.split(' ')[0]}</span>
+                                        <div className="w-14">
+                                          {isCustom ? (
+                                            <input 
+                                              type="text"
+                                              value={customLabel}
+                                              onChange={(e) => setFormData(prev => ({ 
+                                                ...prev, 
+                                                customDeptLabels: { ...(prev.customDeptLabels || {}), [key]: e.target.value } 
+                                              }))}
+                                              className="w-full bg-transparent border-b border-dashed border-slate-200 text-[9px] font-black text-slate-400 focus:border-indigo-400 outline-none p-0"
+                                              placeholder="其他..."
+                                            />
+                                          ) : (
+                                            <span className="text-[10px] font-bold text-slate-400 truncate">{dept?.label.split(' ')[0]}</span>
+                                          )}
+                                        </div>
                                         <div className="relative flex-1">
                                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">$</span>
                                           <input 
@@ -335,7 +353,13 @@ const FoodAndBeverageTab = ({
                 placeholder="無限供應橙汁、汽水、本地啤酒..."
                 className="font-medium text-sm leading-relaxed"
               />
-              <DocumentVisibilityToggles field="drinksPackage" defaultClient={true} defaultInternal={true} />
+              <DocumentVisibilityToggles 
+                field="drinksPackage" 
+                defaultClient={true} 
+                defaultInternal={true} 
+                clientDocs="報價單、合約、發票、收據、附加協議"
+                internalDocs="宴會通知單 (EO)"
+              />
            </div>
 
            <div className="md:col-span-4">
@@ -410,7 +434,7 @@ const FoodAndBeverageTab = ({
 
                  <div className="pt-4 border-t border-slate-200">
                     <div className="flex items-center justify-between mb-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">成本拆分 (Allocation)</label>
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">撇數項目 (Allocation)</label>
                        <button 
                         type="button" 
                         onClick={() => setFormData(prev => ({ ...prev, showDrinkAllocation: !prev.showDrinkAllocation }))}
@@ -423,9 +447,27 @@ const FoodAndBeverageTab = ({
                       <div className="space-y-2 animate-in slide-in-from-top-1">
                          {DRINK_DEPTS.map(key => {
                            const dept = DEPARTMENTS.find(d => d.key === key);
+                           const isCustom = dept?.isCustom;
+                           const customLabel = formData.customDeptLabels?.[key] || '';
+                           
                            return (
                              <div key={key} className="flex items-center gap-2">
-                                <span className="w-12 text-[10px] font-bold text-slate-400">{dept?.label.split(' ')[0]}</span>
+                                <div className="w-14">
+                                  {isCustom ? (
+                                    <input 
+                                      type="text"
+                                      value={customLabel}
+                                      onChange={(e) => setFormData(prev => ({ 
+                                        ...prev, 
+                                        customDeptLabels: { ...(prev.customDeptLabels || {}), [key]: e.target.value } 
+                                      }))}
+                                      className="w-full bg-transparent border-b border-dashed border-slate-200 text-[9px] font-black text-slate-400 focus:border-indigo-400 outline-none p-0"
+                                      placeholder="其他..."
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-slate-400 truncate">{dept?.label.split(' ')[0]}</span>
+                                  )}
+                                </div>
                                 <div className="relative flex-1">
                                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">$</span>
                                   <input 
@@ -439,6 +481,12 @@ const FoodAndBeverageTab = ({
                              </div>
                            );
                          })}
+                         <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[10px] font-bold">
+                            <span className={safeFloat(formData.drinksPrice) === Object.values(formData.drinkAllocation || {}).reduce((a,b) => a+safeFloat(b), 0) ? 'text-emerald-600' : 'text-rose-500'}>
+                              ${Object.values(formData.drinkAllocation || {}).reduce((a,b) => a+safeFloat(b), 0)}
+                            </span>
+                            <span className="text-slate-400">Diff: ${safeFloat(formData.drinksPrice) - Object.values(formData.drinkAllocation || {}).reduce((a,b) => a+safeFloat(b), 0)}</span>
+                         </div>
                       </div>
                     )}
                  </div>
@@ -466,7 +514,13 @@ const FoodAndBeverageTab = ({
                 onChange={handleInputChange} 
                 placeholder="例如: 1位對花生過敏, 2位不吃牛..." 
               />
-              <DocumentVisibilityToggles field="allergies" defaultClient={true} defaultInternal={true} />
+              <DocumentVisibilityToggles 
+                field="allergies" 
+                defaultClient={true} 
+                defaultInternal={true} 
+                clientDocs="報價單、合約、菜譜確認單"
+                internalDocs="宴會通知單 (EO)、樓面工作單 (Staff Copy)"
+              />
            </div>
            <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">特別安排 (Special Arrangement)</label>
@@ -477,7 +531,13 @@ const FoodAndBeverageTab = ({
                 onChange={handleInputChange} 
                 placeholder="例如: 素食套餐 A x 2位, 兒童餐 x 5位..." 
               />
-              <DocumentVisibilityToggles field="specialMenuReq" defaultClient={true} defaultInternal={true} />
+              <DocumentVisibilityToggles 
+                field="specialMenuReq" 
+                defaultClient={true} 
+                defaultInternal={true} 
+                clientDocs="報價單、合約、菜譜確認單"
+                internalDocs="宴會通知單 (EO)、樓面工作單 (Staff Copy)"
+              />
            </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, Truck, Trash2, Plus, MapPin, Info, PenTool } from 'lucide-react';
-import { FormTextArea } from '../../../components/ui';
+import { FormTextArea, TimeInput } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
 
 const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibilityToggles }) => {
@@ -56,18 +56,17 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
               <div className="space-y-2">
                 {(formData.busInfo?.arrivals || []).map((bus, idx) => (
                   <div key={bus.id} className="grid grid-cols-12 gap-2">
-                    <div className="col-span-3 flex items-center bg-white border border-slate-300 rounded px-2">
-                      <Clock size={14} className="text-slate-400 mr-2"/>
-                      <input 
-                        type="text" 
+                    <div className="col-span-3">
+                      <TimeInput 
+                        name={`bus_arrival_${idx}`}
                         value={bus.time} 
                         onChange={e => { 
                           const newArr = [...formData.busInfo.arrivals]; 
                           newArr[idx].time = e.target.value; 
                           setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newArr } })); 
                         }} 
-                        className="w-full bg-transparent text-sm font-bold outline-none" 
-                        placeholder="18:00" 
+                        className="w-full"
+                        inputClassName="h-9 py-1 px-3"
                       />
                     </div>
                     <div className="col-span-6 flex items-center bg-white border border-slate-300 rounded px-2">
@@ -135,18 +134,17 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
               <div className="space-y-2">
                 {(formData.busInfo?.departures || []).map((bus, idx) => (
                   <div key={bus.id} className="grid grid-cols-12 gap-2">
-                    <div className="col-span-3 flex items-center bg-white border border-slate-300 rounded px-2">
-                      <Clock size={14} className="text-slate-400 mr-2"/>
-                      <input 
-                        type="text" 
+                    <div className="col-span-3">
+                      <TimeInput 
+                        name={`bus_departure_${idx}`}
                         value={bus.time} 
                         onChange={e => { 
                           const newDep = [...formData.busInfo.departures]; 
                           newDep[idx].time = e.target.value; 
                           setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newDep } })); 
                         }} 
-                        className="w-full bg-transparent text-sm font-bold outline-none" 
-                        placeholder="22:30" 
+                        className="w-full"
+                        inputClassName="h-9 py-1 px-3"
                       />
                     </div>
                     <div className="col-span-6 flex items-center bg-white border border-slate-300 rounded px-2">
@@ -313,7 +311,13 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
             rows={5}
             value={formData.otherNotes} onChange={handleInputChange}
           />
-          <DocumentVisibilityToggles field="otherNotes" defaultClient={true} defaultInternal={true} />
+          <DocumentVisibilityToggles 
+            field="otherNotes" 
+            defaultClient={true} 
+            defaultInternal={true} 
+            clientDocs="報價單、合約、附加協議"
+            internalDocs="宴會通知單 (EO)"
+          />
         </div>
       </div>
     </div>

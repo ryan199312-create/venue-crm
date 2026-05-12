@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { AlertTriangle, Coffee, Plus } from 'lucide-react';
 import { 
   DocumentHeader, 
@@ -9,7 +10,8 @@ import {
   formatMoney,
   formatDateEn,
   formatDateWithDay,
-  generateBillingSummary
+  generateBillingSummary,
+  shouldShowField
 } from './DocumentShared';
 
 export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => {
@@ -41,8 +43,18 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
   const originalGrandTotal = billing.grandTotal - finalAddendumTotal;
 
   return (
-    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-sm leading-relaxed">
-      <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative flex flex-col text-sm leading-relaxed">
+      <style>{`
+        @media print { 
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+            background: white;
+          }
+          .page-break { page-break-after: always !important; break-after: page !important; display: block; height: 0; width: 100%; clear: both; }
+        }
+      `}</style>
+      
       <DocumentHeader data={data} typeEn="ADDENDUM" typeZh="合約附加條款" appSettings={appSettings} />
       <ClientInfoGrid data={data} appSettings={appSettings} />
 
@@ -150,8 +162,17 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings }) => 
 export const InternalNotesRenderer = ({ data, appSettings }) => {
   if (!data) return null;
   return (
-    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
-      <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
+      <style>{`
+        @media print { 
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+            background: white;
+          }
+          .page-break { page-break-after: always !important; break-after: page !important; display: block; height: 0; width: 100%; clear: both; }
+        }
+      `}</style>
       <DocumentHeader data={data} typeEn="INTERNAL NOTES" typeZh="內部備註" appSettings={appSettings} />
       <ClientInfoGrid data={data} appSettings={appSettings} />
       <div className="mt-8 flex-1">
@@ -159,7 +180,7 @@ export const InternalNotesRenderer = ({ data, appSettings }) => {
           備註內容 (Notes Content)
         </h3>
         <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-          {data.generalRemarks || '(無內容)'}
+          {data.remarks || data.generalRemarks || '(無內容)'}
         </div>
       </div>
     </div>
@@ -178,9 +199,27 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, languag
   if (language === 'CHINESE') displayContent = onlyChinese(menu.content);
   if (language === 'ENGLISH') displayContent = onlyEnglish(menu.content);
 
+  const fontSize = data.printSettings?.menu?.fontSizeOverride || 18;
+  
+  const validityDate = useMemo(() => {
+    if (data.printSettings?.menu?.validityDateOverride) return data.printSettings.menu.validityDateOverride;
+    const date = new Date();
+    date.setDate(date.getDate() + 14);
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }, [data.printSettings?.menu?.validityDateOverride]);
+
   return (
-    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-[297mm] print:min-h-0 shadow-sm print:shadow-none relative">
-      <style>{`@media print { @page { margin: 10mm; size: A4; } body { -webkit-print-color-adjust: exact; } }`}</style>
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative">
+      <style>{`
+        @media print { 
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+            background: white;
+          }
+          .page-break { page-break-after: always !important; break-after: page !important; display: block; height: 0; width: 100%; clear: both; }
+        }
+      `}</style>
       
       <DocumentHeader data={data} typeEn="Menu Confirmation" typeZh="菜單確認表" appSettings={appSettings} />
       <ClientInfoGrid data={data} appSettings={appSettings} />
@@ -195,14 +234,62 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, languag
            </div>
            
            <div className="space-y-6">
-              <p className="text-lg font-bold text-slate-800 leading-loose text-center whitespace-pre-wrap font-serif">
+              <p 
+                className="font-bold text-slate-800 leading-loose text-center whitespace-pre-wrap font-serif"
+                style={{ fontSize: `${fontSize}px` }}
+              >
                 {displayContent}
               </p>
+           </div>
+
+           {((data.allergies && shouldShowField(data, 'MENU_CONFIRM', 'allergies', true, true)) || 
+             (data.specialMenuReq && shouldShowField(data, 'MENU_CONFIRM', 'specialMenuReq', true, true))) && (
+             <div className="mt-8 p-4 border border-amber-200 bg-amber-50/50 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={14} className="text-amber-600" />
+                  <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">特別飲食要求 (Dietary Requirements)</span>
+                </div>
+                <div className="space-y-2 text-xs font-bold text-amber-900 leading-relaxed">
+                  {data.allergies && shouldShowField(data, 'MENU_CONFIRM', 'allergies', true, true) && (
+                    <div className="flex gap-2">
+                      <span className="text-amber-500 shrink-0">•</span>
+                      <p>食物過敏: {data.allergies}</p>
+                    </div>
+                  )}
+                  {data.specialMenuReq && shouldShowField(data, 'MENU_CONFIRM', 'specialMenuReq', true, true) && (
+                    <div className="flex gap-2">
+                      <span className="text-amber-500 shrink-0">•</span>
+                      <p>特別安排: {data.specialMenuReq}</p>
+                    </div>
+                  )}
+                </div>
+             </div>
+           )}
+
+           <div className="mt-12 pt-6 border-t border-slate-200 flex justify-center">
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Offer Valid Until (有效期至)</span>
+                <span className="text-xs font-black text-slate-800 uppercase">{validityDate}</span>
+              </div>
            </div>
         </div>
       </div>
 
-      <div className="mt-20 break-inside-avoid">
+      <div className="mt-8 text-center px-4 break-inside-avoid">
+        <h4 className="text-sm font-black text-slate-800 uppercase tracking-[0.2em] mb-3">RSVP</h4>
+        <div className="space-y-2">
+          <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
+            Please confirm your selection by signing and returning this form. <br/>
+            Any dietary adjustments should be finalized at least 14 days prior to the event.
+          </p>
+          <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
+            請簽妥此表格並回傳以確認上述選擇。 <br/>
+            所有特殊飲食要求請於活動日期前至少 14 天確認。
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-12 break-inside-avoid">
         <SignatureBox 
            labelEn={data.clientName || "Client Signature"} 
            labelZh="客戶簽署" 

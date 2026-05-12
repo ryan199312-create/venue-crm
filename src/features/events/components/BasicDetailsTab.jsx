@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileText, DollarSign, Users, Building2 } from 'lucide-react';
-import { FormInput, FormSelect, LocationSelector } from '../../../components/ui';
+import { FormInput, FormSelect, LocationSelector, TimeInput } from '../../../components/ui';
 import { EVENT_TYPES } from '../../../services/billingService';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -68,12 +68,11 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
         <FormInput label="活動名稱 (Event Name)" name="eventName" required value={formData.eventName} onChange={handleInputChange} placeholder="e.g. 週年晚宴 / Annual Dinner" />
         <div className="grid grid-cols-4 gap-4">
           <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
-          <FormInput label="開始時間 (Start)" name="startTime" type="time" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
+          <TimeInput label="開始時間 (Start)" name="startTime" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
 
-          <FormInput
+          <TimeInput
             label="入席時間 (Serving)"
             name="servingTime"
-            type="time"
             className="col-span-1"
             value={formData.servingTime}
             onChange={handleInputChange}
@@ -81,7 +80,21 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
             labelClassName="text-red-600 font-bold"
           />
 
-          <FormInput label="結束時間 (End)" name="endTime" type="time" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
+          <FormSelect
+            label="出餐方式 (Style)"
+            name="servingStyle"
+            className="col-span-1"
+            value={formData.servingStyle}
+            onChange={handleInputChange}
+            options={[
+              { value: '圍餐', label: '標準圍餐 (Banquet)' },
+              { value: '位上', label: '位上 (Indiv. Plating)' },
+              { value: 'Buffet', label: '自助餐 (Buffet)' },
+              { value: 'Other', label: '其他 (Other)' }
+            ]}
+          />
+
+          <TimeInput label="結束時間 (End)" name="endTime" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
         </div>
         <div className="pt-4 border-t border-slate-100 mt-2">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

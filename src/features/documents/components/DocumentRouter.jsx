@@ -6,14 +6,13 @@ import EventOrderRenderer from './renderers/EventOrderRenderer';
 import { QuotationRenderer, InvoiceRenderer, ReceiptRenderer } from './renderers/FinancialRenderers';
 import FloorplanRenderer from './renderers/FloorplanRenderer';
 import { AddendumRenderer, InternalNotesRenderer, MenuConfirmRenderer } from './renderers/OtherRenderers';
+import { BrandedFooter } from './renderers/DocumentShared';
 
 /**
  * DocumentRouter (Router)
  * 
  * This component acts as a high-level router that decides which specific document 
  * renderer to use based on the 'printMode'.
- * 
- * The actual rendering logic is delegated to specialized components in the ./renderers directory.
  */
 export default function DocumentRouter({ data, printMode, appSettings, onClientSign, onAdminSign }) {
   if (!data) return null;
@@ -26,44 +25,43 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
     renderData = { ...data, menus: (data.menus || []).filter(m => String(m.id) === String(menuId)) };
   }
 
-  switch (printMode) {
-    case 'FLOORPLAN':
-      return <FloorplanRenderer data={renderData} appSettings={appSettings} />;
-    case 'QUOTATION':
-      return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
-    case 'CONTRACT':
-    case 'CONTRACT_CN':
-      return <ContractRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} onAdminSign={onAdminSign} isCn={printMode === 'CONTRACT_CN'} />;
-    case 'INVOICE':
-      return <InvoiceRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
-    case 'RECEIPT':
-      return <ReceiptRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
-    case 'MENU_CONFIRM':
-      return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} appSettings={appSettings} />;
-    case (printMode && printMode.startsWith('MENU_CONFIRM_') ? printMode : null): {
-      const parts = printMode.split('_');
-      // Potential formats: MENU_CONFIRM_{id}, MENU_CONFIRM_CHINESE_{id}, MENU_CONFIRM_ENGLISH_{id}, MENU_CONFIRM_BILINGUAL_{id}
-      let language = 'BILINGUAL';
-      let menuId = '';
-      
-      if (parts.length === 3) {
-        menuId = parts[2];
-      } else if (parts.length === 4) {
-        language = parts[2];
-        menuId = parts[3];
-      } else {
-        menuId = printMode.replace('MENU_CONFIRM_', '');
+  const renderContent = () => {
+    switch (printMode) {
+      case 'FLOORPLAN':
+        return <FloorplanRenderer data={renderData} appSettings={appSettings} />;
+      case 'QUOTATION':
+        return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
+      case 'CONTRACT':
+      case 'CONTRACT_CN':
+        return <ContractRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} onAdminSign={onAdminSign} isCn={printMode === 'CONTRACT_CN'} />;
+      case 'INVOICE':
+        return <InvoiceRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
+      case 'RECEIPT':
+        return <ReceiptRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
+      case 'MENU_CONFIRM':
+        return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} appSettings={appSettings} />;
+      case (printMode && printMode.startsWith('MENU_CONFIRM_') ? printMode : null): {
+        const parts = printMode.split('_');
+        let language = 'BILINGUAL';
+        let menuId = parts.length === 3 ? parts[2] : (parts.length === 4 ? parts[3] : printMode.replace('MENU_CONFIRM_', ''));
+        if (parts.length === 4) language = parts[2];
+        return <MenuConfirmRenderer data={renderData} menuId={menuId} onSign={onClientSign} appSettings={appSettings} language={language} />;
       }
-      
-      return <MenuConfirmRenderer data={renderData} menuId={menuId} onSign={onClientSign} appSettings={appSettings} language={language} />;
+      case 'ADDENDUM':
+        return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} appSettings={appSettings} />;
+      case 'INTERNAL_NOTES':
+        return <InternalNotesRenderer data={renderData} appSettings={appSettings} />;
+      case 'BRIEFING':
+      case 'EO':
+      default:
+        return <EventOrderRenderer data={renderData} printMode={printMode} appSettings={appSettings} />;
     }
-    case 'ADDENDUM':
-      return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} appSettings={appSettings} />;
-    case 'INTERNAL_NOTES':
-      return <InternalNotesRenderer data={renderData} appSettings={appSettings} />;
-    case 'BRIEFING':
-    case 'EO':
-    default:
-      return <EventOrderRenderer data={renderData} printMode={printMode} appSettings={appSettings} />;
-  }
+  };
+
+  return (
+    <>
+      <BrandedFooter data={data} />
+      {renderContent()}
+    </>
+  );
 }

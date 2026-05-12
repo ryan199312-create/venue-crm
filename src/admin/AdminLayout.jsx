@@ -198,11 +198,203 @@ export default function AdminLayout() {
     } catch (error) { addToast(`產生失敗: ${error.message}`, "error"); }
   };
 
-  const triggerPrint = (m) => {
+  const triggerPrint = async (m) => {
+    addToast("正在優化列印性能 (Optimizing Performance)...", "info");
     setIsPreparingPrint(true);
     setPrintData(formData);
     setPrintMode(m);
-    setTimeout(() => { setIsPreparingPrint(false); window.print(); }, 800);
+    
+    try {
+      // 1. Wait for React to render (Reduced from 800ms to 400ms for speed)
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      // 2. Setup Iframe
+      let iframe = document.getElementById('print-iframe');
+      if (iframe) iframe.remove();
+      
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-iframe';
+      iframe.style.cssText = 'position:fixed; opacity:0; pointer-events:none; width:1px; height:1px; left:-100px; top:-100px;';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      const printContainer = document.querySelector('.print-container');
+      
+      if (!printContainer) {
+        throw new Error("Print container not found");
+      }
+
+      const printContent = printContainer.innerHTML;
+      
+      // OPTIMIZATION: Extract Theme Variables to restore brand colors
+      const rootStyle = getComputedStyle(document.documentElement);
+      const themeVars = `
+        :root {
+          --brand-primary: ${rootStyle.getPropertyValue('--brand-primary') || '#4F46E5'};
+          --brand-secondary: ${rootStyle.getPropertyValue('--brand-secondary') || '#1e293b'};
+          --brand-accent: ${rootStyle.getPropertyValue('--brand-accent') || '#8b5cf6'};
+        }
+      `;
+
+      // MORE AGGRESSIVE CSS PRUNING: Only grab styles that are likely needed
+      const styleElements = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
+      const appStyles = styleElements
+        .map(s => {
+          const html = s.outerHTML;
+          // Skip obviously irrelevant or massive third-party styles that don't affect layout
+          if (html.includes('google-analytics') || html.includes('hot-update') || html.includes('vite/client')) return '';
+          if (s.tagName === 'LINK' && (html.includes('fontawesome') || html.includes('inter-font'))) return '';
+          return html;
+        })
+        .join('\n');
+
+      // 3. Inject content with optimized Paged.js and counters
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Print - ${formData.orderId}</title>
+            <meta charset="UTF-8">
+            ${appStyles}
+            <style>
+              ${themeVars}
+              
+              /* NATIVE FONT LOADING */
+              @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+              
+              /* RESET & BASE */
+              body { 
+                font-family: 'Noto Sans TC', sans-serif !important; 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                background: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              
+              .print-container { 
+                display: block !important; 
+                position: static !important; 
+                width: 100% !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              
+              /* PAGED.JS ENGINE CONFIGURATION */
+              @page {
+                size: A4;
+                margin: 15mm 15mm 15mm 15mm;
+
+                @bottom-left {
+                  content: element(footerLeft);
+                  font-size: 8px;
+                  color: #64748b;
+                  font-family: sans-serif;
+                  text-transform: uppercase;
+                  border-top: 0.5pt solid #cbd5e1;
+                  padding-top: 1.5mm;
+                  white-space: nowrap;
+                }
+
+                @bottom-right {
+                  content: "Page " counter(page) " of " counter(pages);
+                  font-size: 8px;
+                  color: #0f172a;
+                  font-family: sans-serif;
+                  font-weight: bold;
+                  border-top: 0.5pt solid #cbd5e1;
+                  padding-top: 1.5mm;
+                  text-align: right;
+                }
+              }
+
+              /* MAP DATA TO PAGED.JS ELEMENTS */
+              .running-footer-left { position: running(footerLeft); }
+              
+              /* HIDE SOURCE ELEMENTS ONLY AFTER RUNNING */
+              .pagedjs-footer-source { 
+                position: absolute;
+                top: 0;
+                left: 0;
+                visibility: hidden;
+                height: 0;
+                width: 0;
+                overflow: hidden;
+              }
+
+              .page-break { page-break-after: always !important; break-after: page !important; }
+              .break-inside-avoid { break-inside: avoid !important; }
+              .print-page { box-shadow: none !important; margin: 0 !important; }
+
+              /* PREVENT TRAILING BLANK PAGES */
+              @page:blank { display: none !important; }
+            </style>
+          </head>
+          <body>
+            <div class="print-container">
+              ${printContent}
+            </div>
+            
+            <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"></script>
+            <script>
+              window.PagedConfig = {
+                auto: true,
+                after: (flow) => {
+                  // Ensure all images are loaded before printing
+                  const images = document.querySelectorAll('img');
+                  const imagePromises = Array.from(images).map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise(resolve => {
+                      img.onload = resolve;
+                      img.onerror = resolve; // Continue even on error
+                    });
+                  });
+
+                  Promise.all(imagePromises).then(() => {
+                    // Optimized print trigger
+                    requestAnimationFrame(() => {
+                      setTimeout(() => {
+                        window.print();
+                        window.parent.postMessage('print_done', '*');
+                      }, 250);
+                    });
+                  });
+                }
+              };
+              
+              // Emergency Timeout for slow networks
+              setTimeout(() => {
+                window.print();
+                window.parent.postMessage('print_done', '*');
+              }, 6000);
+            </script>
+          </body>
+        </html>
+      `);
+      doc.close();
+
+      // 4. Cleanup Listener
+      const handleMessage = (event) => {
+        if (event.data === 'print_done') {
+          setIsPreparingPrint(false);
+          setPrintData(null);
+          window.removeEventListener('message', handleMessage);
+          
+          // Cleanup iframe after a delay
+          setTimeout(() => {
+            const frame = document.getElementById('print-iframe');
+            if (frame) frame.remove();
+          }, 1000);
+        }
+      };
+      window.addEventListener('message', handleMessage);
+
+    } catch (err) {
+      console.error("Print Error:", err);
+      addToast("列印啟動失敗，請再試一次", "error");
+      setIsPreparingPrint(false);
+    }
   };
 
   // ==========================================
@@ -330,23 +522,12 @@ export default function AdminLayout() {
           }}
           onRemoveProof={(key, url) => setConfirmConfig({ isOpen: true, title: '移除收據', message: '確定嗎？', onConfirm: () => setFormData(p => ({ ...p, [key]: p[key].filter(u => u !== url) })) })}
           addToast={addToast} onOpenAi={() => setIsAiOpen(true)} 
-          onPrint={triggerPrint} onDownloadPDF={handleDownloadPDF} 
-          onSendSleekFlow={async (isT, docT) => {
-            let ph = formData.clientPhone?.replace(/[^0-9]/g, ''); if (ph?.length === 8) ph = '852' + ph;
-            const pdfD = await generatePdf({ docType: docT, data: formData, appSettings: getScopedSettings(appSettings, formData.venueId) });
-            const api = httpsCallable(functions, 'sendSleekFlow');
-            await api({ to: ph, messageContent: `Hi ${formData.clientName}`, pdfUrl: pdfD.url, fileName: pdfD.fileName, isTemplate: isT });
-            addToast("WhatsApp Sent", "success");
-          }}
-          onSendEmail={async (docT) => {
-            const pdfD = await generatePdf({ docType: docT, data: formData, appSettings: getScopedSettings(appSettings, formData.venueId) });
-            window.open(`mailto:${formData.clientEmail}?subject=File&body=${pdfD.url}`, '_blank');
-          }}
+          onPrint={triggerPrint}
         />
         {isAiOpen && <AiAssistant formData={formData} setFormData={setFormData} onClose={() => setIsAiOpen(false)} />}
         {isDataAiOpen && <AnalysisAssistant events={events} onClose={() => setIsDataAiOpen(false)} />}
         {printData && (
-          <div className="absolute -left-[10000px] -top-[10000px] -z-50 print:static print:left-auto print:top-auto print:z-auto">
+          <div className="print-container absolute -left-[10000px] -top-[10000px] -z-50 print:static print:left-auto print:top-auto print:z-auto">
             <DocumentRouter data={printData} printMode={printMode} appSettings={getScopedSettings(appSettings, printData.venueId)} />
           </div>
         )}

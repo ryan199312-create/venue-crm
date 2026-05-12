@@ -36,9 +36,12 @@ export const shouldShowField = (data, printMode, field, defaultClient, defaultIn
 
 export const onlyChinese = (text) => {
   if (!text) return '';
-  return text.split('\n').filter(line => 
+  const lines = text.split('\n');
+  const filtered = lines.filter(line => 
     /[\u4e00-\u9fa5]/.test(line) || (line.trim().length > 0 && /^[0-9\s.,()\-:：]*$/.test(line.trim()))
-  ).join('\n');
+  );
+  if (filtered.length === 0 && text.trim().length > 0) return text;
+  return filtered.join('\n');
 };
 
 export const onlyEnglish = (text) => {
@@ -139,6 +142,14 @@ export const getPackageStrings = (data, isEn = false) => {
 // SHARED UI COMPONENTS
 // ==========================================
 
+export const BrandedFooter = ({ data }) => (
+  <div className="pagedjs-footer-source" style={{ position: 'absolute', top: 0, left: 0, height: 0, width: 0, overflow: 'hidden', opacity: 0 }}>
+    <span className="running-footer-left">
+      Order: {data.orderId || '---'} | {data.eventName || '---'}
+    </span>
+  </div>
+);
+
 export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = false }) => {
   const profile = appSettings?.venueProfiles?.[venueId] || appSettings?.venueProfile || {};
   const config = profile.paymentConfig;
@@ -210,8 +221,8 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
   const logoUrl = appSettings?.companyLogoUrl;
 
   return (
-    <div className="flex justify-between items-start border-b-[3px] pb-6 mb-8" style={{ borderColor: 'var(--brand-primary)' }}>
-      <div className="max-w-[60%]">
+    <div className="flex justify-between items-start border-b-[3px] pb-3 mb-8" style={{ borderColor: 'var(--brand-primary)' }}>
+      <div className="max-w-[45%]">
         <div className="flex flex-col gap-1">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="h-12 object-contain self-start mb-2" />
@@ -222,8 +233,10 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
             </div>
           )}
           
-          <div className="text-[10px] text-slate-500 font-medium leading-relaxed mt-2">
-            <p className="font-bold text-slate-800 text-xs mb-0.5">{profile.address || '--- (Please set address in Settings)'}</p>
+          <div className="text-[9px] text-slate-500 font-medium leading-relaxed mt-1">
+            <p className="text-slate-700 mb-0.5 max-w-[280px]">
+              {profile.address || '4/F, Hong Kong Palace Museum, 8 Museum Drive,\nWest Kowloon Cultural District, Kowloon, Hong Kong'}
+            </p>
             <p>
               Tel: {profile.phone || '---'} 
               {profile.website && ` | Web: ${profile.website}`}
@@ -231,12 +244,17 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
           </div>
         </div>
       </div>
-      <div className="text-right">
-        <h1 className="text-3xl md:text-4xl font-light text-slate-800 uppercase tracking-widest mb-1">{typeEn}</h1>
-        {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-widest mb-3">{typeZh}</h2>}
-        <div className="text-right space-y-1 mt-2">
-          <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
-          <div className="text-xs flex justify-end gap-2"><span className="font-bold text-slate-400 uppercase tracking-wider w-12 text-left">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></div>
+      <div className="text-right flex-1 ml-4">
+        <h1 className="text-2xl md:text-3xl font-light text-slate-800 uppercase tracking-tight mb-1 whitespace-nowrap">{typeEn}</h1>
+        {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-wider mb-3">{typeZh}</h2>}
+        <div className="flex flex-col items-end gap-0 mt-2">
+          <div className="text-[10px] flex justify-end gap-3">
+            <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
+            <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></div>
+          </div>
+          <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight">
+            {data.eventName}
+          </div>
         </div>
       </div>
     </div>
@@ -289,8 +307,8 @@ export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings }) =>
 );
 
 export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, showFinancials = false, showPayments = false, showSchedule = false, data = {}, grandTotalLabel = null }) => (
-  <div className="mb-8 rounded-xl border border-slate-200 overflow-hidden break-inside-avoid shadow-sm">
-    <table className="w-full text-xs text-left">
+  <div className="mb-8 rounded-xl border border-slate-200 shadow-sm">
+    <table className="w-full text-xs text-left border-collapse">
       <thead className="bg-slate-50 border-b border-slate-200">
         <tr>
           <th className="py-2 px-4 uppercase tracking-wider text-slate-500 font-bold w-[55%]">Description (項目)</th>
@@ -301,7 +319,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
       </thead>
       <tbody className="divide-y divide-slate-100">
         {billing.parsedMenus.map((m, i) => (
-          <tr key={`m-${i}`} className="bg-white">
+          <tr key={`m-${i}`} className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
               <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">
@@ -314,7 +332,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         ))}
         {billing.plating && (
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900">{isEn ? 'Plating Service Fee' : '位上服務費'}</p>
             </td>
@@ -324,7 +342,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         )}
         {billing.drinks && (
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Beverage Package' : '酒水套餐'}</p>
               <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">{billing.drinks.label}</p>
@@ -335,7 +353,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         )}
         {billing.setupPackagePrice > 0 && (
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Setup & Reception Package' : '舞台與接待設備套票'}</p>
               <p className="text-xs text-slate-700 leading-snug">{setupStr}</p>
@@ -346,7 +364,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         )}
         {billing.avPackagePrice > 0 && (
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'AV Equipment Package' : '影音設備套票'}</p>
               <p className="text-xs text-slate-700 leading-snug">{avStr}</p>
@@ -357,7 +375,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         )}
         {billing.decorPackagePrice > 0 && (
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Venue Decoration Package' : '場地佈置套票'}</p>
               <p className="text-xs text-slate-700 leading-snug">{decorStr}</p>
@@ -368,7 +386,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         )}
         {billing.bus && (
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Bus Arrangement' : '旅遊巴安排'}</p>
               {isEn && (
@@ -386,7 +404,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
           </tr>
         )}
         {billing.parsedCustomItems.map((item, i) => (
-          <tr key={`c-${i}`} className="bg-white">
+          <tr key={`c-${i}`} className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900">{item.name}</p>
             </td>
@@ -398,29 +416,29 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
       </tbody>
       {showFinancials && (
         <tbody className="border-t-2 border-slate-900">
-          <tr className="bg-slate-50/50">
+          <tr className="bg-slate-50/50 break-inside-avoid">
             <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Subtotal (小計)</td>
             <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">${formatMoney(billing.subtotal)}</td>
           </tr>
           {billing.serviceChargeVal > 0 && (
-            <tr className="bg-slate-50/50">
+            <tr className="bg-slate-50/50 break-inside-avoid">
               <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Service Charge ({billing.scLabel})</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">+${formatMoney(billing.serviceChargeVal)}</td>
             </tr>
           )}
           {billing.discountVal > 0 && (
-            <tr className="bg-slate-50/50">
+            <tr className="bg-slate-50/50 break-inside-avoid">
               <td colSpan="3" className="py-2 px-4 text-right font-bold text-rose-600">Discount (折扣)</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-rose-600">-${formatMoney(billing.discountVal)}</td>
             </tr>
           )}
           {billing.ccSurcharge > 0 && (
-            <tr className="bg-slate-50/50">
+            <tr className="bg-slate-50/50 break-inside-avoid">
               <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Credit Card Surcharge ({billing.ccSurchargePercent}%)</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">+${formatMoney(billing.ccSurcharge)}</td>
             </tr>
           )}
-          <tr className="bg-slate-50 border-t-2 border-slate-900">
+          <tr className="bg-slate-50 border-t-2 border-slate-900 break-inside-avoid">
             <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-base text-slate-900">
               {grandTotalLabel || (isEn ? "Grand Total (總金額)" : "總金額 (Grand Total)")}
             </td>
@@ -430,7 +448,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
       )}
       {showSchedule && (
         <tbody className="border-t border-slate-200">
-          <tr className="bg-slate-50/30">
+          <tr className="bg-slate-50/30 break-inside-avoid">
             <td colSpan="4" className="py-1 px-4 font-black text-[9px] text-[var(--brand-primary)] uppercase tracking-widest">
                Suggested Payment Schedule (付款進度)
             </td>
@@ -441,7 +459,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
             { label: '3rd Payment', date: data.deposit3Date, amount: billing.dep3 },
             { label: 'Final Balance', date: data.date, amount: billing.balanceDue }
           ].map((p, i) => p.amount > 0 && (
-            <tr key={`s-${i}`} className="bg-white text-slate-500 italic">
+            <tr key={`s-${i}`} className="bg-white text-slate-500 italic break-inside-avoid">
               <td colSpan="3" className="py-1 px-4 text-right">
                 {p.label} ({p.date || 'TBC'})
               </td>
@@ -457,7 +475,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
             { label: '2nd Payment', date: data.deposit2Date, amount: billing.dep2, received: data.deposit2Received },
             { label: '3rd Payment', date: data.deposit3Date, amount: billing.dep3, received: data.deposit3Received }
           ].map((p, i) => p.amount > 0 && (
-            <tr key={`p-${i}`} className="bg-white text-slate-500 italic">
+            <tr key={`p-${i}`} className="bg-white text-slate-500 italic break-inside-avoid">
               <td colSpan="3" className="py-1 px-4 text-right">
                 {p.label} ({p.date || 'TBC'}) 
                 {p.received && <span className="ml-2 not-italic font-bold text-emerald-600 text-[9px] border border-emerald-200 bg-emerald-50 px-1 rounded">RECEIVED</span>}
@@ -465,11 +483,11 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
               <td className="py-1 px-4 text-right font-mono font-medium">${formatMoney(p.amount)}</td>
             </tr>
           ))}
-          <tr className="bg-white">
+          <tr className="bg-white break-inside-avoid">
             <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500 uppercase">Total Paid (已付)</td>
             <td className="py-2 px-4 text-right font-mono font-bold text-emerald-600">${formatMoney(billing.totalPaid)}</td>
           </tr>
-          <tr className="bg-slate-50 border-t border-slate-200">
+          <tr className="bg-slate-50 border-t border-slate-200 break-inside-avoid">
             <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-slate-600">Balance Due (餘額)</td>
             <td className="py-3 px-4 text-right font-mono font-black text-xl text-slate-900">${formatMoney(billing.balanceDue)}</td>
           </tr>

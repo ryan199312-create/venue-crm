@@ -158,7 +158,26 @@ exports.generatePdfTask = onTaskDispatched({ memory: "2GiB", timeoutSeconds: 120
       await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 4 });
       await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
       await page.evaluateHandle('document.fonts.ready');
-      const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true });
+      
+      const pdfBuffer = await page.pdf({ 
+        format: "A4", 
+        printBackground: true, 
+        preferCSSPageSize: false, // Force our margins for the footer to show correctly
+        displayHeaderFooter: true,
+        headerTemplate: '<div></div>',
+        footerTemplate: `
+          <div style="width: 100%; font-size: 8px; padding: 0 10mm; display: flex; justify-content: space-between; color: #94a3b8; font-family: sans-serif; -webkit-print-color-adjust: exact;">
+            <div style="font-weight: bold;">${fileName.replace('.pdf', '').replace(/_/g, ' | ')}</div>
+            <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+          </div>
+        `,
+        margin: {
+          top: '10mm',
+          bottom: '15mm',
+          left: '10mm',
+          right: '10mm'
+        }
+      });
       await page.close();
       const bucket = admin.storage().bucket();
       const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : "document.pdf";

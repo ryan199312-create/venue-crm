@@ -14,7 +14,11 @@ import { getScopedSettings } from '../../services/helpers';
 import { useConfirm } from '../../hooks/useConfirm';
 
 const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, updateUserRole, updateUserProfile, deleteUser, events }) => {
-  const { selectedVenueId, outlets } = useAuth();
+  const { selectedVenueId, outlets, maxBranches } = useAuth();
+
+  // Licensing: how many branches (outlets) this tenant is allowed. null = unlimited.
+  const branchCount = (settings.outlets || []).length;
+  const atBranchLimit = maxBranches !== null && branchCount >= maxBranches;
   const { confirmConfig, confirm, closeConfirm } = useConfirm();
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationData, setCalibrationData] = useState(null);
@@ -111,6 +115,11 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
   // --- Handlers ---
   const handleSaveOutlet = () => {
     if (!editingOutlet.name) return addToast("請輸入分店名稱", "error");
+    // Licensing gate: adding a NEW branch beyond the licensed count is blocked.
+    // (Editing an existing branch doesn't change the count, so it's always allowed.)
+    if (!editingOutlet.id && atBranchLimit) {
+      return addToast(`已達授權分店數量上限 (${maxBranches})。請聯絡平台管理員升級方案。`, "error");
+    }
     const newOutlets = [...(settings.outlets || [])];
     if (editingOutlet.id) {
       const idx = newOutlets.findIndex(o => o.id === editingOutlet.id);
@@ -217,7 +226,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       indigo: { bg: 'bg-indigo-500', bgLight: 'bg-indigo-100', text: 'text-indigo-600' },
       emerald: { bg: 'bg-emerald-500', bgLight: 'bg-emerald-100', text: 'text-emerald-600' },
       purple: { bg: 'bg-purple-500', bgLight: 'bg-purple-100', text: 'text-purple-600' },
-      indigo: { bg: 'bg-indigo-500', bgLight: 'bg-indigo-100', text: 'text-indigo-600' },
+      blue: { bg: 'bg-blue-500', bgLight: 'bg-blue-100', text: 'text-blue-600' },
       rose: { bg: 'bg-rose-500', bgLight: 'bg-rose-100', text: 'text-rose-600' },
       amber: { bg: 'bg-amber-500', bgLight: 'bg-amber-100', text: 'text-amber-600' },
       slate: { bg: 'bg-slate-500', bgLight: 'bg-slate-100', text: 'text-slate-600' },
@@ -276,13 +285,28 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in">
           <div className="md:col-span-5">
             <Card className="p-6 border-l-4 border-l-indigo-600">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Building2 size={20} className="text-indigo-600" /> {editingOutlet.id ? '編輯分店' : '新增分店'}</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2"><Building2 size={20} className="text-indigo-600" /> {editingOutlet.id ? '編輯分店' : '新增分店'}</h3>
+                {maxBranches !== null && (
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${atBranchLimit ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    授權 {branchCount} / {maxBranches}
+                  </span>
+                )}
+              </div>
+              {!editingOutlet.id && atBranchLimit && (
+                <div className="mb-5 p-3 bg-rose-50 border border-rose-100 rounded-xl flex gap-2.5">
+                  <Shield size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
+                    已達授權分店數量上限。如需新增分店，請聯絡平台管理員 (Super Admin) 升級您的方案。
+                  </p>
+                </div>
+              )}
               <div className="space-y-4">
                 <FormInput label="分店名稱" placeholder="例如: 璟瓏軒 (故宮)" value={editingOutlet.name} onChange={e => setEditingOutlet(p => ({ ...p, name: e.target.value }))} />
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2">主題顏色</label>
                   <div className="flex flex-wrap gap-2">
-                    {['indigo', 'emerald', 'purple', 'indigo', 'rose', 'amber', 'slate'].map(color => {
+                    {['indigo', 'emerald', 'purple', 'blue', 'rose', 'amber', 'slate'].map(color => {
                       const colors = getOutletColorClasses(color);
                       return (
                         <button key={color} onClick={() => setEditingOutlet(p => ({ ...p, color }))} className={`w-10 h-10 rounded-xl border-2 transition-all flex items-center justify-center ${editingOutlet.color === color ? 'border-slate-900 scale-110 shadow-lg' : 'border-transparent hover:scale-105 opacity-60'}`}>
@@ -293,7 +317,13 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
                   </div>
                 </div>
                 <div className="pt-4 flex gap-2">
-                  <button onClick={handleSaveOutlet} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-100 active:scale-95">儲存分店</button>
+                  <button
+                    onClick={handleSaveOutlet}
+                    disabled={!editingOutlet.id && atBranchLimit}
+                    className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+                  >
+                    儲存分店
+                  </button>
                   {editingOutlet.id && <button onClick={() => setEditingOutlet({ id: null, name: '', color: 'indigo' })} className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">取消</button>}
                 </div>
               </div>
@@ -301,7 +331,12 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
           </div>
           <div className="md:col-span-7">
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700">現有分店 ({outlets.length})</div>
+              <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center justify-between">
+                <span>現有分店 ({outlets.length}{maxBranches !== null ? ` / ${maxBranches}` : ''})</span>
+                {maxBranches !== null && (
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">授權方案 (Licensed)</span>
+                )}
+              </div>
               <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
                 {outlets.map(o => {
                   const colors = getOutletColorClasses(o.color);

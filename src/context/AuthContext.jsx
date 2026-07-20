@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [appSettings, setAppSettings] = useState(null);
   const [outlets, setOutlets] = useState([]);
+  const [tenantMeta, setTenantMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedVenueId, setSelectedVenueId] = useState('all');
@@ -59,6 +60,19 @@ export const AuthProvider = ({ children }) => {
     });
     return () => unsubscribe();
   }, [appId, user?.uid, userProfile?.role]); // 🌟 Re-subscribe when identity or role changes!
+
+  // 🌟 SaaS: subscribe to this tenant's global record so the app knows its license
+  // (e.g. maxBranches). Readable by any authenticated user; writable only by super_admin.
+  useEffect(() => {
+    if (!appId || !user?.uid) return;
+    const tenantRef = doc(db, 'tenants', appId);
+    const unsubscribe = onSnapshot(tenantRef, (snap) => {
+      setTenantMeta(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    }, (err) => {
+      console.warn("[AuthContext] Tenant license access restricted:", err.message);
+    });
+    return () => unsubscribe();
+  }, [appId, user?.uid]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -159,10 +173,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Licensed branch (outlet) cap for this tenant. null = unlimited / not yet licensed.
+  const maxBranches = (tenantMeta && typeof tenantMeta.maxBranches === 'number')
+    ? tenantMeta.maxBranches
+    : null;
+
   const value = {
     appId, user, userProfile, appSettings, loading, error, login, signOut,
     hasPermission, refreshUserClaims, selectedVenueId, setSelectedVenueId,
-    getVisibleVenues, outlets
+    getVisibleVenues, outlets, tenantMeta, maxBranches
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

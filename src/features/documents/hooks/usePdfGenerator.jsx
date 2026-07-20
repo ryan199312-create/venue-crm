@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { functions, db, storage } from '../../../core/firebase';
+import { functions, db, storage, auth } from '../../../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -103,10 +103,15 @@ export function usePdfGenerator() {
     await uploadString(htmlRef, styledHtml, 'raw', { contentType: 'text/html' });
 
     // 3. Call Enqueue Function (Manual fetch for CORS stability)
+    // Send the caller's Firebase ID token so the function can authorize + tenant-scope the job.
+    const idToken = await auth.currentUser?.getIdToken();
     const response = await fetch('https://asia-east2-event-management-system-9f764.cloudfunctions.net/enqueuePdfJob', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+      headers: {
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+      },
+      body: JSON.stringify({
         appId, 
         htmlPath, 
         fileName, 

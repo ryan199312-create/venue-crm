@@ -136,11 +136,39 @@ exports.enqueuePdfJob = onRequest({
     }
 
     try {
+      // --- AUTH: require a valid Firebase ID token (was public: arbitrary file read+delete) ---
+      const authHeader = req.headers.authorization || '';
+      const bearer = authHeader.match(/^Bearer (.+)$/);
+      if (!bearer) return res.status(401).send("Unauthorized");
+      let caller;
+      try { caller = await admin.auth().verifyIdToken(bearer[1]); }
+      catch (e) { return res.status(401).send("Invalid token"); }
+
       const { htmlPath, fileName, docType, jobId, appId: requestAppId, orderId, eventName } = req.body.data || req.body;
-      const appId = requestAppId || APP_ID; 
-      
+      const appId = requestAppId || APP_ID;
+
       if (!jobId) return res.status(400).send("Missing jobId");
       if (!htmlPath) return res.status(400).send("Missing htmlPath");
+
+      // --- TENANT BINDING: the caller must belong to the tenant they name ---
+      const isSuper = caller.role === 'super_admin';
+      if (!isSuper) {
+        if (caller.tenantId) {
+          if (caller.tenantId !== appId) return res.status(403).send("Tenant mismatch");
+        } else {
+          // Migration grace: bind via an existing user doc under the requested tenant.
+          const memberDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(caller.uid).get();
+          if (!memberDoc.exists) return res.status(403).send("Not a member of this tenant");
+        }
+      }
+
+      // --- PATH ALLOWLIST: only the caller's own payload dir; never receipts / other tenants ---
+      if (typeof htmlPath !== 'string'
+          || htmlPath.indexOf('..') !== -1
+          || !htmlPath.startsWith(`pdf_payloads/${appId}/`)
+          || !htmlPath.endsWith('.html')) {
+        return res.status(403).send("Invalid htmlPath");
+      }
 
       console.log(`[PDF] Processing synchronous job ${jobId} for tenant ${appId}.`);
 
@@ -333,24 +361,52 @@ exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
   } catch (error) { throw new HttpsError('internal', error.message); }
 });
 
+// Detect a file's real MIME from its magic bytes (never trust the filename extension).
+function detectFileType(buf) {
+  if (buf.length > 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+  if (buf.length > 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return 'application/pdf';
+  if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+
 exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) => {
   const { eventId, phone, fileName, fileBase64, appId: requestAppId } = request.data;
-  const appId = requestAppId || APP_ID; 
+  const appId = requestAppId || APP_ID;
   const db = admin.firestore();
   const bucket = admin.storage().bucket();
   try {
-    const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
+    if (!eventId || !fileName || !fileBase64) throw new HttpsError('invalid-argument', 'Missing required fields.');
+    const safeEventId = String(eventId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(safeEventId);
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
     if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
-    const uniqueFileName = `receipts/client_${eventId}_${Date.now()}_${fileName}`;
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    if (buffer.length === 0) throw new HttpsError('invalid-argument', 'Empty file.');
+    if (buffer.length > 10 * 1024 * 1024) throw new HttpsError('invalid-argument', 'File too large (max 10MB).');
+
+    const contentType = detectFileType(buffer);
+    if (!contentType) throw new HttpsError('invalid-argument', 'Only JPEG, PNG, WEBP, or PDF allowed.');
+
+    if ((docSnap.data().clientUploadedProofs || []).length >= 20) {
+      throw new HttpsError('resource-exhausted', 'Too many uploaded proofs.');
+    }
+
+    const safeName = String(fileName).replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-80);
+    const uniqueFileName = `receipts/client_${safeEventId}_${Date.now()}_${safeName}`;
     const file = bucket.file(uniqueFileName);
     const token = crypto.randomUUID();
-    await file.save(Buffer.from(fileBase64, 'base64'), { metadata: { contentType: fileName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg', metadata: { firebaseStorageDownloadTokens: token } } });
+    await file.save(buffer, { metadata: { contentType, metadata: { firebaseStorageDownloadTokens: token } } });
     const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(uniqueFileName)}?alt=media&token=${token}`;
-    await eventRef.update({ clientUploadedProofs: admin.firestore.FieldValue.arrayUnion({ url: publicUrl, uploadedAt: new Date().toISOString(), fileName }) });
+    await eventRef.update({ clientUploadedProofs: admin.firestore.FieldValue.arrayUnion({ url: publicUrl, uploadedAt: new Date().toISOString(), fileName: safeName }) });
     return { success: true, url: publicUrl };
-  } catch (error) { throw new HttpsError('internal', error.message); }
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error('uploadClientPaymentProof error:', error);
+    throw new HttpsError('internal', 'Upload failed.');
+  }
 });
 
 exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
@@ -374,6 +430,7 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   const appId = requestAppId || APP_ID;
   const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
   const docSnap = await eventRef.get();
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
   if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
   await eventRef.update({ rundown });
   return { success: true };
@@ -385,6 +442,7 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
   const db = admin.firestore();
   const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
   const docSnap = await eventRef.get();
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
   if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
   await eventRef.update({ specialMenuReq: specialMenuReq || '', allergies: allergies || '' });
   return { success: true };
@@ -393,27 +451,52 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
 // ==========================================
 // 5. USER MANAGEMENT (RBAC)
 // ==========================================
-exports.inviteUser = onCall({ 
+exports.inviteUser = onCall({
   memory: "256MiB"
 }, async (request) => {
   const { email, displayName, role, accessibleVenues, appId: requestAppId } = request.data;
-  const appId = requestAppId || APP_ID;
+  const requester = request.auth;
+  if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
+
+  const isSuperAdmin = requester.token.role === 'super_admin';
+  // Tenant admins may only invite into their OWN tenant; super_admins may target any.
+  // (During migration, admins without a tenantId claim yet fall back to the request body.)
+  const appId = isSuperAdmin ? (requestAppId || APP_ID) : (requester.token.tenantId || requestAppId || APP_ID);
   const db = admin.firestore();
-  if (!request.auth || (request.auth.token.role !== 'super_admin' && (await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(request.auth.uid).get()).data()?.role !== 'admin')) {
-    throw new HttpsError('permission-denied', 'Only admins can invite.');
+
+  if (!isSuperAdmin) {
+    const requesterDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).get();
+    if (requesterDoc.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Only admins can invite.');
   }
+
+  // Never allow granting super_admin via invite; restrict to a known role set (fixes H7).
+  const INVITABLE_ROLES = ['staff', 'admin'];
+  const safeRole = INVITABLE_ROLES.includes(role) ? role : 'staff';
+  if (!email || typeof email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new HttpsError('invalid-argument', 'A valid email is required.');
+  }
+
   try {
     let userRecord;
-    try { userRecord = await admin.auth().getUserByEmail(email); } 
+    try { userRecord = await admin.auth().getUserByEmail(email); }
     catch (e) { userRecord = await admin.auth().createUser({ email, displayName, password: crypto.randomBytes(16).toString('hex') }); }
+
+    // Stamp tenant + role claims so the invited user is immediately tenant-scoped.
+    const existing = userRecord.customClaims || {};
+    await admin.auth().setCustomUserClaims(userRecord.uid, { ...existing, role: safeRole, tenantId: appId });
+
     await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(userRecord.uid).set({
-      uid: userRecord.uid, email, displayName: displayName || email, role, accessibleVenues: accessibleVenues || [], isInvited: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      uid: userRecord.uid, email, displayName: displayName || email, role: safeRole, accessibleVenues: accessibleVenues || [], isInvited: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     return { success: true };
-  } catch (error) { throw new HttpsError('internal', error.message); }
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error('inviteUser error:', error);
+    throw new HttpsError('internal', 'Failed to invite user.');
+  }
 });
 
-exports.updateUserRoleSecure = onCall({ 
+exports.updateUserRoleSecure = onCall({
   memory: "256MiB"
 }, async (request) => {
   const { uid, newRole, appId: requestAppId } = request.data;
@@ -421,22 +504,75 @@ exports.updateUserRoleSecure = onCall({
   const db = admin.firestore();
   const requester = request.auth;
   if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
+  if (!uid || !newRole) throw new HttpsError('invalid-argument', 'uid and newRole are required.');
+
+  const ALLOWED_ROLES = ['staff', 'admin', 'super_admin'];
+  if (!ALLOWED_ROLES.includes(newRole)) throw new HttpsError('invalid-argument', 'Invalid role.');
+
   const isSuperAdmin = requester.token.role === 'super_admin';
+
+  // Only a platform super_admin may grant the super_admin role.
+  if (newRole === 'super_admin' && !isSuperAdmin) {
+    throw new HttpsError('permission-denied', 'Only a super admin can grant super admin.');
+  }
+
+  // Non-super-admins must be a verified admin OF THIS tenant. Looking up the requester's
+  // own user doc under {appId} binds them to that tenant (an admin of tenant A passing
+  // tenant B's appId has no doc there -> denied). The old bootstrap fall-through, which
+  // let any user self-claim when no admin existed yet, has been removed. The first
+  // super_admin must be seeded out-of-band (Firebase console / admin script).
   if (!isSuperAdmin) {
     const requesterDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).get();
-    const requesterRole = requesterDoc.data()?.role;
-    if (requesterRole !== 'admin') {
-       const adminsSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').where('role', 'in', ['admin', 'super_admin']).limit(1).get();
-       if (!adminsSnap.empty) throw new HttpsError('permission-denied', 'Only admins can manage roles.');
+    if (requesterDoc.data()?.role !== 'admin') {
+      throw new HttpsError('permission-denied', 'Only admins can manage roles.');
     }
   }
+
   try {
-    await admin.auth().setCustomUserClaims(uid, { role: newRole });
-    await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(uid).set({ 
-      role: newRole, updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+    // Preserve any existing claims, update role, and (re)bind the user to this tenant.
+    const existing = (await admin.auth().getUser(uid)).customClaims || {};
+    await admin.auth().setCustomUserClaims(uid, { ...existing, role: newRole, tenantId: existing.tenantId || appId });
+    await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(uid).set({
+      role: newRole, updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     return { success: true };
-  } catch (error) { throw new HttpsError('internal', error.message); }
+  } catch (error) {
+    console.error('updateUserRoleSecure error:', error);
+    throw new HttpsError('internal', 'Failed to update role.');
+  }
+});
+
+// One-time (idempotent) migration: stamp every existing user with a `tenantId` custom
+// claim equal to the tenant/appId their user doc lives under. Run this AFTER deploying,
+// BEFORE tightening the Firestore rules to the hard-cutover version. Super-admin only.
+exports.backfillTenantClaims = onCall({ memory: "512MiB", timeoutSeconds: 300 }, async (request) => {
+  if (!request.auth || request.auth.token.role !== 'super_admin') {
+    throw new HttpsError('permission-denied', 'Only super admins can run migrations.');
+  }
+  const db = admin.firestore();
+  const tenantsSnap = await db.collection('tenants').get();
+  const appIds = tenantsSnap.docs.map(d => d.id);
+  if (!appIds.includes(APP_ID)) appIds.push(APP_ID);
+
+  let updated = 0, skipped = 0;
+  const perTenant = [];
+  for (const appId of appIds) {
+    const usersSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').get();
+    for (const userDoc of usersSnap.docs) {
+      try {
+        const authUser = await admin.auth().getUser(userDoc.id);
+        const existing = authUser.customClaims || {};
+        const role = existing.role || userDoc.data().role || 'staff';
+        // First-write-wins on tenantId so a user already bound isn't reassigned.
+        await admin.auth().setCustomUserClaims(userDoc.id, { ...existing, role, tenantId: existing.tenantId || appId });
+        updated++;
+      } catch (e) {
+        skipped++;
+      }
+    }
+    perTenant.push({ appId, users: usersSnap.size });
+  }
+  return { success: true, updated, skipped, tenants: perTenant };
 });
 
 // ==========================================
@@ -449,7 +585,15 @@ exports.callAiAssistant = onRequest({
   memory: "256MiB"
 }, async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
-  if (req.method === 'OPTIONS') { res.set('Access-Control-Allow-Methods', 'POST'); res.set('Access-Control-Allow-Headers', 'Content-Type'); res.status(204).send(''); return; }
+  if (req.method === 'OPTIONS') { res.set('Access-Control-Allow-Methods', 'POST'); res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization'); res.status(204).send(''); return; }
+
+  // --- AUTH: require a valid Firebase ID token (was a public proxy to the paid DeepSeek key) ---
+  const authHeader = req.headers.authorization || '';
+  const bearer = authHeader.match(/^Bearer (.+)$/);
+  if (!bearer) return res.status(401).send('Unauthorized');
+  try { await admin.auth().verifyIdToken(bearer[1]); }
+  catch (e) { return res.status(401).send('Invalid token'); }
+
   const { prompt } = req.body;
   if (!prompt) return res.status(400).send('Missing prompt');
   try {

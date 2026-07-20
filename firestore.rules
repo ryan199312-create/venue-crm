@@ -2,57 +2,103 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper functions
+
+    // ---------- Helpers ----------
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    function isAdmin() {
+
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'super_admin';
+    }
+
+    function isAdminRole() {
       return isAuthenticated() && (request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin');
     }
-    
-    function isStaff() {
+
+    function isStaffRole() {
       return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin');
+    }
+
+    // Tenant binding: the caller must belong to {appId} (or be a super_admin).
+    //
+    // MIGRATION GRACE WINDOW: the final clause also admits authenticated users who do
+    // not yet carry a `tenantId` claim, so nobody is locked out between deploying these
+    // rules and finishing the claim backfill + token refresh. After `backfillTenantClaims`
+    // has run AND every active user has re-logged in, DELETE that last clause to reach
+    // full isolation (hard cutover).
+    function belongsTo(appId) {
+      return isSuperAdmin()
+        || (isAuthenticated() && request.auth.token.tenantId == appId)
+        // MIGRATION GRACE (tenant-bound): a user not yet stamped with a tenantId claim is
+        // admitted to {appId} ONLY if they already have a user doc under that tenant. This
+        // closes the cross-tenant hole — a claimless user can no longer reach an ARBITRARY
+        // tenant — while not locking out existing users during the claim backfill. After
+        // backfillTenantClaims has run AND every active user has re-logged in, DELETE this
+        // clause for full (claim-only) isolation.
+        || (isAuthenticated() && !('tenantId' in request.auth.token)
+            && exists(/databases/$(database)/documents/artifacts/$(appId)/private/data/users/$(request.auth.uid)));
+    }
+
+    // --- LICENSING: branch (outlet) cap ---
+    // A tenant's licensed branch count lives on /tenants/{appId}.maxBranches and is
+    // writable ONLY by the super_admin (master admin). Any write to a tenant's
+    // settings/config whose `outlets` array would exceed that cap is rejected here,
+    // so the client UI cannot be bypassed (console/API/direct SDK all hit this).
+    // A tenant with no maxBranches set yet is ungated (grace) — nobody is locked out
+    // before the master admin assigns them a license.
+    function branchLimit(appId) {
+      return exists(/databases/$(database)/documents/tenants/$(appId))
+             && 'maxBranches' in get(/databases/$(database)/documents/tenants/$(appId)).data
+        ? get(/databases/$(database)/documents/tenants/$(appId)).data.maxBranches
+        : 999999;
+    }
+    function withinBranchLimit(appId) {
+      return !('outlets' in request.resource.data)
+        || request.resource.data.outlets.size() <= branchLimit(appId);
     }
 
     // --- GLOBAL TENANTS (SaaS Level) ---
     match /tenants/{tenantId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();   // tightened: was any admin (cross-tenant hole)
     }
 
     // --- ARTIFACTS NAMESPACE ---
     match /artifacts/{appId} {
-      
-      // Allow super_admin to do anything across all tenants
-      allow read, write: if request.auth.token.role == 'super_admin';
 
-      // Public data (for website)
+      // Super admin has full cross-tenant access.
+      allow read, write: if isSuperAdmin();
+
+      // Public data (for the marketing website).
       match /public/data/settings/config {
         allow read: if true;
       }
-      
-      // Private data path
+
+      // Tenant-private data — now bound to the caller's tenant.
+      // Writes carrying an `outlets` array are additionally capped by the tenant's
+      // license (super_admin is exempt so the master admin can never be blocked).
       match /private/data/{collection}/{document=**} {
-        allow read: if isAuthenticated();
-        allow write: if isAdmin();
+        allow read: if belongsTo(appId);
+        allow write: if belongsTo(appId) && isAdminRole()
+                     && (isSuperAdmin() || withinBranchLimit(appId));
       }
 
-      // Specific override for settings config (since it's a deep path)
+      // Settings config is publicly readable (client portal / website), tenant-admin writable.
       match /private/data/settings/config {
-        allow read: if true; 
-        allow write: if isAdmin();
+        allow read: if true;
+        allow write: if belongsTo(appId) && isAdminRole()
+                     && (isSuperAdmin() || withinBranchLimit(appId));
       }
 
-      // Public Calendar
+      // Public Calendar (read-only to the world; writes by the owning tenant's staff).
       match /public_calendar/{eventId} {
         allow read: if true;
-        allow write: if isStaff();
+        allow write: if belongsTo(appId) && isStaffRole();
       }
     }
-    
-    // Default: Deny all
+
+    // Default: deny all.
     match /{document=**} {
       allow read, write: if false;
     }

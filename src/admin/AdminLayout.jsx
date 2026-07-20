@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Loader2, Rocket, ShieldAlert } from 'lucide-react';
 
 // Firebase & Core
@@ -69,6 +69,7 @@ export default function AdminLayout() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
+  const savingRef = useRef(false);   // re-entrancy guard: blocks double-submit creating duplicates
   const [isClaiming, setIsClaiming] = useState(false);
   const [isPreparingPrint, setIsPreparingPrint] = useState(false);
   const [printData, setPrintData] = useState(null);
@@ -159,10 +160,15 @@ export default function AdminLayout() {
 
   const handleSaveEvent = async (e) => {
     if (e) e.preventDefault();
+    if (savingRef.current) return;                  // block rapid double-click
+    savingRef.current = true;
     try {
-      await saveEvent(formData, editingEvent?.id);
+      const savedId = await saveEvent(formData, editingEvent?.id);
+      // Promote a new event to edit mode so the next save UPDATES it, not duplicates it.
+      if (!editingEvent?.id && savedId) setEditingEvent({ id: savedId, ...formData });
       addToast("訂單已儲存", "success");
     } catch (err) { addToast("儲存失敗", "error"); }
+    finally { savingRef.current = false; }
   };
 
   const handleDeleteEvent = async (id) => {

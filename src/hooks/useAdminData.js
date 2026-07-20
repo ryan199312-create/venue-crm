@@ -3,7 +3,6 @@ import { db, functions } from '../core/firebase';
 import {
   collection,
   doc,
-  addDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
@@ -120,10 +119,12 @@ export function useAdminData(appId) {
     };
     if (existingId) {
       await updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'events', existingId), eventData);
-    } else {
-      const docRef = await addDoc(collection(db, 'artifacts', appId, 'private', 'data', 'events'), eventData);
-      await setDoc(docRef, { orderId: eventData.orderId || `EO-${docRef.id.slice(0,5)}` }, { merge: true });
+      return existingId;
     }
+    // Pre-generate the ref so orderId can be derived and the doc written in a single op.
+    const newRef = doc(collection(db, 'artifacts', appId, 'private', 'data', 'events'));
+    await setDoc(newRef, { ...eventData, orderId: eventData.orderId || `EO-${newRef.id.slice(0, 5)}` });
+    return newRef.id;
   };
 
   const deleteEvent = async (id) => {

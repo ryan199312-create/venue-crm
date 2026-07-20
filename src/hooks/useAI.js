@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../core/firebase'; 
+import { functions, auth } from '../core/firebase';
 import { getTenantId } from '../core/tenantResolver';
 
 export const useAI = () => {
@@ -17,11 +17,14 @@ export const useAI = () => {
     try {
       const appId = getTenantId();
       console.log(`[useAI] Calling AI for tenant: ${appId}`);
-      
+
+      // Send the caller's Firebase ID token — the endpoint now requires auth.
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch('https://callaiassistant-tebfenc7da-df.a.run.app', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
         },
         body: JSON.stringify({
           data: { // Wrapped in data to keep compatibility with existing backend structure

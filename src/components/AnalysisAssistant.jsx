@@ -1,7 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { X, Send, Bot, Loader2, Sparkles, BarChart3 } from 'lucide-react';
-import { useAI } from '../hooks/useAI'; 
+import { useAI } from '../hooks/useAI';
 import { useAuth } from '../context/AuthContext';
+
+// Escape HTML first (so model output like <img onerror=…> becomes inert text),
+// then apply simple **bold**, then sanitize as defense-in-depth.
+function formatAiMessage(text) {
+  const escaped = String(text ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const withBold = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  return DOMPurify.sanitize(withBold, { ALLOWED_TAGS: ['strong'], ALLOWED_ATTR: [] });
+}
 
 export default function AnalysisAssistant({ events, onClose }) {
   const { appSettings } = useAuth();
@@ -87,7 +97,7 @@ const handleDataChat = async () => {
                 {msg.role === 'ai' && <div className="flex items-center gap-2 mb-2 border-b border-slate-100 pb-1 text-xs font-bold text-emerald-600"><Bot size={14}/> 數據助理</div>}
                 
                 {/* Safe markdown parsing for simple bolding */}
-                <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: formatAiMessage(msg.text) }} />
               </div>
             </div>
           ))}

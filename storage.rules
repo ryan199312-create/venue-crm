@@ -8,7 +8,7 @@ service firebase.storage {
     }
     
     function isStaff() {
-      return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin');
+      return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin');
     }
 
     // Generated PDFs
@@ -20,7 +20,20 @@ service firebase.storage {
     // Client Uploads (Receipts)
     match /receipts/{allPaths=**} {
       allow read: if isStaff();
-      allow write: if true; // Public upload allowed (Handled/Validated by Cloud Function)
+      // No longer an open door. The Cloud Function (uploadClientPaymentProof) uses the
+      // Admin SDK and bypasses these rules; any direct client write is capped to <10MB
+      // and restricted to image/PDF content types.
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('^(image/(jpeg|png|webp)|application/pdf)$');
+    }
+
+    // PDF HTML payloads — scoped to the uploading tenant's own namespace.
+    // enqueuePdfJob reads these via the Admin SDK and enforces the same path allowlist
+    // server-side; this rule stops a tenant from writing into another tenant's dir.
+    match /pdf_payloads/{tenantId}/{allPaths=**} {
+      allow read, write: if isStaff()
+                         && (request.auth.token.tenantId == tenantId
+                             || !('tenantId' in request.auth.token));
     }
 
     // Default: Staff only

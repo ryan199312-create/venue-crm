@@ -10,6 +10,7 @@ import ScrollToTop from './components/ScrollToTop';
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const ClientPortal = lazy(() => import('./admin/ClientPortal'));
 const SuperAdminPortal = lazy(() => import('./super-admin/SuperAdminPortal'));
+const LandingPage = lazy(() => import('./landing/LandingPage'));
 
 // Error Boundary to catch Chunk Load errors or React UI crashes
 class GlobalErrorBoundary extends React.Component {
@@ -64,6 +65,10 @@ export default function App() {
       <GlobalErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
+            {/* ROOT: public marketing landing page (root domain only).
+                On a tenant subdomain, "/" goes straight to that tenant's app. */}
+            <Route path="/" element={rootDomain ? <LandingPage /> : <Navigate to="/admin" replace />} />
+
             {/* SUPER ADMIN CONSOLE - Always available at this path */}
             <Route path="/super-admin" element={<SuperAdminPortal />} />
 
@@ -73,15 +78,8 @@ export default function App() {
             <Route path="/portal" element={<ClientPortal />} />
             <Route path="/portal/:eventId" element={<ClientPortal />} />
 
-            {/* Fallback Logic */}
-            <Route 
-              path="*" 
-              element={
-                rootDomain 
-                  ? <Navigate to="/admin" replace /> 
-                  : <Navigate to="/admin" replace />
-              } 
-            />
+            {/* Fallback: unknown paths → landing (root domain) or the tenant app (subdomain) */}
+            <Route path="*" element={<Navigate to={rootDomain ? '/' : '/admin'} replace />} />
           </Routes>
         </Suspense>
       </GlobalErrorBoundary>

@@ -45,8 +45,11 @@ export const isRootDomain = () => {
   // In hybrid mode, we don't treat the root as a "Super Admin only" zone
   // unless specifically navigating to /super-admin.
   const hostname = window.location.hostname;
-  const parts = hostname.split('.');
-  
+  const rawParts = hostname.split('.');
+  // Treat the "www" host as the root/marketing domain too (e.g. www.vowsos.com),
+  // since Vercel may redirect the apex vowsos.com -> www.vowsos.com.
+  const parts = rawParts[0] === 'www' ? rawParts.slice(1) : rawParts;
+
   if (hostname.endsWith('.localhost')) return parts.length === 1;
   if (hostname.endsWith('.vercel.app')) return parts.length === 3;
   return parts.length === 2;

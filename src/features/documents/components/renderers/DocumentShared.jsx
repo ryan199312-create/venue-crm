@@ -7,6 +7,7 @@ import {
   generateBillingSummary,
   DEPARTMENTS
 } from '../../../../services/billingService';
+import { getDocStyle } from '../../docStyles';
 
 export { formatMoney, generateBillingSummary, DEPARTMENTS };
 
@@ -219,7 +220,7 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
   const venueId = data.venueId;
   const profile = appSettings?.venueProfile || appSettings?.venueProfiles?.[venueId] || {};
   const logoUrl = appSettings?.companyLogoUrl;
-  const layout = appSettings?.branding?.documentLayout || 'classic';
+  const layout = getDocStyle(appSettings).header;
   const issueDate = formatDateEn(getIssueDate(data));
 
   const brandName = logoUrl ? (

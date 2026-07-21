@@ -11,6 +11,11 @@ html, body, #root, .font-sans {
   font-family: "Noto Sans TC", "PingFang HK", "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
 }
 
+/* Document design style: the .doc-font-root wrapper carries the chosen style font
+   (inline). Force every descendant to inherit it so renderers' hardcoded .font-sans
+   no longer wins. Root itself is untouched (keeps its inline fontFamily). */
+.doc-font-root * { font-family: inherit !important; }
+
 /* 列印專用樣式 */
 @media print {
   html, body, #root {

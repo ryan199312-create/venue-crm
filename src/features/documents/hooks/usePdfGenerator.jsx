@@ -5,12 +5,14 @@ import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import DocumentRouter from '../components/DocumentRouter';
+import { getDocStyle } from '../docStyles';
 import { useAuth } from '../../../context/AuthContext';
 
 export function usePdfGenerator() {
   const { appId } = useAuth();
   
   const generatePdf = async ({ docType, data, appSettings, download = false, lang = 'en' }) => {
+    const docFont = getDocStyle(appSettings).font;
     const jobId = Math.random().toString(36).substring(7);
     const fileName = `${data.orderId}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;
     
@@ -38,14 +40,18 @@ export function usePdfGenerator() {
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
             ${themeVars}
-            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-            
-            body { 
-              font-family: 'Noto Sans TC', sans-serif !important; 
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@400;500;700;900&display=swap');
+
+            body {
+              font-family: ${docFont} !important;
               margin: 0 !important; padding: 0 !important; background: white !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
+
+            /* Document design style: force the chosen font through the whole document,
+               overriding renderers' hardcoded .font-sans (mirrors the on-screen rule). */
+            .doc-font-root, .doc-font-root * { font-family: ${docFont} !important; }
 
             /* PAGED.JS ENGINE CONFIGURATION (MATCHING NATIVE) */
             @page {

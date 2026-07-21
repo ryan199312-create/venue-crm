@@ -7,6 +7,7 @@ import { QuotationRenderer, InvoiceRenderer, ReceiptRenderer } from './renderers
 import FloorplanRenderer from './renderers/FloorplanRenderer';
 import { AddendumRenderer, InternalNotesRenderer, MenuConfirmRenderer } from './renderers/OtherRenderers';
 import { BrandedFooter } from './renderers/DocumentShared';
+import { getDocStyle } from '../docStyles';
 
 /**
  * DocumentRouter (Router)
@@ -59,9 +60,9 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
   };
 
   return (
-    <>
+    <div className="doc-font-root" style={{ fontFamily: getDocStyle(appSettings).font }}>
       <BrandedFooter data={data} />
       {renderContent()}
-    </>
+    </div>
   );
 }

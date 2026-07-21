@@ -1,6 +1,7 @@
 import React from 'react';
 import { Palette, Image as ImageIcon, Globe, MousePointer2, LayoutTemplate } from 'lucide-react';
 import { Card, FormInput } from '../../components/ui';
+import { DOC_STYLES, DOC_STYLE_ORDER } from '../documents/docStyles';
 
 // Preset document design themes — each sets the --brand-primary/secondary/accent colours
 // used across every generated document (contracts, quotations, receipts, EO…).
@@ -13,14 +14,6 @@ const DOC_THEMES = [
   { id: 'navy',      name: '海軍藍',   en: 'Navy',           primary: '#1e3a8a', secondary: '#1e293b', accent: '#94a3b8' },
   { id: 'forest',    name: '森林綠',   en: 'Forest',         primary: '#166534', secondary: '#14532d', accent: '#a3b18a' },
   { id: 'champagne', name: '香檳',     en: 'Champagne',      primary: '#7c6f5b', secondary: '#44403c', accent: '#c9a227' },
-];
-
-// Document layout styles (header arrangement) applied across all generated documents.
-const DOC_LAYOUTS = [
-  { id: 'classic', name: '經典',     en: 'Classic' },
-  { id: 'modern',  name: '現代置中', en: 'Modern' },
-  { id: 'minimal', name: '簡約',     en: 'Minimal' },
-  { id: 'bold',    name: '醒目色帶', en: 'Bold' },
 ];
 
 const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, addToast }) => {
@@ -92,26 +85,27 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
         </div>
       </Card>
 
-      {/* Document layout styles */}
+      {/* Document design style — typography + header treatment */}
       <Card className="p-6 border-l-4 border-l-slate-700">
-        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><LayoutTemplate className="text-slate-700" /> 版面風格 (Layout Style)</h3>
-        <p className="text-[11px] text-slate-400 mb-5">選擇單據的版面排版；套用到所有文件的頁首。</p>
+        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><LayoutTemplate className="text-slate-700" /> 文件設計 (Document Design)</h3>
+        <p className="text-[11px] text-slate-400 mb-5">整體風格：字體與頁首排版，套用到所有生成的單據。</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {DOC_LAYOUTS.map(l => {
-            const active = (branding.documentLayout || 'classic') === l.id;
+          {DOC_STYLE_ORDER.map(id => {
+            const s = DOC_STYLES[id];
+            const active = (branding.docStyle || 'classic') === id;
             const c = branding.primaryColor || '#4F46E5';
             return (
-              <button key={l.id} type="button" onClick={() => handleColorChange('documentLayout', l.id)}
-                className={`p-3 rounded-2xl border-2 transition-all ${active ? 'border-violet-500 shadow-lg shadow-violet-100' : 'border-slate-200 hover:border-slate-300'}`}>
+              <button key={id} type="button" onClick={() => handleColorChange('docStyle', id)}
+                className={`p-3 rounded-2xl border-2 transition-all text-left ${active ? 'border-violet-500 shadow-lg shadow-violet-100' : 'border-slate-200 hover:border-slate-300'}`}>
                 <div className="h-16 bg-slate-50 rounded-lg border border-slate-200 p-2 mb-2 overflow-hidden">
-                  {l.id === 'classic' && (
+                  {s.header === 'classic' && (
                     <div className="h-full flex flex-col">
                       <div className="flex justify-between"><div className="w-8 h-2 rounded-sm" style={{ backgroundColor: c }} /><div className="w-6 h-1.5 bg-slate-300 rounded-sm" /></div>
                       <div className="mt-1 h-0.5 rounded" style={{ backgroundColor: c }} />
                       <div className="mt-2 space-y-1"><div className="w-full h-1 bg-slate-200 rounded" /><div className="w-2/3 h-1 bg-slate-200 rounded" /></div>
                     </div>
                   )}
-                  {l.id === 'modern' && (
+                  {s.header === 'modern' && (
                     <div className="h-full flex flex-col items-center gap-1 pt-1">
                       <div className="w-10 h-2 rounded-sm" style={{ backgroundColor: c }} />
                       <div className="w-6 h-1 bg-slate-300 rounded" />
@@ -119,22 +113,25 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
                       <div className="w-8 h-1 bg-slate-200 rounded mt-0.5" />
                     </div>
                   )}
-                  {l.id === 'minimal' && (
+                  {s.header === 'minimal' && (
                     <div className="h-full flex flex-col justify-between">
                       <div className="flex justify-between items-end"><div className="w-8 h-1.5 bg-slate-400 rounded-sm" /><div className="w-6 h-1.5 bg-slate-300 rounded-sm" /></div>
                       <div className="h-px bg-slate-300" />
                       <div className="w-full h-1 bg-slate-200 rounded" />
                     </div>
                   )}
-                  {l.id === 'bold' && (
+                  {s.header === 'bold' && (
                     <div className="h-full flex flex-col gap-1">
                       <div className="w-full h-4 rounded" style={{ backgroundColor: c }} />
                       <div className="flex justify-between"><div className="w-8 h-1.5 bg-slate-300 rounded-sm" /><div className="w-6 h-1.5 bg-slate-300 rounded-sm" /></div>
                     </div>
                   )}
                 </div>
-                <p className="text-xs font-black text-slate-800 leading-tight">{l.name}</p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{l.en}</p>
+                <div className="flex items-baseline justify-between gap-1">
+                  <p className="text-xs font-black text-slate-800 leading-tight">{s.label}</p>
+                  <span className="text-base text-slate-500 leading-none" style={{ fontFamily: s.font }}>Aa文</span>
+                </div>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{s.en}</p>
               </button>
             );
           })}

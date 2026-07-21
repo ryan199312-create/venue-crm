@@ -646,6 +646,8 @@ exports.activateUser = onCall({ invoker: "public", memory: "256MiB" }, async (re
     displayName: pending.displayName || normalized,
     role: pending.role || 'staff',
     accessibleVenues: pending.accessibleVenues || [],
+    // Owner accounts must verify their email before full access (gated client-side).
+    requiresEmailVerification: !!pending.requiresEmailVerification,
     activatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
@@ -766,14 +768,19 @@ exports.callAiAssistant = onRequest({
   // --- AUTH: require a valid Firebase ID token (was a public proxy to the paid DeepSeek key) ---
   const authHeader = req.headers.authorization || '';
   const bearer = authHeader.match(/^Bearer (.+)$/);
-  if (!bearer) return res.status(401).send('Unauthorized');
+  if (!bearer) return res.status(401).json({ error: { message: 'Unauthorized' } });
   try { await admin.auth().verifyIdToken(bearer[1]); }
-  catch (e) { return res.status(401).send('Invalid token'); }
+  catch (e) { return res.status(401).json({ error: { message: 'Invalid token' } }); }
 
-  const { prompt } = req.body;
-  if (!prompt) return res.status(400).send('Missing prompt');
+  // The client sends { data: { messages: [...] } }; accept that (or a bare { prompt }).
+  const body = req.body?.data || req.body || {};
+  const messages = (Array.isArray(body.messages) && body.messages.length)
+    ? body.messages
+    : (body.prompt ? [{ role: 'user', content: String(body.prompt) }] : null);
+  if (!messages) return res.status(400).json({ error: { message: 'Missing messages' } });
   try {
-    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', { model: "deepseek-chat", messages: [{ role: "user", content: prompt }] }, { headers: { 'Authorization': `Bearer ${deepseekKey.value()}`, 'Content-Type': 'application/json' } });
-    res.status(200).json(response.data);
-  } catch (error) { res.status(500).send(error.message); }
+    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', { model: "deepseek-chat", messages }, { headers: { 'Authorization': `Bearer ${deepseekKey.value()}`, 'Content-Type': 'application/json' } });
+    // Wrap in { data } so the client reads resultData.data.choices[...] consistently.
+    res.status(200).json({ data: response.data });
+  } catch (error) { res.status(500).json({ error: { message: error.message } }); }
 });

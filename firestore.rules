@@ -58,6 +58,14 @@ service cloud.firestore {
         || request.resource.data.outlets.size() <= branchLimit(appId);
     }
 
+    // A suspended tenant is frozen: its members cannot write (super_admin is exempt so
+    // the master admin can still manage/unsuspend). Reads are left open so the app can
+    // still load and show the "suspended" screen.
+    function tenantSuspended(appId) {
+      return exists(/databases/$(database)/documents/tenants/$(appId))
+        && get(/databases/$(database)/documents/tenants/$(appId)).data.status == 'suspended';
+    }
+
     // --- GLOBAL TENANTS (SaaS Level) ---
     match /tenants/{tenantId} {
       allow read: if isAuthenticated();
@@ -84,6 +92,7 @@ service cloud.firestore {
         allow read: if belongsTo(appId) && collection != 'pending_users';
         allow write: if belongsTo(appId) && isAdminRole()
                      && (isSuperAdmin() || withinBranchLimit(appId))
+                     && (isSuperAdmin() || !tenantSuspended(appId))
                      && collection != 'pending_users';
       }
 
@@ -98,7 +107,8 @@ service cloud.firestore {
       match /private/data/settings/config {
         allow read: if true;
         allow write: if belongsTo(appId) && isAdminRole()
-                     && (isSuperAdmin() || withinBranchLimit(appId));
+                     && (isSuperAdmin() || withinBranchLimit(appId))
+                     && (isSuperAdmin() || !tenantSuspended(appId));
       }
 
       // Public Calendar (read-only to the world; writes by the owning tenant's staff).

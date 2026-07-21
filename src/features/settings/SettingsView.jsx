@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText } from 'lucide-react';
+import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText, Eye } from 'lucide-react';
 import {
   formatMoney, isZoneSelected, getPreferredZoneLabel, DAYS_OF_WEEK, DEPARTMENTS
 } from '../../services/billingService';
@@ -24,6 +24,8 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   const [calibrationData, setCalibrationData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewLang, setPreviewLang] = useState('en');
+  const [showLivePreview, setShowLivePreview] = useState(true);
+  const [livePreviewLang, setLivePreviewLang] = useState('en');
   
   // Mock data for preview
   const previewMockData = {
@@ -415,7 +417,34 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
       {activeSubTab === 'documents' && (
         <Card className="p-6 border-l-4 border-l-violet-500 animate-in fade-in">
           <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2"><FileText className="text-violet-500" /> 單據與收款範本 (Documents & Payment)</h3>
-          <p className="text-xs text-slate-400 mb-6">此頁設定會套用到該分店生成的報價單、合約與收據。</p>
+          <p className="text-xs text-slate-400 mb-6">此頁設定會套用到該分店生成的報價單、合約與收據。編輯下方欄位，右方預覽會即時更新，按「儲存」即設為預設範本。</p>
+
+          {/* Live document preview — updates as you edit; Save sets it as the default template. */}
+          <div className="mb-8 border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Eye size={14} /> 即時預覽 · 合約 (Live Preview)</span>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5">
+                  {['en', 'zh'].map(l => (
+                    <button key={l} type="button" onClick={() => setLivePreviewLang(l)} className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${livePreviewLang === l ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>{l === 'en' ? 'EN' : '中文'}</button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => setShowLivePreview(s => !s)} className="text-xs font-bold text-slate-400 hover:text-slate-600 px-2">{showLivePreview ? '隱藏' : '顯示'}</button>
+              </div>
+            </div>
+            {showLivePreview && (
+              <div className="max-h-[75vh] overflow-auto bg-slate-200/60 p-4">
+                <div className="mx-auto shadow-lg" style={{ width: 'fit-content' }}>
+                  <ContractRenderer
+                    data={previewMockData}
+                    isCn={livePreviewLang === 'zh'}
+                    appSettings={{ ...settings, venueProfiles: { ...settings.venueProfiles, [selectedVenueId]: localSettings.venueProfile } }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-6">
             <div>
               <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">單據條款設定 (Document Terms)</h4>

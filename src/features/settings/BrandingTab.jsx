@@ -2,6 +2,19 @@ import React from 'react';
 import { Palette, Image as ImageIcon, Globe, MousePointer2 } from 'lucide-react';
 import { Card, FormInput } from '../../components/ui';
 
+// Preset document design themes — each sets the --brand-primary/secondary/accent colours
+// used across every generated document (contracts, quotations, receipts, EO…).
+const DOC_THEMES = [
+  { id: 'indigo',    name: '經典靛藍', en: 'Classic',        primary: '#4F46E5', secondary: '#1e293b', accent: '#8b5cf6' },
+  { id: 'emerald',   name: '翡翠金',   en: 'Emerald & Gold', primary: '#047857', secondary: '#1c1917', accent: '#b8942f' },
+  { id: 'burgundy',  name: '酒紅',     en: 'Burgundy',       primary: '#9f1239', secondary: '#292524', accent: '#c2953a' },
+  { id: 'noir',      name: '午夜金',   en: 'Midnight Gold',  primary: '#111827', secondary: '#374151', accent: '#d4af37' },
+  { id: 'rosegold',  name: '玫瑰金',   en: 'Rose Gold',      primary: '#b76e79', secondary: '#3f3f46', accent: '#d4a373' },
+  { id: 'navy',      name: '海軍藍',   en: 'Navy',           primary: '#1e3a8a', secondary: '#1e293b', accent: '#94a3b8' },
+  { id: 'forest',    name: '森林綠',   en: 'Forest',         primary: '#166534', secondary: '#14532d', accent: '#a3b18a' },
+  { id: 'champagne', name: '香檳',     en: 'Champagne',      primary: '#7c6f5b', secondary: '#44403c', accent: '#c9a227' },
+];
+
 const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, addToast }) => {
   const branding = localSettings?.branding || {
     primaryColor: '#4F46E5',
@@ -10,11 +23,27 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
   };
 
   const handleColorChange = (field, value) => {
+    const isColor = ['primaryColor', 'secondaryColor', 'accentColor'].includes(field);
     setLocalSettings(prev => ({
       ...prev,
       branding: {
         ...(prev.branding || {}),
-        [field]: value
+        [field]: value,
+        // Hand-tweaking a colour means it's no longer a pristine preset.
+        ...(isColor ? { themeId: null } : {})
+      }
+    }));
+  };
+
+  const applyTheme = (theme) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      branding: {
+        ...(prev.branding || {}),
+        themeId: theme.id,
+        primaryColor: theme.primary,
+        secondaryColor: theme.secondary,
+        accentColor: theme.accent,
       }
     }));
   };
@@ -32,11 +61,34 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
 
   return (
     <div className="space-y-6 animate-in fade-in" style={brandStyles}>
+      {/* Design theme presets */}
+      <Card className="p-6 border-l-4 border-l-violet-600">
+        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><Palette className="text-violet-600" /> 設計主題 (Design Themes)</h3>
+        <p className="text-[11px] text-slate-400 mb-5">選擇一個主題，即套用到所有單據的配色；之後仍可在下方自訂微調。</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {DOC_THEMES.map(theme => {
+            const active = branding.themeId === theme.id;
+            return (
+              <button key={theme.id} type="button" onClick={() => applyTheme(theme)}
+                className={`text-left p-3 rounded-2xl border-2 transition-all ${active ? 'border-violet-500 shadow-lg shadow-violet-100' : 'border-slate-200 hover:border-slate-300'}`}>
+                <div className="flex gap-1.5 mb-2.5">
+                  <span className="w-6 h-6 rounded-lg shadow-inner border border-black/5" style={{ backgroundColor: theme.primary }} />
+                  <span className="w-6 h-6 rounded-lg shadow-inner border border-black/5" style={{ backgroundColor: theme.secondary }} />
+                  <span className="w-6 h-6 rounded-lg shadow-inner border border-black/5" style={{ backgroundColor: theme.accent }} />
+                </div>
+                <p className="text-xs font-black text-slate-800 leading-tight">{theme.name}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{theme.en}</p>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Colors Selection */}
         <Card className="p-6 border-l-4 border-l-indigo-600">
           <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <Palette className="text-indigo-600" /> 品牌顏色 (Brand Colors)
+            <Palette className="text-indigo-600" /> 自訂顏色 (Custom Colors)
           </h3>
           
           <div className="space-y-6">
@@ -176,7 +228,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
           onClick={handleSaveBranding}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl font-bold shadow-xl transition-all active:scale-95"
         >
-          儲存視覺設定 (Save Branding)
+          儲存文件風格 (Save Doc Style)
         </button>
       </div>
     </div>

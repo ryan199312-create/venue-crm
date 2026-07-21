@@ -219,44 +219,89 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
   const venueId = data.venueId;
   const profile = appSettings?.venueProfile || appSettings?.venueProfiles?.[venueId] || {};
   const logoUrl = appSettings?.companyLogoUrl;
+  const layout = appSettings?.branding?.documentLayout || 'classic';
+  const issueDate = formatDateEn(getIssueDate(data));
 
-  return (
-    <div className="flex justify-between items-start border-b-[3px] pb-3 mb-8" style={{ borderColor: 'var(--brand-primary)' }}>
-      <div className="max-w-[45%]">
-        <div className="flex flex-col gap-1">
-          {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="h-12 object-contain self-start mb-2" />
-          ) : (
-            <div className="flex flex-col gap-0" style={{ color: 'var(--brand-primary)' }}>
-              <span className="text-3xl font-black tracking-tight leading-none">{profile.nameZh || appSettings?.venueName || ''}</span>
-              {profile.nameEn && <span className="text-xs font-bold tracking-[0.2em] uppercase mt-1">{profile.nameEn}</span>}
-            </div>
-          )}
+  const brandName = logoUrl ? (
+    <img src={logoUrl} alt="Logo" className="h-12 object-contain mb-2" />
+  ) : (
+    <div className="flex flex-col gap-0" style={{ color: 'var(--brand-primary)' }}>
+      <span className="text-3xl font-black tracking-tight leading-none">{profile.nameZh || appSettings?.venueName || ''}</span>
+      {profile.nameEn && <span className="text-xs font-bold tracking-[0.2em] uppercase mt-1">{profile.nameEn}</span>}
+    </div>
+  );
 
-          <div className="text-[9px] text-slate-500 font-medium leading-relaxed mt-1">
-            {profile.address && (
-              <p className="text-slate-700 mb-0.5 max-w-[280px] whitespace-pre-line">{profile.address}</p>
-            )}
-            {(profile.phone || profile.website) && (
-              <p>
-                {profile.phone && <>Tel: {profile.phone}</>}
-                {profile.website && `${profile.phone ? ' | ' : ''}Web: ${profile.website}`}
-              </p>
-            )}
+  const contactLines = (profile.address || profile.phone || profile.website) ? (
+    <div className="text-[9px] text-slate-500 font-medium leading-relaxed mt-1">
+      {profile.address && <p className="text-slate-700 mb-0.5 max-w-[280px] whitespace-pre-line">{profile.address}</p>}
+      {(profile.phone || profile.website) && (
+        <p>{profile.phone && <>Tel: {profile.phone}</>}{profile.website && `${profile.phone ? ' | ' : ''}Web: ${profile.website}`}</p>
+      )}
+    </div>
+  ) : null;
+
+  const NoDate = ({ center }) => (
+    <div className={`text-[10px] flex gap-3 ${center ? 'justify-center' : ''}`}>
+      <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
+      <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">Date.</span> <span className="font-mono font-bold text-slate-800">{issueDate}</span></div>
+    </div>
+  );
+
+  // MODERN — everything centred
+  if (layout === 'modern') {
+    return (
+      <div className="text-center mb-8 pb-4 border-b border-slate-200">
+        <div className="flex flex-col items-center">{brandName}{contactLines}</div>
+        <h1 className="text-2xl font-light text-slate-800 uppercase tracking-[0.35em] mt-5">{typeEn}</h1>
+        {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-wider">{typeZh}</h2>}
+        <div className="mt-2"><NoDate center /></div>
+        {data.eventName && <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight mt-1">{data.eventName}</div>}
+      </div>
+    );
+  }
+
+  // MINIMAL — thin, understated
+  if (layout === 'minimal') {
+    return (
+      <div className="flex justify-between items-end border-b border-slate-300 pb-2 mb-8">
+        <div>{brandName}{contactLines}</div>
+        <div className="text-right shrink-0 ml-4">
+          <h1 className="text-lg font-bold text-slate-800 uppercase tracking-widest">{typeEn}</h1>
+          <div className="text-[10px] text-slate-500 mt-1">No. <span className="font-mono font-bold text-slate-700">{data.orderId}</span> · {issueDate}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // BOLD — brand-coloured band carrying the document type
+  if (layout === 'bold') {
+    return (
+      <div className="mb-8">
+        <div className="px-6 py-4 rounded-xl text-white mb-4" style={{ backgroundColor: 'var(--brand-primary)' }}>
+          <h1 className="text-2xl font-light uppercase tracking-[0.2em]">{typeEn}</h1>
+          {typeZh && <h2 className="text-xs font-bold uppercase tracking-wider opacity-90">{typeZh}</h2>}
+        </div>
+        <div className="flex justify-between items-start">
+          <div>{brandName}{contactLines}</div>
+          <div className="text-right shrink-0 ml-4">
+            <NoDate />
+            {data.eventName && <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight mt-1">{data.eventName}</div>}
           </div>
         </div>
       </div>
+    );
+  }
+
+  // CLASSIC (default)
+  return (
+    <div className="flex justify-between items-start border-b-[3px] pb-3 mb-8" style={{ borderColor: 'var(--brand-primary)' }}>
+      <div className="max-w-[45%]"><div className="flex flex-col gap-1">{brandName}{contactLines}</div></div>
       <div className="text-right flex-1 ml-4">
         <h1 className="text-2xl md:text-3xl font-light text-slate-800 uppercase tracking-tight mb-1 whitespace-nowrap">{typeEn}</h1>
         {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-wider mb-3">{typeZh}</h2>}
         <div className="flex flex-col items-end gap-0 mt-2">
-          <div className="text-[10px] flex justify-end gap-3">
-            <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
-            <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">Date.</span> <span className="font-mono font-bold text-slate-800">{formatDateEn(getIssueDate(data))}</span></div>
-          </div>
-          <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight">
-            {data.eventName}
-          </div>
+          <NoDate />
+          <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{data.eventName}</div>
         </div>
       </div>
     </div>

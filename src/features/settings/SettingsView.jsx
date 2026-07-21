@@ -477,7 +477,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
                     data={previewMockData}
                     printMode={previewDocType}
                     lang={livePreviewLang}
-                    appSettings={{ ...settings, venueProfiles: { ...settings.venueProfiles, [selectedVenueId]: localSettings.venueProfile } }}
+                    appSettings={{ ...settings, branding: localSettings.branding || settings.branding, venueProfiles: { ...settings.venueProfiles, [selectedVenueId]: localSettings.venueProfile } }}
                   />
                 </div>
               </div>

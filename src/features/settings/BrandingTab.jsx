@@ -1,5 +1,5 @@
 import React from 'react';
-import { Palette, Image as ImageIcon, Globe, MousePointer2 } from 'lucide-react';
+import { Palette, Image as ImageIcon, Globe, MousePointer2, LayoutTemplate } from 'lucide-react';
 import { Card, FormInput } from '../../components/ui';
 
 // Preset document design themes — each sets the --brand-primary/secondary/accent colours
@@ -13,6 +13,14 @@ const DOC_THEMES = [
   { id: 'navy',      name: '海軍藍',   en: 'Navy',           primary: '#1e3a8a', secondary: '#1e293b', accent: '#94a3b8' },
   { id: 'forest',    name: '森林綠',   en: 'Forest',         primary: '#166534', secondary: '#14532d', accent: '#a3b18a' },
   { id: 'champagne', name: '香檳',     en: 'Champagne',      primary: '#7c6f5b', secondary: '#44403c', accent: '#c9a227' },
+];
+
+// Document layout styles (header arrangement) applied across all generated documents.
+const DOC_LAYOUTS = [
+  { id: 'classic', name: '經典',     en: 'Classic' },
+  { id: 'modern',  name: '現代置中', en: 'Modern' },
+  { id: 'minimal', name: '簡約',     en: 'Minimal' },
+  { id: 'bold',    name: '醒目色帶', en: 'Bold' },
 ];
 
 const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, addToast }) => {
@@ -78,6 +86,55 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
                 </div>
                 <p className="text-xs font-black text-slate-800 leading-tight">{theme.name}</p>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{theme.en}</p>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Document layout styles */}
+      <Card className="p-6 border-l-4 border-l-slate-700">
+        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><LayoutTemplate className="text-slate-700" /> 版面風格 (Layout Style)</h3>
+        <p className="text-[11px] text-slate-400 mb-5">選擇單據的版面排版；套用到所有文件的頁首。</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {DOC_LAYOUTS.map(l => {
+            const active = (branding.documentLayout || 'classic') === l.id;
+            const c = branding.primaryColor || '#4F46E5';
+            return (
+              <button key={l.id} type="button" onClick={() => handleColorChange('documentLayout', l.id)}
+                className={`p-3 rounded-2xl border-2 transition-all ${active ? 'border-violet-500 shadow-lg shadow-violet-100' : 'border-slate-200 hover:border-slate-300'}`}>
+                <div className="h-16 bg-slate-50 rounded-lg border border-slate-200 p-2 mb-2 overflow-hidden">
+                  {l.id === 'classic' && (
+                    <div className="h-full flex flex-col">
+                      <div className="flex justify-between"><div className="w-8 h-2 rounded-sm" style={{ backgroundColor: c }} /><div className="w-6 h-1.5 bg-slate-300 rounded-sm" /></div>
+                      <div className="mt-1 h-0.5 rounded" style={{ backgroundColor: c }} />
+                      <div className="mt-2 space-y-1"><div className="w-full h-1 bg-slate-200 rounded" /><div className="w-2/3 h-1 bg-slate-200 rounded" /></div>
+                    </div>
+                  )}
+                  {l.id === 'modern' && (
+                    <div className="h-full flex flex-col items-center gap-1 pt-1">
+                      <div className="w-10 h-2 rounded-sm" style={{ backgroundColor: c }} />
+                      <div className="w-6 h-1 bg-slate-300 rounded" />
+                      <div className="w-full h-px bg-slate-200 mt-0.5" />
+                      <div className="w-8 h-1 bg-slate-200 rounded mt-0.5" />
+                    </div>
+                  )}
+                  {l.id === 'minimal' && (
+                    <div className="h-full flex flex-col justify-between">
+                      <div className="flex justify-between items-end"><div className="w-8 h-1.5 bg-slate-400 rounded-sm" /><div className="w-6 h-1.5 bg-slate-300 rounded-sm" /></div>
+                      <div className="h-px bg-slate-300" />
+                      <div className="w-full h-1 bg-slate-200 rounded" />
+                    </div>
+                  )}
+                  {l.id === 'bold' && (
+                    <div className="h-full flex flex-col gap-1">
+                      <div className="w-full h-4 rounded" style={{ backgroundColor: c }} />
+                      <div className="flex justify-between"><div className="w-8 h-1.5 bg-slate-300 rounded-sm" /><div className="w-6 h-1.5 bg-slate-300 rounded-sm" /></div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs font-black text-slate-800 leading-tight">{l.name}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{l.en}</p>
               </button>
             );
           })}

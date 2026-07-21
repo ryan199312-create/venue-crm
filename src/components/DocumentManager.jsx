@@ -15,9 +15,14 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [isSubmittingSignature, setIsSubmittingSignature] = useState(false);
   const [menuLangSelection, setMenuLangSelection] = useState(null);
-  
+  const [docLang, setDocLang] = useState(null); // per-document language override (null = use venue default)
+
   const { generatePdf } = usePdfGenerator();
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Effective document language: per-document override, else the venue's default, else English.
+  const venueDocLang = appSettings?.venueProfiles?.[eventData?.venueId]?.documentLanguage || appSettings?.venueProfile?.documentLanguage || 'en';
+  const effectiveLang = docLang || venueDocLang;
 
   const openPreview = (docId, menuId = null, language = null) => {
     if (docId === 'MENU_CONFIRM' && menuId && !language) {
@@ -26,6 +31,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     }
     
     setStagedSignature(null);
+    setDocLang(null); // reset per-document language override to the venue default on open
     if (language) {
       setPreviewDoc(`MENU_CONFIRM_${language}_${menuId}`);
     } else {
@@ -327,6 +333,14 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                   </>
                 ) : (
                   <>
+                    {['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT'].includes(previewDoc) && (
+                      <div className="flex gap-0.5 bg-slate-800 rounded-lg p-0.5 mr-1">
+                        {[{ id: 'en', label: 'EN' }, { id: 'zh', label: '中' }].map(o => (
+                          <button key={o.id} type="button" onClick={() => setDocLang(o.id)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${effectiveLang === o.id ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}>{o.label}</button>
+                        ))}
+                      </div>
+                    )}
                     {!isClientPortal && (
                       <div className="flex items-center gap-1.5">
                         <button 
@@ -336,7 +350,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                             setIsGenerating(true);
                             try {
                               const docType = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
-                              await generatePdf({ docType, data: dataToRender, appSettings });
+                              await generatePdf({ docType, data: dataToRender, appSettings, lang: effectiveLang });
                             } finally {
                               setIsGenerating(false);
                             }
@@ -372,10 +386,11 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                   const hasStagedOrRealClientSig = !!(dataToRender.signatures?.[sigKey]?.client || dataToRender.clientSignature);
                   const hasStagedOrRealAdminSig = !!dataToRender.signatures?.[sigKey]?.admin;
                   return (
-                    <DocumentRouter 
-                      data={dataToRender} 
-                      printMode={previewDoc} 
-                      appSettings={appSettings} 
+                    <DocumentRouter
+                      data={dataToRender}
+                      printMode={previewDoc}
+                      lang={effectiveLang}
+                      appSettings={appSettings}
                       onClientSign={isClientPortal && activeDocDef?.clientSignable && !hasStagedOrRealClientSig ? () => setIsSigningModalOpen(true) : undefined}
                       onAdminSign={!isClientPortal && activeDocDef?.adminSignable && !hasStagedOrRealAdminSig ? () => setIsSigningModalOpen(true) : undefined}
                     />

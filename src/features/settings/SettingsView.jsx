@@ -421,6 +421,17 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
           <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2"><FileText className="text-violet-500" /> 單據與收款範本 (Documents & Payment)</h3>
           <p className="text-xs text-slate-400 mb-6">此頁設定會套用到該分店生成的報價單、合約與收據。編輯下方欄位，右方預覽會即時更新，按「儲存」即設為預設範本。</p>
 
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">預設語言 (Default Document Language)</label>
+            <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
+              {[{ id: 'en', label: 'English' }, { id: 'zh', label: '中文' }].map(o => (
+                <button key={o.id} type="button" onClick={() => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), documentLanguage: o.id } }))}
+                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${(localSettings.venueProfile?.documentLanguage || 'en') === o.id ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>{o.label}</button>
+              ))}
+            </div>
+            <span className="text-[10px] text-slate-400">生成單據時的預設語言，可於下載時個別覆寫。</span>
+          </div>
+
           {/* Live document preview — updates as you edit; Save sets it as the default template. */}
           <div className="mb-8 border border-slate-200 rounded-2xl overflow-hidden">
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 space-y-3">
@@ -464,7 +475,8 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
                 }}>
                   <DocumentRouter
                     data={previewMockData}
-                    printMode={previewDocType === 'CONTRACT' && livePreviewLang === 'zh' ? 'CONTRACT_CN' : previewDocType}
+                    printMode={previewDocType}
+                    lang={livePreviewLang}
                     appSettings={{ ...settings, venueProfiles: { ...settings.venueProfiles, [selectedVenueId]: localSettings.venueProfile } }}
                   />
                 </div>

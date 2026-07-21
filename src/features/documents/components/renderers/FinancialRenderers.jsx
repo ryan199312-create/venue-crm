@@ -13,13 +13,9 @@ import {
   PaymentMethodBlock
 } from './DocumentShared';
 
-const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings }) => {
+const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings, lang = 'en' }) => {
   const { clientSig, adminSig } = getSignatures(data, printMode);
-  const isCn = printMode === 'INVOICE' || printMode === 'RECEIPT' ? false : false; // Placeholder if we add CN versions later, but for now we look at the specific renderer
-  
-  // For Financial docs, we usually default to English for professional standard in HK, 
-  // but let's make it respect the type passed.
-  const useEn = true; 
+  const useEn = lang !== 'zh'; // 'zh' -> Chinese, anything else -> English
 
   return (
     <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
@@ -121,23 +117,23 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
   );
 };
 
-export const QuotationRenderer = ({ data, appSettings, onSign }) => {
+export const QuotationRenderer = ({ data, appSettings, onSign, lang = 'en' }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, true) : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh') : { setupStr: '', avStr: '', decorStr: '' };
   if (!data) return null;
-  return <InvoiceReceiptLayout data={data} typeEn="Quotation" typeZh="報價單" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="QUOTATION" appSettings={appSettings} />;
+  return <InvoiceReceiptLayout data={data} typeEn="Quotation" typeZh="報價單" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="QUOTATION" appSettings={appSettings} lang={lang} />;
 };
 
-export const InvoiceRenderer = ({ data, appSettings, onSign }) => {
+export const InvoiceRenderer = ({ data, appSettings, onSign, lang = 'en' }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, true) : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh') : { setupStr: '', avStr: '', decorStr: '' };
   if (!data) return null;
-  return <InvoiceReceiptLayout data={data} typeEn="Invoice" typeZh="發票" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="INVOICE" appSettings={appSettings} />;
+  return <InvoiceReceiptLayout data={data} typeEn="Invoice" typeZh="發票" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="INVOICE" appSettings={appSettings} lang={lang} />;
 };
 
-export const ReceiptRenderer = ({ data, appSettings, onSign }) => {
+export const ReceiptRenderer = ({ data, appSettings, onSign, lang = 'en' }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, true) : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh') : { setupStr: '', avStr: '', decorStr: '' };
   if (!data) return null;
-  return <InvoiceReceiptLayout data={data} typeEn="Receipt" typeZh="收據" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="RECEIPT" appSettings={appSettings} />;
+  return <InvoiceReceiptLayout data={data} typeEn="Receipt" typeZh="收據" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="RECEIPT" appSettings={appSettings} lang={lang} />;
 };

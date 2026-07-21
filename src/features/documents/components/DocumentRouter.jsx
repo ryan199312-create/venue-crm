@@ -14,7 +14,7 @@ import { BrandedFooter } from './renderers/DocumentShared';
  * This component acts as a high-level router that decides which specific document 
  * renderer to use based on the 'printMode'.
  */
-export default function DocumentRouter({ data, printMode, appSettings, onClientSign, onAdminSign }) {
+export default function DocumentRouter({ data, printMode, appSettings, onClientSign, onAdminSign, lang = 'en' }) {
   if (!data) return null;
   
   // Filter data for specific menu printing if printMode specifies a menuId
@@ -30,14 +30,14 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
       case 'FLOORPLAN':
         return <FloorplanRenderer data={renderData} appSettings={appSettings} />;
       case 'QUOTATION':
-        return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
+        return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} lang={lang} />;
       case 'CONTRACT':
       case 'CONTRACT_CN':
-        return <ContractRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} onAdminSign={onAdminSign} isCn={printMode === 'CONTRACT_CN'} />;
+        return <ContractRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} onAdminSign={onAdminSign} isCn={printMode === 'CONTRACT_CN' || lang === 'zh'} />;
       case 'INVOICE':
-        return <InvoiceRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
+        return <InvoiceRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} lang={lang} />;
       case 'RECEIPT':
-        return <ReceiptRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} />;
+        return <ReceiptRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} lang={lang} />;
       case 'MENU_CONFIRM':
         return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} appSettings={appSettings} />;
       case (printMode && printMode.startsWith('MENU_CONFIRM_') ? printMode : null): {

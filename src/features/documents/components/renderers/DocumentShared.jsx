@@ -7,7 +7,8 @@ import {
   generateBillingSummary,
   DEPARTMENTS
 } from '../../../../services/billingService';
-import { getDocStyle } from '../../docStyles';
+import { getDocStyle, getDocTokens, brandBg } from '../../docStyles';
+import { docT, formatDocDate } from '../../docStrings';
 
 export { formatMoney, generateBillingSummary, DEPARTMENTS };
 
@@ -151,10 +152,11 @@ export const BrandedFooter = ({ data }) => (
   </div>
 );
 
-export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = false }) => {
+export const PaymentMethodBlock = ({ appSettings, venueId, printMode, lang = 'en' }) => {
+  const t = docT(lang);
   const profile = appSettings?.venueProfiles?.[venueId] || appSettings?.venueProfile || {};
   const config = profile.paymentConfig;
-  
+
   if (!config) return null;
 
   // Visibility logic
@@ -163,7 +165,7 @@ export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = fal
   const isContract = printMode === 'CONTRACT' || printMode === 'CONTRACT_CN';
   const isQuotation = printMode === 'QUOTATION';
 
-  const shouldShow = 
+  const shouldShow =
     (isQuotation && config.showInQuotation) ||
     (isInvoice && config.showInInvoice) ||
     (isReceipt && config.showInReceipt) ||
@@ -172,29 +174,29 @@ export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = fal
   if (!shouldShow) return null;
 
   const activeMethods = [];
-  if (config.bankTransfer?.enabled) activeMethods.push({ 
-    label: isCn ? '銀行轉帳' : 'Bank Transfer', 
-    details: `${config.bankTransfer.bank}\n${isCn ? '名稱' : 'Name'}: ${config.bankTransfer.name}\n${isCn ? '賬號' : 'A/C'}: ${config.bankTransfer.account}` 
+  if (config.bankTransfer?.enabled) activeMethods.push({
+    label: t.bankTransfer,
+    details: `${config.bankTransfer.bank}\n${t.accountName}: ${config.bankTransfer.name}\n${t.accountNo}: ${config.bankTransfer.account}`
   });
-  if (config.fps?.enabled) activeMethods.push({ 
-    label: isCn ? '轉數快' : 'FPS', 
-    details: config.fps.id 
+  if (config.fps?.enabled) activeMethods.push({
+    label: t.fps,
+    details: config.fps.id
   });
-  if (config.cheque?.enabled) activeMethods.push({ 
-    label: isCn ? '支票' : 'Cheque', 
-    details: `${isCn ? '抬頭人' : 'Payable to'}: ${config.cheque.payableTo}` 
+  if (config.cheque?.enabled) activeMethods.push({
+    label: t.cheque,
+    details: `${t.payableTo}: ${config.cheque.payableTo}`
   });
-  if (config.wechat?.enabled) activeMethods.push({ 
-    label: isCn ? '微信支付' : 'WeChat Pay', 
-    details: config.wechat.remarks || (isCn ? '接受' : 'Accepted') 
+  if (config.wechat?.enabled) activeMethods.push({
+    label: t.wechat,
+    details: config.wechat.remarks || t.accepted
   });
-  if (config.alipay?.enabled) activeMethods.push({ 
-    label: isCn ? '支付寶' : 'Alipay', 
-    details: config.alipay.remarks || (isCn ? '接受' : 'Accepted') 
+  if (config.alipay?.enabled) activeMethods.push({
+    label: t.alipay,
+    details: config.alipay.remarks || t.accepted
   });
-  if (config.creditCard?.enabled) activeMethods.push({ 
-    label: isCn ? '信用卡' : 'Credit Card', 
-    details: `${isCn ? '附加費' : 'Surcharge'}: ${config.creditCard.surcharge || 3}%` 
+  if (config.creditCard?.enabled) activeMethods.push({
+    label: t.creditCard,
+    details: `${t.surcharge}: ${config.creditCard.surcharge || 3}%`
   });
 
   if (activeMethods.length === 0) return null;
@@ -202,7 +204,7 @@ export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = fal
   return (
     <div className="mt-6 bg-slate-50 p-5 rounded-2xl border border-slate-200 break-inside-avoid">
       <h4 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 flex items-center gap-2">
-        {isCn ? '付款方式及銀行資料' : 'Payment Methods & Bank Details'}
+        {t.paymentMethodsTitle}
       </h4>
       <div className="grid grid-cols-2 gap-x-8 gap-y-4">
         {activeMethods.map((m, idx) => (
@@ -216,12 +218,14 @@ export const PaymentMethodBlock = ({ appSettings, venueId, printMode, isCn = fal
   );
 };
 
-export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
+export const DocumentHeader = ({ data, typeEn, typeZh, appSettings, lang = 'en' }) => {
+  const t = docT(lang);
   const venueId = data.venueId;
   const profile = appSettings?.venueProfile || appSettings?.venueProfiles?.[venueId] || {};
   const logoUrl = appSettings?.companyLogoUrl;
   const layout = getDocStyle(appSettings).header;
-  const issueDate = formatDateEn(getIssueDate(data));
+  const issueDate = formatDocDate(getIssueDate(data), lang);
+  const docType = lang === 'zh' ? (typeZh || typeEn) : (typeEn || typeZh);
 
   const brandName = logoUrl ? (
     <img src={logoUrl} alt="Logo" className="h-12 object-contain mb-2" />
@@ -236,15 +240,15 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
     <div className="text-[9px] text-slate-500 font-medium leading-relaxed mt-1">
       {profile.address && <p className="text-slate-700 mb-0.5 max-w-[280px] whitespace-pre-line">{profile.address}</p>}
       {(profile.phone || profile.website) && (
-        <p>{profile.phone && <>Tel: {profile.phone}</>}{profile.website && `${profile.phone ? ' | ' : ''}Web: ${profile.website}`}</p>
+        <p>{profile.phone && <>{t.tel}: {profile.phone}</>}{profile.website && `${profile.phone ? ' | ' : ''}${t.web}: ${profile.website}`}</p>
       )}
     </div>
   ) : null;
 
   const NoDate = ({ center }) => (
     <div className={`text-[10px] flex gap-3 ${center ? 'justify-center' : ''}`}>
-      <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">No.</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
-      <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">Date.</span> <span className="font-mono font-bold text-slate-800">{issueDate}</span></div>
+      <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">{t.no}</span> <span className="font-mono font-bold text-slate-800">{data.orderId}</span></div>
+      <div className="flex gap-1"><span className="font-bold text-slate-400 uppercase tracking-wider">{t.date}</span> <span className="font-mono font-bold text-slate-800">{issueDate}</span></div>
     </div>
   );
 
@@ -253,8 +257,7 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
     return (
       <div className="text-center mb-8 pb-4 border-b border-slate-200">
         <div className="flex flex-col items-center">{brandName}{contactLines}</div>
-        <h1 className="text-2xl font-light text-slate-800 uppercase tracking-[0.35em] mt-5">{typeEn}</h1>
-        {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-wider">{typeZh}</h2>}
+        <h1 className="text-2xl font-light text-slate-800 uppercase tracking-[0.35em] mt-5">{docType}</h1>
         <div className="mt-2"><NoDate center /></div>
         {data.eventName && <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight mt-1">{data.eventName}</div>}
       </div>
@@ -267,8 +270,8 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
       <div className="flex justify-between items-end border-b border-slate-300 pb-2 mb-8">
         <div>{brandName}{contactLines}</div>
         <div className="text-right shrink-0 ml-4">
-          <h1 className="text-lg font-bold text-slate-800 uppercase tracking-widest">{typeEn}</h1>
-          <div className="text-[10px] text-slate-500 mt-1">No. <span className="font-mono font-bold text-slate-700">{data.orderId}</span> · {issueDate}</div>
+          <h1 className="text-lg font-bold text-slate-800 uppercase tracking-widest">{docType}</h1>
+          <div className="text-[10px] text-slate-500 mt-1">{t.no} <span className="font-mono font-bold text-slate-700">{data.orderId}</span> · {issueDate}</div>
         </div>
       </div>
     );
@@ -279,8 +282,7 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
     return (
       <div className="mb-8">
         <div className="px-6 py-4 rounded-xl text-white mb-4" style={{ backgroundColor: 'var(--brand-primary)' }}>
-          <h1 className="text-2xl font-light uppercase tracking-[0.2em]">{typeEn}</h1>
-          {typeZh && <h2 className="text-xs font-bold uppercase tracking-wider opacity-90">{typeZh}</h2>}
+          <h1 className="text-2xl font-light uppercase tracking-[0.2em]">{docType}</h1>
         </div>
         <div className="flex justify-between items-start">
           <div>{brandName}{contactLines}</div>
@@ -298,8 +300,7 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
     <div className="flex justify-between items-start border-b-[3px] pb-3 mb-8" style={{ borderColor: 'var(--brand-primary)' }}>
       <div className="max-w-[45%]"><div className="flex flex-col gap-1">{brandName}{contactLines}</div></div>
       <div className="text-right flex-1 ml-4">
-        <h1 className="text-2xl md:text-3xl font-light text-slate-800 uppercase tracking-tight mb-1 whitespace-nowrap">{typeEn}</h1>
-        {typeZh && <h2 className="text-sm font-bold text-[var(--brand-primary)] uppercase tracking-wider mb-3">{typeZh}</h2>}
+        <h1 className="text-2xl md:text-3xl font-light text-slate-800 uppercase tracking-tight mb-3 whitespace-nowrap">{docType}</h1>
         <div className="flex flex-col items-end gap-0 mt-2">
           <NoDate />
           <div className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{data.eventName}</div>
@@ -309,60 +310,68 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
   );
 };
 
-export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings }) => (
-  <div className="grid grid-cols-2 gap-12 mb-8 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
-    <div>
-      <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 border-b border-slate-200 pb-1.5">Bill To (客戶)</h3>
-      {!hideClientInfo ? (
+export const ClientInfoGrid = ({ data, hideClientInfo = false, appSettings, lang = 'en' }) => {
+  const t = docT(lang);
+  const tk = getDocTokens(appSettings).infoGrid;
+  const location = lang === 'zh' ? cleanLocation(data.venueLocation) : getVenueEn(data.venueLocation, appSettings);
+  return (
+    <div className={tk.wrap}>
+      <div>
+        <h3 className={tk.heading}>{t.billTo}</h3>
+        {!hideClientInfo ? (
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">{data.clientName}</p>
+              {data.companyName && <p className="text-[10px] text-slate-500 font-medium">{data.companyName}</p>}
+            </div>
+            <div className="space-y-1 pt-1 border-t border-slate-100">
+              <div className="flex gap-2 text-xs">
+                <span className="text-[9px] font-bold text-slate-400 uppercase w-12 shrink-0 pt-0.5">{t.tel}</span>
+                <span className="font-bold text-slate-800">{data.clientPhone}</span>
+              </div>
+              <div className="flex gap-2 text-xs">
+                <span className="text-[9px] font-bold text-slate-400 uppercase w-12 shrink-0 pt-0.5">{t.email}</span>
+                <span className="font-bold text-slate-800 break-all flex-1">{data.clientEmail || t.na}</span>
+              </div>
+            </div>
+          </div>
+        ) : <div className="py-2 text-xs text-slate-400 italic">{t.clientHidden}</div>}
+      </div>
+      <div>
+        <h3 className={tk.heading}>{t.eventDetails}</h3>
         <div className="space-y-3">
           <div>
-            <p className="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">{data.clientName}</p>
-            {data.companyName && <p className="text-[10px] text-slate-500 font-medium">{data.companyName}</p>}
+            <p className="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">{data.eventName}</p>
+            <p className="text-[10px] text-slate-500 font-medium">{location}</p>
           </div>
           <div className="space-y-1 pt-1 border-t border-slate-100">
             <div className="flex gap-2 text-xs">
-              <span className="text-[9px] font-bold text-slate-400 uppercase w-10 shrink-0 pt-0.5">Tel:</span>
-              <span className="font-bold text-slate-800">{data.clientPhone}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase w-12 shrink-0 pt-0.5">{t.date}</span>
+              <span className="font-bold text-slate-800">{formatDocDate(data.date, lang)} ({data.startTime}-{data.endTime})</span>
             </div>
             <div className="flex gap-2 text-xs">
-              <span className="text-[9px] font-bold text-slate-400 uppercase w-10 shrink-0 pt-0.5">Email:</span>
-              <span className="font-bold text-slate-800 break-all flex-1">{data.clientEmail || 'N/A'}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase w-12 shrink-0 pt-0.5">{t.zh ? '人數' : 'Pax'}</span>
+              <span className="font-bold text-slate-800">{data.tableCount} {t.tablesUnit} / {data.guestCount} {t.paxUnit}</span>
             </div>
-          </div>
-        </div>
-      ) : <div className="py-2 text-xs text-slate-400 italic">(Client details hidden)</div>}
-    </div>
-    <div>
-      <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 border-b border-slate-200 pb-1.5">Event Details (活動)</h3>
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">{data.eventName}</p>
-          <p className="text-[10px] text-slate-500 font-medium">{getVenueEn(data.venueLocation, appSettings)}</p>
-        </div>
-        <div className="space-y-1 pt-1 border-t border-slate-100">
-          <div className="flex gap-2 text-xs">
-            <span className="text-[9px] font-bold text-slate-400 uppercase w-10 shrink-0 pt-0.5">Date:</span>
-            <span className="font-bold text-slate-800">{formatDateEn(data.date)} ({data.startTime}-{data.endTime})</span>
-          </div>
-          <div className="flex gap-2 text-xs">
-            <span className="text-[9px] font-bold text-slate-400 uppercase w-10 shrink-0 pt-0.5">Pax:</span>
-            <span className="font-bold text-slate-800">{data.tableCount} Tables / {data.guestCount} Pax</span>
           </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, showFinancials = false, showPayments = false, showSchedule = false, data = {}, grandTotalLabel = null }) => (
-  <div className="mb-8 rounded-xl border border-slate-200 shadow-sm">
+export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', showFinancials = false, showPayments = false, showSchedule = false, data = {}, grandTotalLabel = null, appSettings }) => {
+  const t = docT(lang);
+  const tk = getDocTokens(appSettings).table;
+  return (
+  <div className={tk.wrap}>
     <table className="w-full text-xs text-left border-collapse">
-      <thead className="bg-slate-50 border-b border-slate-200">
+      <thead className={tk.thead} style={brandBg(tk.brandHead)}>
         <tr>
-          <th className="py-2 px-4 uppercase tracking-wider text-slate-500 font-bold w-[55%]">Description (項目)</th>
-          <th className="py-2 px-4 uppercase tracking-wider text-slate-500 font-bold text-right w-[15%]">Unit Price</th>
-          <th className="py-2 px-4 uppercase tracking-wider text-slate-500 font-bold text-center w-[10%]">Qty</th>
-          <th className="py-2 px-4 uppercase tracking-wider text-slate-500 font-bold text-right w-[20%]">Amount (HKD)</th>
+          <th className={`${tk.th} w-[55%]`}>{t.description}</th>
+          <th className={`${tk.th} text-right w-[15%]`}>{t.unitPrice}</th>
+          <th className={`${tk.th} text-center w-[10%]`}>{t.qty}</th>
+          <th className={`${tk.th} text-right w-[20%]`}>{t.amountHkd}</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
@@ -382,7 +391,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         {billing.plating && (
           <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
-              <p className="font-bold text-slate-900">{isEn ? 'Plating Service Fee' : '位上服務費'}</p>
+              <p className="font-bold text-slate-900">{t.platingFee}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.plating.price)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">{billing.plating.qty}</td>
@@ -392,7 +401,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         {billing.drinks && (
           <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
-              <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Beverage Package' : '酒水套餐'}</p>
+              <p className="font-bold text-slate-900 mb-0.5">{t.beveragePackage}</p>
               <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">{billing.drinks.label}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.drinks.price)}</td>
@@ -403,7 +412,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         {billing.setupPackagePrice > 0 && (
           <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
-              <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Setup & Reception Package' : '舞台與接待設備套票'}</p>
+              <p className="font-bold text-slate-900 mb-0.5">{t.setupPackage}</p>
               <p className="text-xs text-slate-700 leading-snug">{setupStr}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.setupPackagePrice)}</td>
@@ -414,7 +423,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         {billing.avPackagePrice > 0 && (
           <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
-              <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'AV Equipment Package' : '影音設備套票'}</p>
+              <p className="font-bold text-slate-900 mb-0.5">{t.avPackage}</p>
               <p className="text-xs text-slate-700 leading-snug">{avStr}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.avPackagePrice)}</td>
@@ -425,7 +434,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         {billing.decorPackagePrice > 0 && (
           <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
-              <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Venue Decoration Package' : '場地佈置套票'}</p>
+              <p className="font-bold text-slate-900 mb-0.5">{t.decorPackage}</p>
               <p className="text-xs text-slate-700 leading-snug">{decorStr}</p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.decorPackagePrice)}</td>
@@ -436,18 +445,16 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         {billing.bus && (
           <tr className="bg-white break-inside-avoid">
             <td className="py-3 px-4 align-top">
-              <p className="font-bold text-slate-900 mb-0.5">{isEn ? 'Bus Arrangement' : '旅遊巴安排'}</p>
-              {isEn && (
-                <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">
-                  {billing.bus.arrivals.length > 0 && `Arrivals: ${billing.bus.arrivals.length} Buses `}
-                  {billing.bus.departures.length > 0 && `| Departures: ${billing.bus.departures.length} Buses`}
-                </p>
-              )}
+              <p className="font-bold text-slate-900 mb-0.5">{t.busArrangement}</p>
+              <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">
+                {billing.bus.arrivals.length > 0 && `${t.arrivals}: ${billing.bus.arrivals.length} ${t.busesUnit} `}
+                {billing.bus.departures.length > 0 && `| ${t.departures}: ${billing.bus.departures.length} ${t.busesUnit}`}
+              </p>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(billing.bus.amount)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">1</td>
             <td className="py-3 px-4 text-right align-top font-bold text-slate-900 font-mono">
-              {billing.bus.amount > 0 ? `$${formatMoney(billing.bus.amount)}` : (isEn ? 'COMP' : '免費')}
+              {billing.bus.amount > 0 ? `$${formatMoney(billing.bus.amount)}` : t.comp}
             </td>
           </tr>
         )}
@@ -465,32 +472,32 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
       {showFinancials && (
         <tbody className="border-t-2 border-slate-900">
           <tr className="bg-slate-50/50 break-inside-avoid">
-            <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Subtotal (小計)</td>
+            <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">{t.subtotal}</td>
             <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">${formatMoney(billing.subtotal)}</td>
           </tr>
           {billing.serviceChargeVal > 0 && (
             <tr className="bg-slate-50/50 break-inside-avoid">
-              <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Service Charge ({billing.scLabel})</td>
+              <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">{t.serviceCharge} ({billing.scLabel})</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">+${formatMoney(billing.serviceChargeVal)}</td>
             </tr>
           )}
           {billing.discountVal > 0 && (
             <tr className="bg-slate-50/50 break-inside-avoid">
-              <td colSpan="3" className="py-2 px-4 text-right font-bold text-rose-600">Discount (折扣)</td>
+              <td colSpan="3" className="py-2 px-4 text-right font-bold text-rose-600">{t.discount}</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-rose-600">-${formatMoney(billing.discountVal)}</td>
             </tr>
           )}
           {billing.ccSurcharge > 0 && (
             <tr className="bg-slate-50/50 break-inside-avoid">
-              <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">Credit Card Surcharge ({billing.ccSurchargePercent}%)</td>
+              <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500">{t.ccSurcharge} ({billing.ccSurchargePercent}%)</td>
               <td className="py-2 px-4 text-right font-mono font-bold text-slate-800">+${formatMoney(billing.ccSurcharge)}</td>
             </tr>
           )}
-          <tr className="bg-slate-50 border-t-2 border-slate-900 break-inside-avoid">
-            <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-base text-slate-900">
-              {grandTotalLabel || (isEn ? "Grand Total (總金額)" : "總金額 (Grand Total)")}
+          <tr className={`${tk.grandRow} break-inside-avoid`} style={brandBg(tk.brandGrand)}>
+            <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-base">
+              {grandTotalLabel || t.grandTotal}
             </td>
-            <td className="py-3 px-4 text-right font-black text-xl font-mono text-[var(--brand-primary)]">${formatMoney(billing.grandTotal)}</td>
+            <td className={`py-3 px-4 text-right font-black text-xl font-mono ${tk.grandValue}`}>${formatMoney(billing.grandTotal)}</td>
           </tr>
         </tbody>
       )}
@@ -498,18 +505,18 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
         <tbody className="border-t border-slate-200">
           <tr className="bg-slate-50/30 break-inside-avoid">
             <td colSpan="4" className="py-1 px-4 font-black text-[9px] text-[var(--brand-primary)] uppercase tracking-widest">
-               Suggested Payment Schedule (付款進度)
+               {t.paymentSchedule}
             </td>
           </tr>
           {[
-            { label: '1st Payment (Deposit)', date: data.deposit1Date, amount: billing.dep1 },
-            { label: '2nd Payment', date: data.deposit2Date, amount: billing.dep2 },
-            { label: '3rd Payment', date: data.deposit3Date, amount: billing.dep3 },
-            { label: 'Final Balance', date: data.date, amount: billing.balanceDue }
+            { label: t.payment1Deposit, date: data.deposit1Date, amount: billing.dep1 },
+            { label: t.payment2, date: data.deposit2Date, amount: billing.dep2 },
+            { label: t.payment3, date: data.deposit3Date, amount: billing.dep3 },
+            { label: t.finalBalance, date: data.date, amount: billing.balanceDue }
           ].map((p, i) => p.amount > 0 && (
             <tr key={`s-${i}`} className="bg-white text-slate-500 italic break-inside-avoid">
               <td colSpan="3" className="py-1 px-4 text-right">
-                {p.label} ({p.date || 'TBC'})
+                {p.label} ({p.date || t.tbc})
               </td>
               <td className="py-1 px-4 text-right font-mono font-medium">${formatMoney(p.amount)}</td>
             </tr>
@@ -519,35 +526,39 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, isEn = false, sh
       {showPayments && (
         <tbody className="border-t border-slate-200">
           {[
-            { label: '1st Payment', date: data.deposit1Date, amount: billing.dep1, received: data.deposit1Received },
-            { label: '2nd Payment', date: data.deposit2Date, amount: billing.dep2, received: data.deposit2Received },
-            { label: '3rd Payment', date: data.deposit3Date, amount: billing.dep3, received: data.deposit3Received }
+            { label: t.payment1, date: data.deposit1Date, amount: billing.dep1, received: data.deposit1Received },
+            { label: t.payment2, date: data.deposit2Date, amount: billing.dep2, received: data.deposit2Received },
+            { label: t.payment3, date: data.deposit3Date, amount: billing.dep3, received: data.deposit3Received }
           ].map((p, i) => p.amount > 0 && (
             <tr key={`p-${i}`} className="bg-white text-slate-500 italic break-inside-avoid">
               <td colSpan="3" className="py-1 px-4 text-right">
-                {p.label} ({p.date || 'TBC'}) 
-                {p.received && <span className="ml-2 not-italic font-bold text-emerald-600 text-[9px] border border-emerald-200 bg-emerald-50 px-1 rounded">RECEIVED</span>}
+                {p.label} ({p.date || t.tbc})
+                {p.received && <span className="ml-2 not-italic font-bold text-emerald-600 text-[9px] border border-emerald-200 bg-emerald-50 px-1 rounded">{t.received}</span>}
               </td>
               <td className="py-1 px-4 text-right font-mono font-medium">${formatMoney(p.amount)}</td>
             </tr>
           ))}
           <tr className="bg-white break-inside-avoid">
-            <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500 uppercase">Total Paid (已付)</td>
+            <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500 uppercase">{t.totalPaid}</td>
             <td className="py-2 px-4 text-right font-mono font-bold text-emerald-600">${formatMoney(billing.totalPaid)}</td>
           </tr>
           <tr className="bg-slate-50 border-t border-slate-200 break-inside-avoid">
-            <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-slate-600">Balance Due (餘額)</td>
+            <td colSpan="3" className="py-3 px-4 text-right font-black uppercase tracking-widest text-slate-600">{t.balanceDue}</td>
             <td className="py-3 px-4 text-right font-mono font-black text-xl text-slate-900">${formatMoney(billing.balanceDue)}</td>
           </tr>
         </tbody>
       )}
     </table>
   </div>
-);
+  );
+};
 
-export const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, dateStr, alignRight = false, isAdmin = false }) => (
+export const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, dateStr, alignRight = false, isAdmin = false, lang = 'en', appSettings }) => {
+  const t = docT(lang);
+  const line = getDocTokens(appSettings).signature.line;
+  return (
   <div className={`w-full max-w-[220px] ${alignRight ? 'ml-auto text-right' : 'mr-auto text-left'}`}>
-    <div className={`border-b-2 border-slate-800 h-16 mb-3 relative flex items-end ${alignRight ? 'justify-end' : 'justify-start'} bg-slate-50/30`}>
+    <div className={`${line} h-16 mb-3 relative flex items-end ${alignRight ? 'justify-end' : 'justify-start'} bg-slate-50/30`}>
       {!sigDataUrl ? (
         onSign ? (
           <button type="button" onClick={onSign} className={`absolute inset-0 flex items-center justify-center w-full h-full transition-colors cursor-pointer border-2 border-dashed z-10 ${isAdmin ? 'bg-[var(--brand-primary)]/5 hover:bg-[var(--brand-primary)]/10 border-[var(--brand-primary)]/40' : 'bg-amber-50 hover:bg-amber-100 border-amber-400'}`}>
@@ -568,11 +579,12 @@ export const SignatureBox = ({ titleEn, labelEn, labelZh, sigDataUrl, onSign, da
       <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">{labelZh}</p>
     )}
     {sigDataUrl && dateStr ? (
-      <p className="text-[9px] text-slate-400 mt-0.5">Signed: {new Date(dateStr).toLocaleDateString()}</p>
+      <p className="text-[9px] text-slate-400 mt-0.5">{t.signed}: {new Date(dateStr).toLocaleDateString(lang === 'zh' ? 'zh-HK' : 'en-GB')}</p>
     ) : (
       <p className={`text-[9px] text-slate-400 mt-2 flex items-end ${alignRight ? 'justify-end' : 'justify-start'}`}>
-        Date: <span className="inline-block border-b border-slate-400 w-24 ml-2 h-3"></span>
+        {t.date}: <span className="inline-block border-b border-slate-400 w-24 ml-2 h-3"></span>
       </p>
     )}
   </div>
-);
+  );
+};

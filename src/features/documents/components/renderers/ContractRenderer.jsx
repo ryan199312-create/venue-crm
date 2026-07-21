@@ -15,11 +15,14 @@ import {
   formatBoldText,
   PaymentMethodBlock
 } from './DocumentShared';
+import { docT } from '../../docStrings';
 
 export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn = false }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
   const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, !isCn) : { setupStr: '', avStr: '', decorStr: '' };
   const printMode = isCn ? 'CONTRACT_CN' : 'CONTRACT';
+  const lang = isCn ? 'zh' : 'en';
+  const t = docT(lang);
   const { clientSig, adminSig, sigData } = data ? getSignatures(data, printMode) : { clientSig: null, adminSig: null, sigData: {} };
 
   const isFullyPaid = data ? (data.balanceReceived || (billing.totalPaid > 0 && billing.totalPaid >= billing.grandTotal)) : false;
@@ -80,7 +83,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
         }
       `}</style>
 
-      <DocumentHeader data={data} typeEn="Service Agreement" typeZh={isCn ? "服務合約" : "合約"} appSettings={appSettings} />
+      <DocumentHeader data={data} typeEn="Service Agreement" typeZh={isCn ? "服務合約" : "合約"} appSettings={appSettings} lang={lang} />
       
       <div className="py-6 mb-8 text-center">
         <div className="max-w-2xl mx-auto">
@@ -144,12 +147,13 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
         <h3 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-4">
           {isCn ? '服務與最低消費' : 'Services & Minimum Spend'}
         </h3>
-        <ItemTable 
-          billing={billing} 
-          setupStr={setupStr} 
-          avStr={avStr} 
-          decorStr={decorStr} 
-          isEn={!isCn} 
+        <ItemTable
+          billing={billing}
+          setupStr={setupStr}
+          avStr={avStr}
+          decorStr={decorStr}
+          lang={lang}
+          appSettings={appSettings}
           showFinancials={true}
           grandTotalLabel={isCn ? "總合約金額" : "Total Agreement Value"}
         />
@@ -169,8 +173,8 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
           (appSettings?.venueProfiles?.[data.venueId]?.contractTermsZh || appSettings?.venueProfile?.contractTermsZh) ? (
             <div className="text-[10px] text-slate-700 leading-relaxed whitespace-pre-wrap text-justify">
               {formatBoldText(appSettings?.venueProfiles?.[data.venueId]?.contractTermsZh || appSettings?.venueProfile?.contractTermsZh)}
-              
-              <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} isCn={true} />
+
+              <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} lang={lang} />
             </div>
           ) : (
             <div className="columns-2 gap-10 text-[10px] text-slate-700 leading-relaxed text-justify">
@@ -208,8 +212,8 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
           (appSettings?.venueProfiles?.[data.venueId]?.contractTerms || appSettings?.venueProfile?.contractTerms) ? (
             <div className="text-[10px] text-slate-700 leading-relaxed whitespace-pre-wrap text-justify">
               {formatBoldText(appSettings?.venueProfiles?.[data.venueId]?.contractTerms || appSettings?.venueProfile?.contractTerms)}
-              
-              <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} isCn={false} />
+
+              <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} lang={lang} />
             </div>
           ) : (
             <div className="columns-2 gap-10 text-[10px] text-slate-700 leading-relaxed text-justify">
@@ -247,25 +251,27 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
       </div>
 
       <div className="grid grid-cols-2 gap-12 mt-16 break-inside-avoid">
-        <SignatureBox 
-           titleEn={isCn ? "" : "For and on behalf of"}
-           titleZh={isCn ? "承辦方簽署" : ""}
-           labelEn={isCn ? "" : (appSettings?.venueProfile?.nameEn || 'Venue Management')} 
-           labelZh={isCn ? `${appSettings?.venueProfile?.nameZh || '管理員'} 簽署及蓋章` : "Authorized Signature & Chop"} 
-           sigDataUrl={adminSig} 
+        <SignatureBox
+           titleEn={isCn ? '承辦方' : 'For and on behalf of'}
+           labelEn={isCn ? `${appSettings?.venueProfile?.nameZh || '管理員'} 簽署及蓋章` : (appSettings?.venueProfile?.nameEn || 'Venue Management')}
+           labelZh=""
+           sigDataUrl={adminSig}
            onSign={onAdminSign ? () => onAdminSign(printMode) : null}
            dateStr={sigData.adminDate}
            isAdmin={true}
+           lang={lang}
+           appSettings={appSettings}
         />
-        <SignatureBox 
-           titleEn={isCn ? "" : "Confirmed & Accepted by"}
-           titleZh={isCn ? "客戶簽署" : ""}
-           labelEn={isCn ? "" : (data.clientName || "Client Signature")} 
-           labelZh={isCn ? "客戶簽署 / 公司蓋章" : "Client Signature / Company Chop"} 
-           sigDataUrl={clientSig} 
+        <SignatureBox
+           titleEn={t.confirmedAcceptedBy}
+           labelEn={data.clientName || t.clientSignatureChop}
+           labelZh=""
+           sigDataUrl={clientSig}
            onSign={onSign ? () => onSign(printMode) : null}
            dateStr={sigData.clientDate}
            alignRight={true}
+           lang={lang}
+           appSettings={appSettings}
         />
       </div>
     </div>

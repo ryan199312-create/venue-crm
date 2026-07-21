@@ -12,10 +12,12 @@ import {
   formatBoldText,
   PaymentMethodBlock
 } from './DocumentShared';
+import { docT } from '../../docStrings';
 
 const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, decorStr, onSign, printMode, appSettings, lang = 'en' }) => {
   const { clientSig, adminSig } = getSignatures(data, printMode);
   const useEn = lang !== 'zh'; // 'zh' -> Chinese, anything else -> English
+  const t = docT(lang);
 
   return (
     <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
@@ -30,21 +32,22 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
         }
       `}</style>
 
-      <DocumentHeader data={data} typeEn={typeEn} typeZh={typeZh} appSettings={appSettings} />
-      <ClientInfoGrid data={data} appSettings={appSettings} />
-      <ItemTable 
-        billing={billing} 
-        setupStr={setupStr} 
-        avStr={avStr} 
-        decorStr={decorStr} 
-        isEn={useEn} 
-        showFinancials={true} 
+      <DocumentHeader data={data} typeEn={typeEn} typeZh={typeZh} appSettings={appSettings} lang={lang} />
+      <ClientInfoGrid data={data} appSettings={appSettings} lang={lang} />
+      <ItemTable
+        billing={billing}
+        setupStr={setupStr}
+        avStr={avStr}
+        decorStr={decorStr}
+        lang={lang}
+        appSettings={appSettings}
+        showFinancials={true}
         showPayments={printMode === 'INVOICE' || printMode === 'RECEIPT'}
         showSchedule={printMode === 'QUOTATION'}
         data={data}
       />
 
-      <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} isCn={!useEn} />
+      <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} lang={lang} />
 
       {printMode === 'QUOTATION' && (() => {
         // Tenant-specific confidentiality notice: use the venue's own settings, or a
@@ -69,7 +72,7 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
           <div className="text-[10px] text-slate-500 leading-relaxed">
             {printMode === 'QUOTATION' && (appSettings?.venueProfiles?.[data.venueId]?.paymentTermsQuotation || appSettings?.venueProfile?.paymentTermsQuotation) && (
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <h4 className="font-bold text-slate-800 uppercase mb-2 tracking-wider">Payment Terms</h4>
+                <h4 className="font-bold text-slate-800 uppercase mb-2 tracking-wider">{t.paymentTerms}</h4>
                 <div className="whitespace-pre-wrap">
                   {formatBoldText(appSettings?.venueProfiles?.[data.venueId]?.paymentTermsQuotation || appSettings?.venueProfile?.paymentTermsQuotation)}
                 </div>
@@ -80,33 +83,39 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
           <div className="flex flex-col gap-6">
             {printMode === 'QUOTATION' ? (
               <div className="flex justify-end">
-                <SignatureBox 
-                  titleEn="Confirmed & Accepted by"
-                  labelEn={data.clientName || "Client Signature"} 
-                  labelZh={useEn ? "" : "客戶簽署"} 
-                  sigDataUrl={clientSig} 
+                <SignatureBox
+                  titleEn={t.confirmedAcceptedBy}
+                  labelEn={data.clientName || t.clientSignature}
+                  labelZh=""
+                  sigDataUrl={clientSig}
                   onSign={onSign ? () => onSign(printMode) : null}
                   dateStr={data.signatures?.[printMode]?.clientDate}
                   alignRight={true}
+                  lang={lang}
+                  appSettings={appSettings}
                 />
               </div>
             ) : (printMode !== 'INVOICE' && printMode !== 'RECEIPT') ? (
               <div className="grid grid-cols-2 gap-6">
-                <SignatureBox 
-                  labelEn="Authorized Signature" 
-                  labelZh={useEn ? "" : `${appSettings?.venueProfile?.nameZh || '管理員'} 簽署及蓋章`} 
-                  sigDataUrl={adminSig} 
+                <SignatureBox
+                  labelEn={useEn ? 'Authorized Signature' : `${appSettings?.venueProfile?.nameZh || '管理員'} 簽署及蓋章`}
+                  labelZh=""
+                  sigDataUrl={adminSig}
                   dateStr={data.signatures?.[printMode]?.adminDate}
                   isAdmin={true}
                   alignRight={false}
+                  lang={lang}
+                  appSettings={appSettings}
                 />
-                <SignatureBox 
-                  labelEn={data.clientName || "Client Signature"} 
-                  labelZh={useEn ? "" : "客戶簽署"} 
-                  sigDataUrl={clientSig} 
+                <SignatureBox
+                  labelEn={data.clientName || t.clientSignature}
+                  labelZh=""
+                  sigDataUrl={clientSig}
                   onSign={onSign ? () => onSign(printMode) : null}
                   dateStr={data.signatures?.[printMode]?.clientDate}
                   alignRight={true}
+                  lang={lang}
+                  appSettings={appSettings}
                 />
               </div>
             ) : null}

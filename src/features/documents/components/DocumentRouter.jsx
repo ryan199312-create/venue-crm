@@ -29,7 +29,7 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
   const renderContent = () => {
     switch (printMode) {
       case 'FLOORPLAN':
-        return <FloorplanRenderer data={renderData} appSettings={appSettings} />;
+        return <FloorplanRenderer data={renderData} appSettings={appSettings} lang={lang} />;
       case 'QUOTATION':
         return <QuotationRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} lang={lang} />;
       case 'CONTRACT':
@@ -40,16 +40,16 @@ export default function DocumentRouter({ data, printMode, appSettings, onClientS
       case 'RECEIPT':
         return <ReceiptRenderer data={renderData} appSettings={appSettings} onSign={onClientSign} lang={lang} />;
       case 'MENU_CONFIRM':
-        return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} appSettings={appSettings} />;
+        return <MenuConfirmRenderer data={renderData} menuId={renderData.menus?.[0]?.id} onSign={onClientSign} appSettings={appSettings} lang={lang} />;
       case (printMode && printMode.startsWith('MENU_CONFIRM_') ? printMode : null): {
         const parts = printMode.split('_');
         let language = 'BILINGUAL';
         let menuId = parts.length === 3 ? parts[2] : (parts.length === 4 ? parts[3] : printMode.replace('MENU_CONFIRM_', ''));
         if (parts.length === 4) language = parts[2];
-        return <MenuConfirmRenderer data={renderData} menuId={menuId} onSign={onClientSign} appSettings={appSettings} language={language} />;
+        return <MenuConfirmRenderer data={renderData} menuId={menuId} onSign={onClientSign} appSettings={appSettings} language={language} lang={lang} />;
       }
       case 'ADDENDUM':
-        return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} appSettings={appSettings} />;
+        return <AddendumRenderer data={renderData} onSign={onClientSign} onAdminSign={onAdminSign} appSettings={appSettings} lang={lang} />;
       case 'INTERNAL_NOTES':
         return <InternalNotesRenderer data={renderData} appSettings={appSettings} />;
       case 'BRIEFING':

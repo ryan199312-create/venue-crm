@@ -333,7 +333,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                   </>
                 ) : (
                   <>
-                    {['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT'].includes(previewDoc) && (
+                    {['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT', 'ADDENDUM', 'MENU_CONFIRM', 'FLOORPLAN'].includes(previewDoc) && (
                       <div className="flex gap-0.5 bg-slate-800 rounded-lg p-0.5 mr-1">
                         {[{ id: 'en', label: 'EN' }, { id: 'zh', label: '中' }].map(o => (
                           <button key={o.id} type="button" onClick={() => setDocLang(o.id)}

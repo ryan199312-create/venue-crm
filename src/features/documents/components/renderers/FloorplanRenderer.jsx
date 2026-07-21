@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { TOOL_GROUPS } from '../../../../components/FloorplanTools';
 import { DocumentHeader } from './DocumentShared';
 
-export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) => {  
+export const FloorplanAppendix = ({ data, appSettings, isStandalone = false, lang = 'en' }) => {  
   const fp = data.floorplan || {};
   const bgImage = fp.bgImage || appSettings?.defaultFloorplan?.bgImage || '';
   const hasElements = fp.elements && fp.elements.length > 0;
@@ -64,11 +64,12 @@ export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) =
     <React.Fragment>
       {!isStandalone && <div className="page-break"></div>}
       <div className="print-page relative p-[10mm] print:p-0">
-        <DocumentHeader 
-          data={data} 
-          typeEn="Floor Plan" 
-          typeZh="場地平面圖" 
-          appSettings={appSettings} 
+        <DocumentHeader
+          data={data}
+          typeEn="Floor Plan"
+          typeZh="場地平面圖"
+          appSettings={appSettings}
+          lang={lang}
         />
       
       {/* 
@@ -176,15 +177,15 @@ export const FloorplanAppendix = ({ data, appSettings, isStandalone = false }) =
 );
 };
 
-export const FloorplanRenderer = ({ data, appSettings }) => (
+export const FloorplanRenderer = ({ data, appSettings, lang = 'en' }) => (
   <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white min-h-0 print:min-h-0 shadow-sm print:shadow-none relative">
     <style>{`
-      @media print { 
-        body { -webkit-print-color-adjust: exact; } 
+      @media print {
+        body { -webkit-print-color-adjust: exact; }
       }
     `}</style>
-    
-    <FloorplanAppendix data={data} appSettings={appSettings} isStandalone={true} />
+
+    <FloorplanAppendix data={data} appSettings={appSettings} isStandalone={true} lang={lang} />
   </div>
 );
 

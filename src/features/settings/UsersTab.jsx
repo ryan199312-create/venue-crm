@@ -278,7 +278,10 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
                     <select value={u.role || 'staff'} onChange={(e) => handleUpdateRole(u.id, e.target.value)}
                       disabled={userProfile?.role !== 'super_admin' && (u.role === 'admin' || u.role === 'super_admin') && users.filter(usr => usr.role === 'admin' || usr.role === 'super_admin').length === 1}
                       className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm">
-                      {Object.entries(roles).map(([id, config]) => (<option key={id} value={id}>{config.label}</option>))}
+                      {/* super_admin is the platform master — never assignable from a tenant.
+                          (Kept as an option only if the user somehow already holds it, so the
+                          select isn't broken.) */}
+                      {Object.entries(roles).filter(([id]) => id !== 'super_admin' || u.role === 'super_admin').map(([id, config]) => (<option key={id} value={id}>{config.label}</option>))}
                     </select>
                   </td>
                   <td className="p-4">

@@ -82,8 +82,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
 
       <DocumentHeader data={data} typeEn="Service Agreement" typeZh={isCn ? "服務合約" : "合約"} appSettings={appSettings} />
       
-      <div className="bg-slate-50 border border-slate-200 px-8 py-10 rounded-[2rem] mb-8 text-center relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-[var(--brand-primary)]"></div>
+      <div className="py-6 mb-8 text-center">
         <div className="max-w-2xl mx-auto">
           <p className="text-sm text-slate-700 leading-relaxed font-medium text-center whitespace-pre-wrap">
             {getIntroText()}

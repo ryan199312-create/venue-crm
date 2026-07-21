@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { getTenantId } from '../core/tenantResolver';
+import { authEmailFor } from '../core/authIdentity';
 import { DEFAULT_ROLE_PERMISSIONS } from '../core/constants';
 
 
@@ -127,10 +128,12 @@ export const AuthProvider = ({ children }) => {
     }
     try {
       setLoading(true);
+      // Accept an email OR a phone number — phone resolves to a synthetic internal email.
+      const loginId = authEmailFor(email, appId);
       if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, loginId, password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, loginId, password);
       }
     } catch (err) {
       console.error(err);
@@ -173,15 +176,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Licensed branch (outlet) cap for this tenant. null = unlimited / not yet licensed.
+  // Licensed caps for this tenant. null = unlimited / not yet licensed.
   const maxBranches = (tenantMeta && typeof tenantMeta.maxBranches === 'number')
     ? tenantMeta.maxBranches
+    : null;
+  const maxUsers = (tenantMeta && typeof tenantMeta.maxUsers === 'number')
+    ? tenantMeta.maxUsers
     : null;
 
   const value = {
     appId, user, userProfile, appSettings, loading, error, login, signOut,
     hasPermission, refreshUserClaims, selectedVenueId, setSelectedVenueId,
-    getVisibleVenues, outlets, tenantMeta, maxBranches
+    getVisibleVenues, outlets, tenantMeta, maxBranches, maxUsers
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

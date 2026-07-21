@@ -11,6 +11,7 @@ const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const ClientPortal = lazy(() => import('./admin/ClientPortal'));
 const SuperAdminPortal = lazy(() => import('./super-admin/SuperAdminPortal'));
 const LandingPage = lazy(() => import('./landing/LandingPage'));
+const ActivatePage = lazy(() => import('./admin/ActivatePage'));
 
 // Error Boundary to catch Chunk Load errors or React UI crashes
 class GlobalErrorBoundary extends React.Component {
@@ -80,6 +81,7 @@ export default function App() {
                 public landing page. Access a tenant via its subdomain, e.g.
                 kinglungheen.vowsos.com/admin (or kinglungheen.localhost:5173/admin in dev). */}
             <Route path="/admin" element={rootDomain ? <Navigate to="/" replace /> : <AdminLayout />} />
+            <Route path="/activate" element={rootDomain ? <Navigate to="/" replace /> : <ActivatePage />} />
             <Route path="/portal" element={rootDomain ? <Navigate to="/" replace /> : <ClientPortal />} />
             <Route path="/portal/:eventId" element={rootDomain ? <Navigate to="/" replace /> : <ClientPortal />} />
 

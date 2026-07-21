@@ -460,6 +460,28 @@ function generateTempPassword() {
   return out;
 }
 
+// --- Identity helpers for the provision / self-activate flow ---
+// Staff log in with an email OR a phone. Phone logins have no OTP; they are backed by a
+// synthetic internal email so Firebase email/password auth can be reused.
+function normalizeIdentifier(identifier, type) {
+  if (type === 'phone') return String(identifier || '').replace(/[^0-9]/g, '');
+  return String(identifier || '').trim().toLowerCase();
+}
+
+// The Firebase Auth email used for login. Phone -> synthetic internal address.
+function authEmailFor(normalized, type, appId) {
+  if (type === 'phone') {
+    const safeTenant = String(appId || 'tenant').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'tenant';
+    return `phone_${normalized}@${safeTenant}.phone.vowsos.internal`;
+  }
+  return normalized; // real email
+}
+
+// Stable doc id for a whitelisted (pending) identifier.
+function pendingKey(normalized, type) {
+  return `${type}_${normalized}`;
+}
+
 exports.inviteUser = onCall({
   memory: "256MiB"
 }, async (request) => {
@@ -527,6 +549,126 @@ exports.completePasswordSetup = onCall({ memory: "256MiB" }, async (request) => 
     mustChangePassword: admin.firestore.FieldValue.delete(),
     passwordSetAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  return { success: true };
+});
+
+// PROVISION a user: a tenant admin (or super_admin) whitelists an email/phone + role.
+// No login is created yet — the person self-activates later. Enforces the tenant's
+// maxUsers license (active users + pending records). Unset maxUsers = ungated (grace).
+exports.provisionUser = onCall({ memory: "256MiB" }, async (request) => {
+  const requester = request.auth;
+  if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
+  const { identifier, type, role, displayName, accessibleVenues, firstUser, appId: requestAppId } = request.data;
+
+  const isSuperAdmin = requester.token.role === 'super_admin';
+  const appId = isSuperAdmin ? (requestAppId || APP_ID) : (requester.token.tenantId || requestAppId || APP_ID);
+  const db = admin.firestore();
+
+  if (!isSuperAdmin) {
+    const rdoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).get();
+    if (rdoc.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Only admins can add users.');
+  }
+
+  const kind = type === 'phone' ? 'phone' : 'email';
+  const safeRole = ['staff', 'admin'].includes(role) ? role : 'staff';
+  const normalized = normalizeIdentifier(identifier, kind);
+  if (kind === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) throw new HttpsError('invalid-argument', 'A valid email is required.');
+  if (kind === 'phone' && normalized.length < 6) throw new HttpsError('invalid-argument', 'A valid phone number is required.');
+
+  const base = db.collection('artifacts').doc(appId).collection('private').doc('data');
+  const key = pendingKey(normalized, kind);
+
+  // Enforce the user license (active + pending), unless the tenant has no maxUsers set.
+  const tenantSnap = await db.collection('tenants').doc(appId).get();
+  const maxUsers = (tenantSnap.exists && typeof tenantSnap.data().maxUsers === 'number') ? tenantSnap.data().maxUsers : null;
+  if (maxUsers !== null) {
+    const [usersSnap, pendingSnap] = await Promise.all([
+      base.collection('users').get(),
+      base.collection('pending_users').get()
+    ]);
+    const activeCount = usersSnap.docs.filter(d => (d.data().role || 'staff') !== 'deleted').length;
+    const alreadyPending = pendingSnap.docs.some(d => d.id === key);
+    if (!alreadyPending && (activeCount + pendingSnap.size) >= maxUsers) {
+      throw new HttpsError('resource-exhausted', `已達授權用戶數量上限 (${maxUsers})。請聯絡平台管理員升級。`);
+    }
+  }
+
+  await base.collection('pending_users').doc(key).set({
+    identifier: normalized, type: kind, role: safeRole,
+    displayName: displayName || '', accessibleVenues: accessibleVenues || [],
+    requiresEmailVerification: !!firstUser && kind === 'email',
+    status: 'pending', createdBy: requester.uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  return { success: true, identifier: normalized, type: kind };
+});
+
+// ACTIVATE a whitelisted account (public — the person has no login yet). They supply their
+// whitelisted email/phone and set their own password. No email/phone verification for staff;
+// first-user (owner) accounts are flagged so the client can require email verification.
+exports.activateUser = onCall({ invoker: "public", memory: "256MiB" }, async (request) => {
+  const { tenantId, identifier, type, password } = request.data;
+  const appId = tenantId || APP_ID;
+  const kind = type === 'phone' ? 'phone' : 'email';
+  const db = admin.firestore();
+
+  if (!password || String(password).length < 8) throw new HttpsError('invalid-argument', '密碼至少需 8 位字元。');
+  const normalized = normalizeIdentifier(identifier, kind);
+  const base = db.collection('artifacts').doc(appId).collection('private').doc('data');
+  const key = pendingKey(normalized, kind);
+
+  const pendingRef = base.collection('pending_users').doc(key);
+  const pendingSnap = await pendingRef.get();
+  if (!pendingSnap.exists) throw new HttpsError('not-found', '找不到此帳戶的設定，請聯絡您的場地管理員。');
+  const pending = pendingSnap.data();
+
+  const authEmail = authEmailFor(normalized, kind, appId);
+
+  // Already claimed?
+  try {
+    await admin.auth().getUserByEmail(authEmail);
+    await pendingRef.delete().catch(() => {});
+    throw new HttpsError('already-exists', '此帳戶已啟用，請直接登入。');
+  } catch (e) {
+    if (e instanceof HttpsError) throw e; // already-exists
+    // otherwise user-not-found -> good, continue
+  }
+
+  const userRecord = await admin.auth().createUser({ email: authEmail, password: String(password) });
+  await admin.auth().setCustomUserClaims(userRecord.uid, { role: pending.role || 'staff', tenantId: appId });
+
+  await base.collection('users').doc(userRecord.uid).set({
+    uid: userRecord.uid,
+    email: kind === 'email' ? normalized : null,
+    phone: kind === 'phone' ? normalized : null,
+    loginType: kind,
+    displayName: pending.displayName || normalized,
+    role: pending.role || 'staff',
+    accessibleVenues: pending.accessibleVenues || [],
+    activatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await pendingRef.delete().catch(() => {});
+
+  // authEmail lets the client sign in (needed for phone -> synthetic email).
+  return { success: true, authEmail, type: kind, requiresEmailVerification: !!pending.requiresEmailVerification };
+});
+
+// Remove a pending (not-yet-activated) whitelisted user. Tenant admin / super_admin only.
+exports.revokeProvisionedUser = onCall({ memory: "256MiB" }, async (request) => {
+  const requester = request.auth;
+  if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
+  const { key, appId: requestAppId } = request.data;
+  if (!key) throw new HttpsError('invalid-argument', 'Missing key.');
+  const isSuperAdmin = requester.token.role === 'super_admin';
+  const appId = isSuperAdmin ? (requestAppId || APP_ID) : (requester.token.tenantId || requestAppId || APP_ID);
+  const db = admin.firestore();
+  if (!isSuperAdmin) {
+    const rdoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).get();
+    if (rdoc.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Only admins can manage users.');
+  }
+  await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('pending_users').doc(key).delete();
   return { success: true };
 });
 

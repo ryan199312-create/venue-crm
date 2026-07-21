@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MapPin, AlertCircle, Mail, Key } from 'lucide-react';
 
 const AdminLogin = ({ onLogin, error, appSettings }) => {
@@ -38,15 +39,15 @@ const AdminLogin = ({ onLogin, error, appSettings }) => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email 或電話 (Email or Phone)</label>
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 outline-none transition-all font-medium"
-                  placeholder="name@company.com"
+                  placeholder="name@company.com 或 91234567"
                   required
                 />
               </div>
@@ -75,13 +76,14 @@ const AdminLogin = ({ onLogin, error, appSettings }) => {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-100">
-            <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-              第一次登入？請使用管理員提供的<b className="text-slate-600">一次性密碼</b>登入，
-              登入後系統會引導您設定自己的新密碼。
-              <br />
-              <span className="text-slate-300">First time? Log in with the one-time password from your admin.</span>
+          <div className="mt-6 pt-6 border-t border-slate-100 text-center">
+            <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
+              第一次使用？請先啟用您的帳戶並設定密碼。
+              <span className="text-slate-300">First time? Activate your account.</span>
             </p>
+            <Link to="/activate" className="inline-block text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors">
+              啟用帳戶 (Activate Account) →
+            </Link>
           </div>
         </div>
       </div>

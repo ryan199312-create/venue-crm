@@ -73,6 +73,7 @@ export const INITIAL_FORM_STATE = {
 export function useAdminData(appId) {
   const [events, setEvents] = useState([]);
   const [users, setUsers] = useState([]);
+  const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [init, setInit] = useState({ events: false, users: false });
 
@@ -102,7 +103,14 @@ export function useAdminData(appId) {
       setInit(prev => ({ ...prev, users: true }));
     });
 
-    return () => { unsubEvents(); unsubUsers(); };
+    // 3. Pending (whitelisted, not-yet-activated) users — admins only; staff get a
+    //    harmless permission denial and simply see an empty list.
+    const qPending = query(collection(db, 'artifacts', appId, 'private', 'data', 'pending_users'));
+    const unsubPending = onSnapshot(qPending, (snap) => {
+      setPendingUsers(snap.docs.map(d => ({ key: d.id, ...d.data() })));
+    }, () => setPendingUsers([]));
+
+    return () => { unsubEvents(); unsubUsers(); unsubPending(); };
   }, [appId]);
 
   useEffect(() => {
@@ -147,5 +155,21 @@ export function useAdminData(appId) {
     return res.data; // { success, isNew, tempPassword }
   };
 
-  return { events, users, loading, saveEvent, deleteEvent, updateUserProfile, updateUserRole, createUser };
+  // Whitelist a user by email/phone (no login yet; they self-activate). Enforces maxUsers.
+  const provisionUser = async ({ identifier, type, role, displayName, accessibleVenues, firstUser }) => {
+    const fn = httpsCallable(functions, 'provisionUser');
+    const res = await fn({ appId, identifier, type, role, displayName, accessibleVenues, firstUser });
+    return res.data; // { success, identifier, type }
+  };
+
+  const revokePending = async (key) => {
+    const fn = httpsCallable(functions, 'revokeProvisionedUser');
+    await fn({ appId, key });
+  };
+
+  return {
+    events, users, pendingUsers, loading,
+    saveEvent, deleteEvent, updateUserProfile, updateUserRole,
+    createUser, provisionUser, revokePending
+  };
 }

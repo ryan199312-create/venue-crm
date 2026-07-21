@@ -64,15 +64,16 @@ const SuperAdminPortal = () => {
 
   // Modals / forms
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newTenant, setNewTenant] = useState({ id: '', name: '', maxBranches: 1 });
+  const [newTenant, setNewTenant] = useState({ id: '', name: '', maxBranches: 1, maxUsers: 5 });
   const [isCreating, setIsCreating] = useState(false);
 
   const [isLicenseOpen, setIsLicenseOpen] = useState(false);
   const [licenseValue, setLicenseValue] = useState(1);
+  const [licenseUsersValue, setLicenseUsersValue] = useState(5);
   const [isSavingLicense, setIsSavingLicense] = useState(false);
 
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', displayName: '', role: 'staff' });
+  const [inviteForm, setInviteForm] = useState({ identifier: '', identifierType: 'email', displayName: '', role: 'admin', firstUser: false });
   const [isInviting, setIsInviting] = useState(false);
   const [invitedCreds, setInvitedCreds] = useState(null); // { email, tempPassword, isNew }
 
@@ -160,8 +161,15 @@ const SuperAdminPortal = () => {
     if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
       window.location.href = `${protocol}//${tid}.localhost${p}/admin`;
     } else {
-      window.location.href = `${protocol}//${tid}.${hostname}${p}/admin`;
+      window.location.href = `${protocol}//${tid}.${hostname.replace(/^(www|app)\./, '')}${p}/admin`;
     }
+  };
+
+  const tenantActivateUrl = (tid) => {
+    const { hostname, protocol, port } = window.location;
+    const p = port ? `:${port}` : '';
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) return `${protocol}//${tid}.localhost${p}/activate`;
+    return `${protocol}//${tid}.${hostname.replace(/^(www|app)\./, '')}${p}/activate`;
   };
 
   const handleCreate = async (e) => {
@@ -174,7 +182,8 @@ const SuperAdminPortal = () => {
         name: newTenant.name,
         createdAt: serverTimestamp(),
         status: 'active',
-        maxBranches: Math.max(1, Number(newTenant.maxBranches) || 1)
+        maxBranches: Math.max(1, Number(newTenant.maxBranches) || 1),
+        maxUsers: Math.max(1, Number(newTenant.maxUsers) || 1)
       }, { merge: true });
 
       const settingsRef = doc(db, 'artifacts', id, 'private', 'data', 'settings', 'config');
@@ -188,7 +197,7 @@ const SuperAdminPortal = () => {
         });
       }
       setIsCreateOpen(false);
-      setNewTenant({ id: '', name: '', maxBranches: 1 });
+      setNewTenant({ id: '', name: '', maxBranches: 1, maxUsers: 5 });
     } catch (err) {
       console.error('Error creating tenant:', err);
       alert('建立租戶失敗: ' + err.message);
@@ -204,6 +213,7 @@ const SuperAdminPortal = () => {
 
   const openLicense = () => {
     setLicenseValue(typeof selectedTenant?.maxBranches === 'number' ? selectedTenant.maxBranches : 1);
+    setLicenseUsersValue(typeof selectedTenant?.maxUsers === 'number' ? selectedTenant.maxUsers : 5);
     setIsLicenseOpen(true);
   };
 
@@ -213,7 +223,7 @@ const SuperAdminPortal = () => {
     setIsSavingLicense(true);
     try {
       await setDoc(doc(db, 'tenants', selectedTenant.id),
-        { maxBranches: Math.max(1, Number(licenseValue) || 1), updatedAt: serverTimestamp() }, { merge: true });
+        { maxBranches: Math.max(1, Number(licenseValue) || 1), maxUsers: Math.max(1, Number(licenseUsersValue) || 1), updatedAt: serverTimestamp() }, { merge: true });
       setIsLicenseOpen(false);
     } catch (err) { alert('更新授權失敗: ' + err.message); }
     finally { setIsSavingLicense(false); }
@@ -224,14 +234,21 @@ const SuperAdminPortal = () => {
     if (!selectedTenant) return;
     setIsInviting(true);
     try {
-      const fn = httpsCallable(functions, 'inviteUser');
-      const res = await fn({ email: inviteForm.email, displayName: inviteForm.displayName, role: inviteForm.role, appId: selectedTenant.id });
-      const invitedEmail = inviteForm.email;
+      const fn = httpsCallable(functions, 'provisionUser');
+      await fn({
+        appId: selectedTenant.id,
+        identifier: inviteForm.identifier.trim(),
+        type: inviteForm.identifierType,
+        role: inviteForm.role,
+        displayName: inviteForm.displayName,
+        firstUser: inviteForm.firstUser
+      });
+      const info = { identifier: inviteForm.identifier.trim(), type: inviteForm.identifierType, tenantId: selectedTenant.id };
       setIsInviteOpen(false);
-      setInviteForm({ email: '', displayName: '', role: 'staff' });
-      setInvitedCreds({ email: invitedEmail, tempPassword: res.data?.tempPassword || null, isNew: !!res.data?.isNew });
+      setInviteForm({ identifier: '', identifierType: 'email', displayName: '', role: 'admin', firstUser: false });
+      setInvitedCreds(info);
     } catch (err) {
-      alert('邀請失敗: ' + (err.message || err));
+      alert('新增失敗: ' + (err.message || err));
     } finally { setIsInviting(false); }
   };
 
@@ -532,6 +549,33 @@ const SuperAdminPortal = () => {
                 })()}
               </Card>
 
+              {/* User License */}
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Gauge size={18} className="text-blue-500" /> 用戶授權 (User License)</h4>
+                  <button onClick={openLicense} className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700"><Pencil size={13} /> 調整</button>
+                </div>
+                {(() => {
+                  const max = typeof selectedTenant.maxUsers === 'number' ? selectedTenant.maxUsers : null;
+                  const u = userCountMap[selectedTenant.id] ?? 0;
+                  const pct = max ? Math.min(100, Math.round((u / max) * 100)) : 0;
+                  const over = max !== null && u >= max;
+                  return (
+                    <div>
+                      <div className="flex items-end justify-between mb-2">
+                        <span className="text-3xl font-black text-slate-800">{u} <span className="text-lg text-slate-400">/ {max ?? '∞'}</span></span>
+                        <span className={`text-xs font-bold ${over ? 'text-rose-600' : 'text-slate-400'}`}>{max === null ? '未設定授權 (unlimited)' : (over ? '已達上限' : `剩餘 ${max - u}`)}</span>
+                      </div>
+                      {max !== null && (
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${over ? 'bg-rose-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </Card>
+
               {/* Users */}
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -618,10 +662,17 @@ const SuperAdminPortal = () => {
               <span className="text-sm font-bold text-slate-400">.vowsos.com</span>
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">分店授權數量 (Licensed Branches)</label>
-            <input type="number" min="1" required value={newTenant.maxBranches} onChange={e => setNewTenant(p => ({ ...p, maxBranches: e.target.value }))}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">分店授權 (Branches)</label>
+              <input type="number" min="1" required value={newTenant.maxBranches} onChange={e => setNewTenant(p => ({ ...p, maxBranches: e.target.value }))}
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">用戶授權 (Users)</label>
+              <input type="number" min="1" required value={newTenant.maxUsers} onChange={e => setNewTenant(p => ({ ...p, maxUsers: e.target.value }))}
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
+            </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
@@ -639,7 +690,13 @@ const SuperAdminPortal = () => {
             <label className="text-xs font-black text-slate-400 uppercase tracking-widest">授權分店數量 (Max Branches)</label>
             <input type="number" min="1" required value={licenseValue} onChange={e => setLicenseValue(e.target.value)}
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
-            <p className="text-[10px] text-slate-400 font-medium">目前使用中: <b>{selectedTenant ? (usageMap[selectedTenant.id] ?? '–') : '–'}</b> 個分店。調低至低於現有數量不會刪除既有分店，但該租戶將無法再新增。</p>
+            <p className="text-[10px] text-slate-400 font-medium">目前使用中: <b>{selectedTenant ? (usageMap[selectedTenant.id] ?? '–') : '–'}</b> 個分店。</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">授權用戶數量 (Max Users)</label>
+            <input type="number" min="1" required value={licenseUsersValue} onChange={e => setLicenseUsersValue(e.target.value)}
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
+            <p className="text-[10px] text-slate-400 font-medium">目前使用中: <b>{selectedTenant ? (userCountMap[selectedTenant.id] ?? '–') : '–'}</b> 位用戶。調低不會刪除既有用戶，但該租戶將無法再新增。</p>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setIsLicenseOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
@@ -651,13 +708,25 @@ const SuperAdminPortal = () => {
       </Modal>
 
       {/* INVITE MODAL */}
-      <Modal isOpen={isInviteOpen} onClose={() => !isInviting && setIsInviteOpen(false)} title="邀請用戶 (Invite User)">
-        <form onSubmit={handleInvite} className="space-y-6 p-6 bg-slate-50">
-          <p className="text-xs text-slate-500 font-medium">邀請的用戶將被加入 <b>{selectedTenant?.name}</b> ({selectedTenant?.id})。</p>
+      <Modal isOpen={isInviteOpen} onClose={() => !isInviting && setIsInviteOpen(false)} title="新增用戶 (Add User)">
+        <form onSubmit={handleInvite} className="space-y-5 p-6 bg-slate-50">
+          <p className="text-xs text-slate-500 font-medium">登記的用戶將被加入 <b>{selectedTenant?.name}</b> ({selectedTenant?.id})，之後自行前往啟用頁面設定密碼。</p>
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Email</label>
-            <input type="email" required value={inviteForm.email} onChange={e => setInviteForm(p => ({ ...p, email: e.target.value }))}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" placeholder="user@example.com" />
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">登入方式 (Login ID)</label>
+              <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
+                {['email', 'phone'].map(t => (
+                  <button key={t} type="button" onClick={() => setInviteForm(p => ({ ...p, identifierType: t, firstUser: t === 'phone' ? false : p.firstUser }))}
+                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${inviteForm.identifierType === t ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500'}`}>
+                    {t === 'email' ? 'Email' : '電話'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <input type={inviteForm.identifierType === 'phone' ? 'tel' : 'email'} required value={inviteForm.identifier}
+              onChange={e => setInviteForm(p => ({ ...p, identifier: e.target.value }))}
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm"
+              placeholder={inviteForm.identifierType === 'phone' ? '91234567' : 'user@example.com'} />
           </div>
           <div className="space-y-2">
             <label className="text-xs font-black text-slate-400 uppercase tracking-widest">名稱 (Display Name)</label>
@@ -672,49 +741,39 @@ const SuperAdminPortal = () => {
               <option value="admin">Admin</option>
             </select>
           </div>
+          {inviteForm.identifierType === 'email' && (
+            <label className="flex items-center gap-2.5 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer">
+              <input type="checkbox" checked={inviteForm.firstUser} onChange={e => setInviteForm(p => ({ ...p, firstUser: e.target.checked }))} className="rounded text-violet-600" />
+              <span className="text-[11px] font-bold text-slate-600">擁有者帳戶 — 需 Email 驗證 (Owner — requires email verification)</span>
+            </label>
+          )}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setIsInviteOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
             <button type="submit" disabled={isInviting} className="flex-[2] py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-              {isInviting ? <Loader2 className="animate-spin" size={20} /> : '送出邀請'}
+              {isInviting ? <Loader2 className="animate-spin" size={20} /> : '登記用戶'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* INVITE SUCCESS — share credentials */}
-      <Modal isOpen={!!invitedCreds} onClose={() => setInvitedCreds(null)} title="帳戶已建立 (Account Created)">
+      {/* PROVISION SUCCESS — activation link */}
+      <Modal isOpen={!!invitedCreds} onClose={() => setInvitedCreds(null)} title="已登記 (User Added)">
         <div className="p-6 bg-slate-50 space-y-5">
-          {invitedCreds?.tempPassword ? (
-            <>
-              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                <CheckCircle className="text-emerald-500 shrink-0" size={22} />
-                <p className="text-sm font-bold text-emerald-800">帳戶已建立。請將以下登入資料交給對方。</p>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">登入 Email</label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <code className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-mono text-sm font-bold text-slate-800 break-all">{invitedCreds.email}</code>
-                    <button onClick={() => navigator.clipboard?.writeText(invitedCreds.email)} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製 Email"><Copy size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">一次性密碼 (One-time Password)</label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <code className="flex-1 px-4 py-3 bg-white border border-violet-200 rounded-xl font-mono text-lg font-black text-violet-700 tracking-wider">{invitedCreds.tempPassword}</code>
-                    <button onClick={() => navigator.clipboard?.writeText(invitedCreds.tempPassword)} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製密碼"><Copy size={16} /></button>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-600 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg p-3">
-                <b>提示：</b> 此密碼只會顯示這一次。對方首次登入後，系統會要求他們設定自己的新密碼。
-              </p>
-            </>
-          ) : (
-            <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl p-4">
-              <AlertTriangle className="text-blue-500 shrink-0" size={22} />
-              <p className="text-sm font-bold text-blue-800">此 Email 已有帳戶，已更新其角色與存取權限。對方沿用原有密碼登入。</p>
-            </div>
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+            <CheckCircle className="text-emerald-500 shrink-0" size={22} />
+            <p className="text-sm font-bold text-emerald-800">已登記！請通知對方啟用帳戶。</p>
+          </div>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            請對方前往以下網址，使用其 <b>{invitedCreds?.type === 'phone' ? '電話號碼' : 'Email'}</b>
+            <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded font-mono text-xs">{invitedCreds?.identifier}</code>
+            啟用帳戶並自行設定密碼：
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-4 py-3 bg-white border border-violet-200 rounded-xl font-mono text-sm font-bold text-violet-700 break-all">{invitedCreds ? tenantActivateUrl(invitedCreds.tenantId) : ''}</code>
+            <button onClick={() => navigator.clipboard?.writeText(invitedCreds ? tenantActivateUrl(invitedCreds.tenantId) : '')} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製連結"><Copy size={16} /></button>
+          </div>
+          {invitedCreds?.type === 'email' && (
+            <p className="text-[11px] text-slate-500 bg-amber-50 border border-amber-100 rounded-lg p-3">擁有者帳戶啟用後需完成 Email 驗證。</p>
           )}
           <button onClick={() => setInvitedCreds(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all">完成</button>
         </div>

@@ -9,6 +9,7 @@ import UsersTab from './UsersTab';
 import BrandingTab from './BrandingTab';
 import FloorplanEditor from '../../components/FloorplanEditor';
 import { ContractRenderer } from '../documents/components/renderers/ContractRenderer';
+import DocumentRouter from '../documents/components/DocumentRouter';
 import { useAuth } from '../../context/AuthContext';
 import { getScopedSettings } from '../../services/helpers';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -26,6 +27,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   const [previewLang, setPreviewLang] = useState('en');
   const [showLivePreview, setShowLivePreview] = useState(true);
   const [livePreviewLang, setLivePreviewLang] = useState('en');
+  const [previewDocType, setPreviewDocType] = useState('CONTRACT');
   
   // Mock data for preview
   const previewMockData = {
@@ -421,23 +423,43 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
 
           {/* Live document preview — updates as you edit; Save sets it as the default template. */}
           <div className="mb-8 border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
-              <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Eye size={14} /> 即時預覽 · 合約 (Live Preview)</span>
-              <div className="flex items-center gap-2">
-                <div className="flex gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5">
-                  {['en', 'zh'].map(l => (
-                    <button key={l} type="button" onClick={() => setLivePreviewLang(l)} className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${livePreviewLang === l ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>{l === 'en' ? 'EN' : '中文'}</button>
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Eye size={14} /> 即時預覽 (Live Preview)</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5">
+                    {['en', 'zh'].map(l => (
+                      <button key={l} type="button" onClick={() => setLivePreviewLang(l)} className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${livePreviewLang === l ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>{l === 'en' ? 'EN' : '中文'}</button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => setShowLivePreview(s => !s)} className="text-xs font-bold text-slate-400 hover:text-slate-600 px-2">{showLivePreview ? '隱藏' : '顯示'}</button>
+                </div>
+              </div>
+              {showLivePreview && (
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                  {[
+                    { id: 'QUOTATION', label: '報價單' },
+                    { id: 'CONTRACT', label: '合約' },
+                    { id: 'INVOICE', label: '發票' },
+                    { id: 'RECEIPT', label: '收據' },
+                    { id: 'EO', label: '宴會通知單 (EO)' },
+                    { id: 'ADDENDUM', label: '附加協議' },
+                    { id: 'INTERNAL_NOTES', label: '內部備註' },
+                  ].map(d => (
+                    <button key={d.id} type="button" onClick={() => setPreviewDocType(d.id)}
+                      className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${previewDocType === d.id ? 'bg-violet-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
+                      {d.label}
+                    </button>
                   ))}
                 </div>
-                <button type="button" onClick={() => setShowLivePreview(s => !s)} className="text-xs font-bold text-slate-400 hover:text-slate-600 px-2">{showLivePreview ? '隱藏' : '顯示'}</button>
-              </div>
+              )}
             </div>
             {showLivePreview && (
               <div className="max-h-[75vh] overflow-auto bg-slate-200/60 p-4">
                 <div className="mx-auto shadow-lg" style={{ width: 'fit-content' }}>
-                  <ContractRenderer
+                  <DocumentRouter
                     data={previewMockData}
-                    isCn={livePreviewLang === 'zh'}
+                    printMode={previewDocType === 'CONTRACT' && livePreviewLang === 'zh' ? 'CONTRACT_CN' : previewDocType}
                     appSettings={{ ...settings, venueProfiles: { ...settings.venueProfiles, [selectedVenueId]: localSettings.venueProfile } }}
                   />
                 </div>

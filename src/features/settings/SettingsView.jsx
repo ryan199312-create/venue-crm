@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette } from 'lucide-react';
+import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText } from 'lucide-react';
 import {
   formatMoney, isZoneSelected, getPreferredZoneLabel, DAYS_OF_WEEK, DEPARTMENTS
 } from '../../services/billingService';
@@ -50,7 +50,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   useEffect(() => {
     setLocalSettings(getInitialSettings());
     // Auto-switch tab if incompatible with new view
-    if (selectedVenueId === 'all' && ['minSpend', 'menus', 'payment', 'floorplan', 'venueProfile'].includes(activeSubTab)) {
+    if (selectedVenueId === 'all' && ['minSpend', 'menus', 'payment', 'floorplan', 'venueProfile', 'documents'].includes(activeSubTab)) {
         setActiveSubTab('outlets');
     } else if (selectedVenueId !== 'all' && ['outlets', 'companyInfo', 'users', 'roles'].includes(activeSubTab)) {
         setActiveSubTab('venueProfile');
@@ -271,6 +271,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
         ) : (
           <>
             <button onClick={() => setActiveSubTab('venueProfile')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'venueProfile' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>分店資料</button>
+            <button onClick={() => setActiveSubTab('documents')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'documents' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>單據與收款</button>
             <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>視覺風格 (Branding)</button>
             <button onClick={() => setActiveSubTab('minSpend')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>低消規則</button>
             <button onClick={() => setActiveSubTab('menus')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>菜單預設</button>
@@ -404,7 +405,19 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
             </div>
             <FormTextArea label="詳細地址" icon={MapPin} value={localSettings.venueProfile?.address || ''} onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), address: e.target.value } }))} />
             
-            <div className="border-t border-slate-100 pt-6 mt-6">
+          </div>
+          <div className="pt-6 flex justify-end">
+            <button onClick={handleSaveVenueProfile} className="bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all active:scale-95">儲存分店資料</button>
+          </div>
+        </Card>
+      )}
+
+      {activeSubTab === 'documents' && (
+        <Card className="p-6 border-l-4 border-l-violet-500 animate-in fade-in">
+          <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2"><FileText className="text-violet-500" /> 單據與收款範本 (Documents & Payment)</h3>
+          <p className="text-xs text-slate-400 mb-6">此頁設定會套用到該分店生成的報價單、合約與收據。</p>
+          <div className="space-y-6">
+            <div>
               <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">單據條款設定 (Document Terms)</h4>
               <div className="space-y-6">
                 <FormTextArea

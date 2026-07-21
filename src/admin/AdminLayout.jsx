@@ -18,9 +18,9 @@ import { ConfirmationModal, Toast, Card } from '../components/ui';
 import AdminSidebar from './AdminSidebar';
 import AdminMobileHeader from './AdminMobileHeader';
 import AdminLogin from './AdminLogin';
+import SetPasswordScreen from './SetPasswordScreen';
 
 // Lazy Components
-const OnboardingWizard = React.lazy(() => import('../features/onboarding/OnboardingWizard'));
 const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
 const EventsListView = React.lazy(() => import('../features/events/components/EventsListView'));
 const SettingsView = React.lazy(() => import('../features/settings/SettingsView'));
@@ -85,12 +85,18 @@ export default function AdminLayout() {
     (users.length === 0 || !users.some(u => u.role === 'admin' || u.role === 'super_admin')) &&
     userProfile?.role !== 'admin' && userProfile?.role !== 'super_admin';
 
-  const needsOnboarding = hasInitialized && appSettings?.isSetupComplete === false;
   const hasNoAccess = hasInitialized && !hasPermission('dashboard') && !hasPermission('events');
 
   // --- Handlers ---
   const handleClaimAdmin = useCallback(async () => {
     if (!user || isClaiming) return;
+    // Guard: never downgrade an already-privileged user. The platform owner
+    // (super_admin) — or an existing tenant admin — visiting /admin must NOT be
+    // reset to 'admin'. Check the LIVE token (userProfile can lag a token refresh).
+    try {
+      const token = await user.getIdTokenResult(true);
+      if (token.claims.role === 'super_admin' || token.claims.role === 'admin') return;
+    } catch (e) { /* if the token can't be read, fall through to the normal flow */ }
     setIsClaiming(true);
     try {
       console.log("[AdminLayout] Executing Auto-Claim for Admin role...");
@@ -422,6 +428,11 @@ export default function AdminLayout() {
     return <AdminLogin onLogin={login} error={authError} appSettings={appSettings} />;
   }
 
+  // 2b. First login for an invited account: force setting a real password before anything else.
+  if (userProfile?.mustChangePassword) {
+    return <SetPasswordScreen email={user?.email} onSignOut={handleSignOut} />;
+  }
+
   // 3. BOOTSTRAP OVERLAY (Strict Early Return)
   // 🌟 Senior Strategy: If no admins exist, show a passive initialization screen.
   // The useEffect will handle the promotion automatically.
@@ -443,7 +454,7 @@ export default function AdminLayout() {
 
   // 4. NO ACCESS (Authenticated but no permission to any main view)
   // 🌟 Senior Fix: Only show "No Access" if onboarding isn't also required.
-  if (hasNoAccess && !needsOnboarding) {
+  if (hasNoAccess) {
     console.log("[AdminLayout] Access DENIED for user:", user?.email, "Role:", userProfile?.role);
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
@@ -468,25 +479,6 @@ export default function AdminLayout() {
   // 🌟 NO FLICKER: If we reached here, user has access and setup is complete (or onboarding is shown as overlay).
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-900 font-sans flex overflow-hidden">
-      {/* ONBOARDING OVERLAY */}
-      {/* 🌟 Senior Strategy: Render inside the main tree to maintain component identity and state. */}
-      {needsOnboarding && (
-        <div className="fixed inset-0 bg-slate-50 overflow-hidden z-[5000]">
-          <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>}>
-            <OnboardingWizard 
-              appSettings={appSettings} 
-              onSave={handleSaveSettings} 
-              onUploadProof={async (f) => {
-                  const sRef = ref(storage, `receipts/${Date.now()}_${f.name}`);
-                  await uploadBytes(sRef, f);
-                  return await getDownloadURL(sRef);
-              }} 
-              addToast={addToast} 
-            />
-          </React.Suspense>
-        </div>
-      )}
-
       <ConfirmationModal isOpen={confirmConfig.isOpen} title={confirmConfig.title} message={confirmConfig.message} onConfirm={confirmConfig.onConfirm} onCancel={() => setConfirmConfig({ ...confirmConfig, isOpen: false })} />
       
       <div className="fixed bottom-4 right-4 z-[6000] flex flex-col space-y-2">
@@ -503,7 +495,7 @@ export default function AdminLayout() {
               {activeTab === 'dashboard' && <AdminDashboard events={events} openEditModal={openEditModal} setIsDataAiOpen={setIsDataAiOpen} />}
               {activeTab === 'events' && <EventsListView events={events} openNewEventModal={openNewEventModal} openEditModal={openEditModal} handleDelete={handleDeleteEvent} />}
               {activeTab === 'docs' && <DocumentationHub />}
-              {activeTab === 'settings' && (<SettingsView settings={appSettings} onSave={(s) => setDoc(doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config'), s, { merge: true })} addToast={addToast} users={users} updateUserProfile={updateUserProfile} updateUserRole={updateUserRole} deleteUser={(id) => updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'users', id), { role: 'deleted' })} />)}
+              {activeTab === 'settings' && (<SettingsView settings={appSettings} onSave={(s) => setDoc(doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config'), s, { merge: true })} addToast={addToast} users={users} updateUserProfile={updateUserProfile} updateUserRole={updateUserRole} createUser={createUser} deleteUser={(id) => updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'users', id), { role: 'deleted' })} />)}
             </div>
           </React.Suspense>
         </div>

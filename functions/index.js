@@ -451,6 +451,15 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
 // ==========================================
 // 5. USER MANAGEMENT (RBAC)
 // ==========================================
+
+// Generate a short, human-shareable one-time password (no ambiguous 0/O/1/l chars).
+function generateTempPassword() {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let out = '';
+  for (let i = 0; i < 10; i++) out += chars[crypto.randomInt(chars.length)];
+  return out;
+}
+
 exports.inviteUser = onCall({
   memory: "256MiB"
 }, async (request) => {
@@ -478,22 +487,47 @@ exports.inviteUser = onCall({
 
   try {
     let userRecord;
-    try { userRecord = await admin.auth().getUserByEmail(email); }
-    catch (e) { userRecord = await admin.auth().createUser({ email, displayName, password: crypto.randomBytes(16).toString('hex') }); }
+    let isNew = false;
+    let tempPassword = null;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (e) {
+      // Brand-new account: provision with a shareable one-time password.
+      tempPassword = generateTempPassword();
+      userRecord = await admin.auth().createUser({ email, displayName, password: tempPassword });
+      isNew = true;
+    }
 
     // Stamp tenant + role claims so the invited user is immediately tenant-scoped.
     const existing = userRecord.customClaims || {};
     await admin.auth().setCustomUserClaims(userRecord.uid, { ...existing, role: safeRole, tenantId: appId });
 
     await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(userRecord.uid).set({
-      uid: userRecord.uid, email, displayName: displayName || email, role: safeRole, accessibleVenues: accessibleVenues || [], isInvited: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      uid: userRecord.uid, email, displayName: displayName || email, role: safeRole,
+      accessibleVenues: accessibleVenues || [], isInvited: true,
+      // New accounts must set their own password on first login.
+      ...(isNew ? { mustChangePassword: true } : {}),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    return { success: true };
+    return { success: true, isNew, tempPassword };
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     console.error('inviteUser error:', error);
     throw new HttpsError('internal', 'Failed to invite user.');
   }
+});
+
+// Clear the first-login password flag for the calling user, after they set a new password.
+exports.completePasswordSetup = onCall({ memory: "256MiB" }, async (request) => {
+  const requester = request.auth;
+  if (!requester) throw new HttpsError('unauthenticated', 'Login required.');
+  const appId = requester.token.tenantId || request.data?.appId || APP_ID;
+  const db = admin.firestore();
+  await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('users').doc(requester.uid).set({
+    mustChangePassword: admin.firestore.FieldValue.delete(),
+    passwordSetAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  return { success: true };
 });
 
 exports.updateUserRoleSecure = onCall({

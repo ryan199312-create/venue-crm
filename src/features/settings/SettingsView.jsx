@@ -13,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getScopedSettings } from '../../services/helpers';
 import { useConfirm } from '../../hooks/useConfirm';
 
-const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, updateUserRole, updateUserProfile, deleteUser, events }) => {
+const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, updateUserRole, updateUserProfile, deleteUser, createUser, events }) => {
   const { selectedVenueId, outlets, maxBranches } = useAuth();
 
   // Licensing: how many branches (outlets) this tenant is allowed. null = unlimited.
@@ -738,7 +738,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, update
       )}
       
       {activeSubTab === 'users' && (
-        <UsersTab users={users} appSettings={localSettings} updateUserRole={updateUserRole} updateUserProfile={updateUserProfile} deleteUser={deleteUser} addToast={addToast} />
+        <UsersTab users={users} appSettings={localSettings} updateUserRole={updateUserRole} updateUserProfile={updateUserProfile} deleteUser={deleteUser} createUser={createUser} addToast={addToast} />
       )}
 
       {activeSubTab === 'floorplan' && (

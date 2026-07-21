@@ -17,7 +17,7 @@ export const getTenantId = () => {
     if (parts.length > 1 && parts[0] !== 'www' && parts[0] !== 'app') {
       return parts[0];
     }
-    return 'my-venue-crm'; // Default for local dev
+    return null; // bare localhost = NO default tenant. Use <tenant>.localhost for a tenant.
   }
 
   // 2. Production / Vercel Handling
@@ -45,6 +45,7 @@ export const isRootDomain = () => {
   // In hybrid mode, we don't treat the root as a "Super Admin only" zone
   // unless specifically navigating to /super-admin.
   const hostname = window.location.hostname;
+  if (hostname === 'localhost') return true; // bare localhost = root/marketing (no default tenant)
   const rawParts = hostname.split('.');
   // Treat the "www" host as the root/marketing domain too (e.g. www.vowsos.com),
   // since Vercel may redirect the apex vowsos.com -> www.vowsos.com.

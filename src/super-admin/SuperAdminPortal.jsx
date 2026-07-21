@@ -7,7 +7,7 @@ import { httpsCallable } from 'firebase/functions';
 import {
   Shield, Users, Building2, LayoutDashboard, Globe, LogOut, Plus, Search, Loader2,
   ArrowLeft, ExternalLink, Clock, AlertTriangle, Trash2, Layers, Gauge, UserPlus,
-  Power, Database, CheckCircle, ChevronRight, Pencil
+  Power, Database, CheckCircle, ChevronRight, Pencil, Copy
 } from 'lucide-react';
 import AdminLogin from '../admin/AdminLogin';
 import DataMigrationTool from './DataMigrationTool';
@@ -74,6 +74,7 @@ const SuperAdminPortal = () => {
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', displayName: '', role: 'staff' });
   const [isInviting, setIsInviting] = useState(false);
+  const [invitedCreds, setInvitedCreds] = useState(null); // { email, tempPassword, isNew }
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -224,9 +225,11 @@ const SuperAdminPortal = () => {
     setIsInviting(true);
     try {
       const fn = httpsCallable(functions, 'inviteUser');
-      await fn({ email: inviteForm.email, displayName: inviteForm.displayName, role: inviteForm.role, appId: selectedTenant.id });
+      const res = await fn({ email: inviteForm.email, displayName: inviteForm.displayName, role: inviteForm.role, appId: selectedTenant.id });
+      const invitedEmail = inviteForm.email;
       setIsInviteOpen(false);
       setInviteForm({ email: '', displayName: '', role: 'staff' });
+      setInvitedCreds({ email: invitedEmail, tempPassword: res.data?.tempPassword || null, isNew: !!res.data?.isNew });
     } catch (err) {
       alert('邀請失敗: ' + (err.message || err));
     } finally { setIsInviting(false); }
@@ -261,9 +264,8 @@ const SuperAdminPortal = () => {
   // ---------- Auth gates ----------
   if (authLoading || (user && !userProfile)) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-500">
-        <Loader2 className="animate-spin mb-4 text-violet-600" size={48} />
-        <p className="font-bold">驗證身份中 (Verifying Identity)...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-violet-500" size={26} />
       </div>
     );
   }
@@ -677,6 +679,45 @@ const SuperAdminPortal = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* INVITE SUCCESS — share credentials */}
+      <Modal isOpen={!!invitedCreds} onClose={() => setInvitedCreds(null)} title="帳戶已建立 (Account Created)">
+        <div className="p-6 bg-slate-50 space-y-5">
+          {invitedCreds?.tempPassword ? (
+            <>
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                <CheckCircle className="text-emerald-500 shrink-0" size={22} />
+                <p className="text-sm font-bold text-emerald-800">帳戶已建立。請將以下登入資料交給對方。</p>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">登入 Email</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-mono text-sm font-bold text-slate-800 break-all">{invitedCreds.email}</code>
+                    <button onClick={() => navigator.clipboard?.writeText(invitedCreds.email)} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製 Email"><Copy size={16} /></button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">一次性密碼 (One-time Password)</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 px-4 py-3 bg-white border border-violet-200 rounded-xl font-mono text-lg font-black text-violet-700 tracking-wider">{invitedCreds.tempPassword}</code>
+                    <button onClick={() => navigator.clipboard?.writeText(invitedCreds.tempPassword)} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製密碼"><Copy size={16} /></button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg p-3">
+                <b>提示：</b> 此密碼只會顯示這一次。對方首次登入後，系統會要求他們設定自己的新密碼。
+              </p>
+            </>
+          ) : (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl p-4">
+              <AlertTriangle className="text-blue-500 shrink-0" size={22} />
+              <p className="text-sm font-bold text-blue-800">此 Email 已有帳戶，已更新其角色與存取權限。對方沿用原有密碼登入。</p>
+            </div>
+          )}
+          <button onClick={() => setInvitedCreds(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all">完成</button>
+        </div>
       </Modal>
 
       {/* DELETE MODAL */}

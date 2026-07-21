@@ -143,7 +143,8 @@ export function useAdminData(appId) {
 
   const createUser = async (userData) => {
     const inviteUser = httpsCallable(functions, 'inviteUser');
-    await inviteUser({ ...userData, appId });
+    const res = await inviteUser({ ...userData, appId });
+    return res.data; // { success, isNew, tempPassword }
   };
 
   return { events, users, loading, saveEvent, deleteEvent, updateUserProfile, updateUserRole, createUser };

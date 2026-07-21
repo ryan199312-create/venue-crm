@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Shield, Trash2, Plus, Search, MoreVertical, Edit2, Building2 } from 'lucide-react';
+import { User, Mail, Shield, Trash2, Plus, Search, MoreVertical, Edit2, Building2, Copy, CheckCircle } from 'lucide-react';
 import { Card } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_ROLE_PERMISSIONS } from '../../core/constants';
@@ -12,6 +12,7 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'staff', accessibleVenues: [] });
   const [editingUserId, setEditingUserId] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [invitedCreds, setInvitedCreds] = useState(null); // { email, tempPassword }
 
   // 🌟 Senior Fix: Merge custom roles with default roles to ensure essential roles always exist.
   const roles = { ...DEFAULT_ROLE_PERMISSIONS, ...(appSettings.rolePermissions || {}) };
@@ -28,13 +29,18 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
     
     setIsInviting(true);
     try {
-      await createUser({
+      const res = await createUser({
         email: newUser.email,
         displayName: newUser.name,
         role: newUser.role,
         accessibleVenues: newUser.accessibleVenues
       });
-      addToast(`邀請已送出至 ${newUser.email}`, "success");
+      if (res?.tempPassword) {
+        setInvitedCreds({ email: newUser.email, tempPassword: res.tempPassword });
+        addToast("帳戶已建立，請將登入資料交給對方", "success");
+      } else {
+        addToast(`已更新 ${newUser.email} 的存取權限`, "success");
+      }
       setNewUser({ name: '', email: '', role: 'staff', accessibleVenues: [] });
       setIsAddingUser(false);
     } catch (err) {
@@ -92,6 +98,36 @@ const UsersTab = ({ users, appSettings, updateUserRole, updateUserProfile, delet
 
   return (
     <div className="space-y-6 animate-in fade-in">
+      {invitedCreds && (
+        <div className="fixed inset-0 z-[5000] bg-black/40 flex items-center justify-center p-4" onClick={() => setInvitedCreds(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+              <CheckCircle className="text-emerald-500 shrink-0" size={22} />
+              <p className="text-sm font-bold text-emerald-800">帳戶已建立。請將以下登入資料交給對方。</p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">登入 Email</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm font-bold text-slate-800 break-all">{invitedCreds.email}</code>
+                  <button onClick={() => navigator.clipboard?.writeText(invitedCreds.email)} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製"><Copy size={16} /></button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">一次性密碼 (One-time Password)</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="flex-1 px-4 py-3 bg-slate-50 border border-indigo-200 rounded-xl font-mono text-lg font-black text-indigo-700 tracking-wider">{invitedCreds.tempPassword}</code>
+                  <button onClick={() => navigator.clipboard?.writeText(invitedCreds.tempPassword)} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製"><Copy size={16} /></button>
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed bg-amber-50 border border-amber-100 rounded-lg p-3">
+              <b>提示：</b> 此密碼只會顯示這一次。對方首次登入後將被要求設定自己的新密碼。
+            </p>
+            <button onClick={() => setInvitedCreds(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all">完成</button>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

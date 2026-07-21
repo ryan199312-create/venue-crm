@@ -4,21 +4,13 @@ import { MapPin, AlertCircle, Mail, Key } from 'lucide-react';
 const AdminLogin = ({ onLogin, error, appSettings }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
 
   const venueProfile = appSettings?.venueProfile || {};
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onLogin(email, password, isRegistering);
+    onLogin(email, password, false);
   };
-
-  const toggleRegister = () => {
-    setIsRegistering(!isRegistering);
-    if (onLogin) onLogin(null, null, null, true); // Trigger error clearing in parent
-  };
-
-  const showRegisterLink = !appSettings?.isSetupComplete;
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
@@ -79,20 +71,18 @@ const AdminLogin = ({ onLogin, error, appSettings }) => {
               type="submit" 
               className="w-full bg-indigo-600 hover:opacity-90 text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
             >
-              {isRegistering ? '立即註冊 (Register)' : '登入管理系統 (Login)'}
+              登入管理系統 (Login)
             </button>
           </form>
 
-          {showRegisterLink && (
-            <div className="mt-6 pt-6 border-t border-slate-100 text-center">
-              <button 
-                onClick={toggleRegister}
-                className="text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
-              >
-                {isRegistering ? '已有帳號？返回登入' : '第一次使用？點此註冊新帳號'}
-              </button>
-            </div>
-          )}
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+              第一次登入？請使用管理員提供的<b className="text-slate-600">一次性密碼</b>登入，
+              登入後系統會引導您設定自己的新密碼。
+              <br />
+              <span className="text-slate-300">First time? Log in with the one-time password from your admin.</span>
+            </p>
+          </div>
         </div>
       </div>
       

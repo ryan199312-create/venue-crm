@@ -69,14 +69,19 @@ export default function App() {
                 On a tenant subdomain, "/" goes straight to that tenant's app. */}
             <Route path="/" element={rootDomain ? <LandingPage /> : <Navigate to="/admin" replace />} />
 
+            {/* Always-available preview of the landing page (works on any host, incl. localhost). */}
+            <Route path="/landing" element={<LandingPage />} />
+
             {/* SUPER ADMIN CONSOLE - Always available at this path */}
             <Route path="/super-admin" element={<SuperAdminPortal />} />
 
-            {/* TENANT ADMIN & PORTAL */}
-            {/* These routes now work on both Subdomains AND Root Domain (defaulting to my-venue-crm) */}
-            <Route path="/admin" element={<AdminLayout />} />
-            <Route path="/portal" element={<ClientPortal />} />
-            <Route path="/portal/:eventId" element={<ClientPortal />} />
+            {/* TENANT ADMIN & PORTAL — only on a tenant subdomain.
+                On the root domain there is NO default tenant, so these redirect to the
+                public landing page. Access a tenant via its subdomain, e.g.
+                kinglungheen.vowsos.com/admin (or kinglungheen.localhost:5173/admin in dev). */}
+            <Route path="/admin" element={rootDomain ? <Navigate to="/" replace /> : <AdminLayout />} />
+            <Route path="/portal" element={rootDomain ? <Navigate to="/" replace /> : <ClientPortal />} />
+            <Route path="/portal/:eventId" element={rootDomain ? <Navigate to="/" replace /> : <ClientPortal />} />
 
             {/* Fallback: unknown paths → landing (root domain) or the tenant app (subdomain) */}
             <Route path="*" element={<Navigate to={rootDomain ? '/' : '/admin'} replace />} />

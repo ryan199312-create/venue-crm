@@ -228,19 +228,21 @@ export const DocumentHeader = ({ data, typeEn, typeZh, appSettings }) => {
             <img src={logoUrl} alt="Logo" className="h-12 object-contain self-start mb-2" />
           ) : (
             <div className="flex flex-col gap-0" style={{ color: 'var(--brand-primary)' }}>
-              <span className="text-3xl font-black tracking-tight leading-none">{profile.nameZh || '璟瓏軒'}</span>
-              <span className="text-xs font-bold tracking-[0.2em] uppercase mt-1">{profile.nameEn || 'King Lung Heen'}</span>
+              <span className="text-3xl font-black tracking-tight leading-none">{profile.nameZh || appSettings?.venueName || ''}</span>
+              {profile.nameEn && <span className="text-xs font-bold tracking-[0.2em] uppercase mt-1">{profile.nameEn}</span>}
             </div>
           )}
-          
+
           <div className="text-[9px] text-slate-500 font-medium leading-relaxed mt-1">
-            <p className="text-slate-700 mb-0.5 max-w-[280px]">
-              {profile.address || '4/F, Hong Kong Palace Museum, 8 Museum Drive,\nWest Kowloon Cultural District, Kowloon, Hong Kong'}
-            </p>
-            <p>
-              Tel: {profile.phone || '---'} 
-              {profile.website && ` | Web: ${profile.website}`}
-            </p>
+            {profile.address && (
+              <p className="text-slate-700 mb-0.5 max-w-[280px] whitespace-pre-line">{profile.address}</p>
+            )}
+            {(profile.phone || profile.website) && (
+              <p>
+                {profile.phone && <>Tel: {profile.phone}</>}
+                {profile.website && `${profile.phone ? ' | ' : ''}Web: ${profile.website}`}
+              </p>
+            )}
           </div>
         </div>
       </div>

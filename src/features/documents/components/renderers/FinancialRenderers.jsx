@@ -50,12 +50,23 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
 
       <PaymentMethodBlock appSettings={appSettings} venueId={data.venueId} printMode={printMode} isCn={!useEn} />
 
-      {printMode === 'QUOTATION' && (
-        <div className="mt-8 p-4 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-500 italic leading-relaxed break-inside-avoid">
-          <p className="mb-2">本文及其附件由璟瓏軒發出，內容屬於機密，僅供收件人使用，未經璟瓏軒事先批准，不得複製或披露；其應妥善保管，保持機密，且不得用於與此次活動無關的任何用途。</p>
-          <p>This document and its attachments are issued by King Lung Heen and are confidential for the use of the intended recipient only. They may not be reproduced or disclosed without the prior approval of King Lung Heen. They should be kept secure and confidential and must not be used for any purpose unrelated to this event.</p>
-        </div>
-      )}
+      {printMode === 'QUOTATION' && (() => {
+        // Tenant-specific confidentiality notice: use the venue's own settings, or a
+        // neutral default built from the tenant's name (never another tenant's).
+        const profile = appSettings?.venueProfiles?.[data.venueId] || appSettings?.venueProfile || {};
+        const vZh = profile.nameZh || appSettings?.venueName || '本公司';
+        const vEn = profile.nameEn || 'the venue';
+        const noticeZh = profile.confidentialityNoticeZh
+          || `本文及其附件由${vZh}發出，內容屬於機密，僅供收件人使用，未經${vZh}事先批准，不得複製或披露；其應妥善保管，保持機密，且不得用於與此次活動無關的任何用途。`;
+        const noticeEn = profile.confidentialityNoticeEn
+          || `This document and its attachments are issued by ${vEn} and are confidential for the use of the intended recipient only. They may not be reproduced or disclosed without prior approval. They should be kept secure and confidential and must not be used for any purpose unrelated to this event.`;
+        return (
+          <div className="mt-8 p-4 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-500 italic leading-relaxed break-inside-avoid">
+            <p className="mb-2 whitespace-pre-line">{noticeZh}</p>
+            <p className="whitespace-pre-line">{noticeEn}</p>
+          </div>
+        );
+      })()}
 
       {(printMode === 'QUOTATION' || (printMode !== 'INVOICE' && printMode !== 'RECEIPT')) && (
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-start break-inside-avoid">

@@ -407,11 +407,23 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
             <div className="border-t border-slate-100 pt-6 mt-6">
               <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">單據條款設定 (Document Terms)</h4>
               <div className="space-y-6">
-                <FormTextArea 
-                  label="報價單付款條款 (Quotation Payment Terms) - 使用 **文字** 來粗體" 
+                <FormTextArea
+                  label="報價單付款條款 (Quotation Payment Terms) - 使用 **文字** 來粗體"
                   placeholder="例如: **50% deposit** required to confirm..."
-                  value={localSettings.venueProfile?.paymentTermsQuotation || ''} 
-                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentTermsQuotation: e.target.value } }))} 
+                  value={localSettings.venueProfile?.paymentTermsQuotation || ''}
+                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), paymentTermsQuotation: e.target.value } }))}
+                />
+                <FormTextArea
+                  label="報價單保密聲明 — 中文 (Confidentiality Notice, ZH)"
+                  placeholder="留空則自動以貴場地名稱產生預設聲明"
+                  value={localSettings.venueProfile?.confidentialityNoticeZh || ''}
+                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), confidentialityNoticeZh: e.target.value } }))}
+                />
+                <FormTextArea
+                  label="報價單保密聲明 — English (Confidentiality Notice, EN)"
+                  placeholder="Leave blank to auto-generate from your venue name"
+                  value={localSettings.venueProfile?.confidentialityNoticeEn || ''}
+                  onChange={e => setLocalSettings(p => ({ ...p, venueProfile: { ...(p.venueProfile || {}), confidentialityNoticeEn: e.target.value } }))}
                 />
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-6 mt-4">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-3">

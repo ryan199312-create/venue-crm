@@ -191,7 +191,11 @@ export const InternalNotesRenderer = ({ data, appSettings }) => {
 };
 
 export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, language = 'BILINGUAL', lang = 'en' }) => {
-  const t = docT(lang);
+  // The menu's content language also drives the document chrome (header/labels/dates):
+  // Chinese menu -> Chinese chrome, English menu -> English chrome, Bilingual -> use the
+  // order/venue default language.
+  const chromeLang = language === 'CHINESE' ? 'zh' : language === 'ENGLISH' ? 'en' : lang;
+  const t = docT(chromeLang);
   if (!data) return null;
   const menu = data.menus && data.menus.find(m => String(m.id) === String(menuId)) ? data.menus.find(m => String(m.id) === String(menuId)) : (data.menus?.[0] || null);
   if (!menu) return <div className="p-10 text-center text-red-500 font-bold">{t.menuDataNotFound}</div>;
@@ -209,7 +213,7 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, languag
     if (data.printSettings?.menu?.validityDateOverride) return data.printSettings.menu.validityDateOverride;
     const date = new Date();
     date.setDate(date.getDate() + 14);
-    return date.toLocaleDateString(lang === 'zh' ? 'zh-HK' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString(chromeLang === 'zh' ? 'zh-HK' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   })();
 
   return (
@@ -225,8 +229,8 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, languag
         }
       `}</style>
       
-      <DocumentHeader data={data} typeEn="Menu Confirmation" typeZh="菜單確認表" appSettings={appSettings} lang={lang} />
-      <ClientInfoGrid data={data} appSettings={appSettings} lang={lang} />
+      <DocumentHeader data={data} typeEn="Menu Confirmation" typeZh="菜單確認表" appSettings={appSettings} lang={chromeLang} />
+      <ClientInfoGrid data={data} appSettings={appSettings} lang={chromeLang} />
 
       <div className="flex flex-col items-center bg-slate-50/50 rounded-2xl border border-slate-200 p-8 shadow-inner mb-12">
         <div className="w-full max-w-lg">
@@ -304,7 +308,7 @@ export const MenuConfirmRenderer = ({ data, menuId, onSign, appSettings, languag
            sigDataUrl={clientSig}
            onSign={onSign ? () => onSign(docType) : null}
            dateStr={data.signatures?.[docType]?.clientDate}
-           lang={lang}
+           lang={chromeLang}
            appSettings={appSettings}
         />
       </div>

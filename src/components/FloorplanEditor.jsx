@@ -1,21 +1,29 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Trash2, RotateCw, Move, Image as ImageIcon, MousePointer2, Maximize, Minimize, Copy, Eraser, MoveHorizontal, MoveVertical, Undo2, Redo2, Link, Unlink, ChevronsUp, ChevronsDown, Grid, Save, AlignLeft, AlignRight, ArrowUpToLine, ArrowDownToLine, PenTool, ZoomIn, ZoomOut, X } from 'lucide-react';
-import { TOOL_GROUPS } from './FloorplanTools';
+import { TOOL_GROUPS, buildCustomGroup } from './FloorplanTools';
 import { useLang } from '../i18n/language';
 
 export default function FloorplanEditor({
-  formData, 
-  setFormData, 
-  defaultBgImage = '', 
-  defaultItemScale = 40, 
-  defaultZones = [], 
+  formData,
+  setFormData,
+  defaultBgImage = '',
+  defaultItemScale = 40,
+  defaultZones = [],
   events = [],
   onClose = null,
   initialFullscreen = false,
-  liteMode = false
+  liteMode = false,
+  customItems = []
 }) {
   const { L } = useLang();
+
+  // Palette = built-in tool groups + any tenant-defined custom items.
+  const allGroups = useMemo(
+    () => (customItems && customItems.length ? [...TOOL_GROUPS, buildCustomGroup(customItems)] : TOOL_GROUPS),
+    [customItems]
+  );
+  const allTools = useMemo(() => allGroups.flatMap(g => g.items), [allGroups]);
   const canvasRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
@@ -244,7 +252,7 @@ export default function FloorplanEditor({
     let projH = itemScale;
 
     if (dragState.type) {
-      const tool = TOOL_GROUPS.flatMap(g => g.items).find(t => t.type === dragState.type);
+      const tool = allTools.find(t => t.type === dragState.type);
       if (!tool) return;
       projW = tool.w_m * itemScale;
       projH = tool.h_m * itemScale;
@@ -304,7 +312,7 @@ export default function FloorplanEditor({
     
     if (source === 'toolbox') {
       const type = e.dataTransfer.getData('type');
-      const tool = TOOL_GROUPS.flatMap(g => g.items).find(t => t.type === type);
+      const tool = allTools.find(t => t.type === type);
       if (!tool) return;
 
       const w = tool.w_m * itemScale;
@@ -707,7 +715,7 @@ export default function FloorplanEditor({
         const w_m = el.w_m || (el.w ? el.w / 40 : 1);
         const h_m = el.h_m || (el.h ? el.h / 40 : 1);
         
-        const toolDef = TOOL_GROUPS.flatMap(g => g.items).find(t => t.type === el.type);
+        const toolDef = allTools.find(t => t.type === el.type);
         const displayStyle = toolDef && el.type !== 'text' ? toolDef.style : el.style;
         const displayContent = toolDef && el.type !== 'text' ? toolDef.content : el.content;
 
@@ -999,7 +1007,7 @@ export default function FloorplanEditor({
             </div>
           )}
 
-          {TOOL_GROUPS.map((group, gIdx) => (
+          {allGroups.map((group, gIdx) => (
             <div key={gIdx}>
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">{L(group.name)}</h4>
               <div className="grid grid-cols-2 gap-2">

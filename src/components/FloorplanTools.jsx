@@ -48,3 +48,45 @@ export const TOOL_GROUPS = [
     ]
   }
 ];
+
+// ==========================================
+// CUSTOM (tenant-defined) FLOORPLAN ITEMS
+// ==========================================
+// A saved custom item is { type, label, w_m, h_m, shape, color, text }.
+// buildCustomToolItem turns it into a palette item compatible with TOOL_GROUPS.
+export const CUSTOM_SHAPE_OPTIONS = [
+  { id: 'rect', label: '長方形 (Rectangle)' },
+  { id: 'rounded', label: '圓角 (Rounded)' },
+  { id: 'circle', label: '圓形 (Circle)' },
+];
+export const CUSTOM_COLOR_OPTIONS = [
+  { id: 'slate', label: '灰 (Slate)', swatch: 'bg-slate-400' },
+  { id: 'indigo', label: '靛藍 (Indigo)', swatch: 'bg-indigo-400' },
+  { id: 'rose', label: '玫瑰 (Rose)', swatch: 'bg-rose-400' },
+  { id: 'emerald', label: '翡翠 (Emerald)', swatch: 'bg-emerald-400' },
+  { id: 'amber', label: '琥珀 (Amber)', swatch: 'bg-amber-400' },
+  { id: 'cyan', label: '青 (Cyan)', swatch: 'bg-cyan-400' },
+  { id: 'dark', label: '深色 (Dark)', swatch: 'bg-slate-800' },
+];
+const CUSTOM_SHAPE_CLASS = { rect: 'rounded-sm', rounded: 'rounded-lg', circle: 'rounded-full' };
+const CUSTOM_COLOR_CLASS = {
+  slate: 'bg-slate-50 border-slate-500 text-slate-600',
+  indigo: 'bg-indigo-50 border-indigo-400 text-indigo-700',
+  rose: 'bg-rose-50 border-rose-400 text-rose-600',
+  emerald: 'bg-emerald-50 border-emerald-400 text-emerald-700',
+  amber: 'bg-amber-50 border-amber-400 text-amber-700',
+  cyan: 'bg-cyan-50 border-cyan-400 text-cyan-600',
+  dark: 'bg-slate-800 border-slate-900 text-slate-100',
+};
+export const buildCustomToolItem = (def) => ({
+  type: def.type,
+  label: def.label || 'Custom',
+  w_m: Number(def.w_m) || 1,
+  h_m: Number(def.h_m) || 1,
+  style: `${CUSTOM_COLOR_CLASS[def.color] || CUSTOM_COLOR_CLASS.slate} border-2 ${CUSTOM_SHAPE_CLASS[def.shape] || 'rounded-sm'} shadow-sm flex items-center justify-center text-[8px] font-bold text-center leading-tight overflow-hidden p-0.5`,
+  content: def.text || '',
+});
+export const buildCustomGroup = (defs) => ({
+  name: '自訂項目 (Custom Items)',
+  items: (defs || []).filter(d => d && d.type).map(buildCustomToolItem),
+});

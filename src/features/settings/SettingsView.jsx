@@ -8,6 +8,7 @@ import RolePermissionsTab from './RolePermissionsTab';
 import UsersTab from './UsersTab';
 import BrandingTab from './BrandingTab';
 import ItemOptionsTab from './ItemOptionsTab';
+import CustomFloorplanItems from './CustomFloorplanItems';
 import { getItemOptions } from '../../core/constants';
 import FloorplanEditor from '../../components/FloorplanEditor';
 import { ContractRenderer } from '../documents/components/renderers/ContractRenderer';
@@ -908,8 +909,15 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
               initialFullscreen={true}
               defaultZones={localSettings.zonesConfig}
               events={events}
+              customItems={localSettings.customFloorplanItems}
             />
           )}
+
+          <CustomFloorplanItems
+            items={localSettings.customFloorplanItems || []}
+            onSave={(items) => handleSaveScoped({ customFloorplanItems: items })}
+            addToast={addToast}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Zone Management */}

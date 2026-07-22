@@ -177,6 +177,7 @@ const VenueTab = ({
           defaultZones={formData.venueId ? appSettings?.zonesConfig : []}
           events={events}
           liteMode={true}
+          customItems={appSettings?.customFloorplanItems}
         />
       </div>
 

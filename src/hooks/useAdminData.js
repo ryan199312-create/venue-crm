@@ -58,7 +58,7 @@ export const INITIAL_FORM_STATE = {
   // 5. Logistics
   deliveries: [],
   parkingInfo: { ticketQty: '', ticketHours: '', plates: '' },
-  rundown: [ { id: 1, time: '18:00', activity: '恭候 (Reception)' }, { id: 2, time: '20:00', activity: '入席 (March In)' } ],
+  rundown: [],
   busCharge: '', generalRemarks: '',
   busInfo: { enabled: false, arrivals: [{ id: 1, time: '18:30', location: '', plate: '' }], departures: [{ id: 1, time: '22:30', location: '', plate: '' }], customRoutes: [] },
   printSettings: { menu: { showPlatingFeeDisclaimer: true, validityDateOverride: '' }, quotation: { showClientInfo: true }, contract: { showChop: true } },

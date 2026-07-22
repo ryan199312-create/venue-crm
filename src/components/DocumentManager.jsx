@@ -292,6 +292,14 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                   </>
                 ) : (
                   <>
+                    {previewDoc?.startsWith('MENU_CONFIRM_') && (
+                      <div className="flex gap-0.5 bg-slate-800 rounded-lg p-0.5 mr-1">
+                        {[{ id: 'CHINESE', label: '中' }, { id: 'ENGLISH', label: 'EN' }, { id: 'BILINGUAL', label: '雙語' }].map(o => (
+                          <button key={o.id} type="button" onClick={() => setPreviewDoc(`MENU_CONFIRM_${o.id}_${selectedMenuId}`)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${previewDoc.split('_')[2] === o.id ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}>{o.label}</button>
+                        ))}
+                      </div>
+                    )}
                     {['QUOTATION', 'CONTRACT', 'CONTRACT_CN', 'INVOICE', 'RECEIPT', 'ADDENDUM', 'MENU_CONFIRM', 'FLOORPLAN'].includes(previewDoc) && (
                       <div className="flex gap-0.5 bg-slate-800 rounded-lg p-0.5 mr-1">
                         {[{ id: 'en', label: 'EN' }, { id: 'zh', label: '中' }].map(o => (

@@ -312,14 +312,14 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
 
                     {/* Right Column: Trio - Completely Independent */}
                     <div className="operational-column">
+                        {(data.rundown || []).some(r => r.time || r.activity) && (
                         <div className="border-2 border-slate-200 rounded-xl box-decoration-clone mb-4">
                           <div className="bg-[var(--brand-primary)] text-white px-3 py-1.5 font-bold text-sm uppercase flex justify-between items-center rounded-t-[10px]"><span>📋 Rundown (流程)</span></div>
                           <div className="p-3">
-                            {(!data.rundown || data.rundown.length === 0) ? <p className="text-center text-slate-400 italic py-2">No Rundown Provided</p> : (
-                              <table className="w-full text-xs"><tbody className="divide-y divide-slate-100">{data.rundown.map((item, i) => (<tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}><td className="py-2 pl-2 w-14 font-mono font-bold text-slate-900 align-top">{item.time}</td><td className="py-2 pr-2 font-bold text-slate-700">{item.activity}</td></tr>))}</tbody></table>
-                            )}
+                            <table className="w-full text-xs"><tbody className="divide-y divide-slate-100">{data.rundown.filter(r => r.time || r.activity).map((item, i) => (<tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}><td className="py-2 pl-2 w-14 font-mono font-bold text-slate-900 align-top">{item.time}</td><td className="py-2 pr-2 font-bold text-slate-700">{item.activity}</td></tr>))}</tbody></table>
                           </div>
                         </div>
+                        )}
 
                         {copy.type !== 'BQT' && (
                           <>

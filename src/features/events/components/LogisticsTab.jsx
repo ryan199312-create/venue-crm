@@ -11,6 +11,64 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
 
   return (
     <div className="space-y-6 animate-in fade-in">
+      {/* 0. Event Rundown */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Clock size={20} /></div>
+            <div>
+              <h3 className="font-bold text-slate-800">{L('活動流程 (Event Rundown)')}</h3>
+              <p className="text-xs text-slate-500">{L('時間表：恭候、入席、證婚、敬酒等。留空則不顯示於單據。 (Timeline: reception, seating, ceremony, toast… Leave empty to hide it from documents.)')}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, rundown: [...(prev.rundown || []), { id: Date.now(), time: '', activity: '' }] }))}
+            className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 font-bold transition-colors shrink-0"
+          >
+            <Plus size={14} /> {L('新增項目 (Add Item)')}
+          </button>
+        </div>
+
+        {(formData.rundown || []).length === 0 ? (
+          <p className="text-sm text-slate-400 italic text-center py-4">{L('未設定活動流程 (No rundown set)')}</p>
+        ) : (
+          <div className="space-y-2">
+            {(formData.rundown || []).map((item, idx) => (
+              <div key={item.id ?? idx} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-3">
+                  <TimeInput
+                    name={`rundown_${idx}`}
+                    value={item.time}
+                    onChange={e => { const arr = [...formData.rundown]; arr[idx] = { ...arr[idx], time: e.target.value }; setFormData(prev => ({ ...prev, rundown: arr })); }}
+                    className="w-full"
+                    inputClassName="h-9 py-1 px-3"
+                  />
+                </div>
+                <div className="col-span-8 flex items-center bg-white border border-slate-300 rounded px-2">
+                  <input
+                    type="text"
+                    value={item.activity}
+                    onChange={e => { const arr = [...formData.rundown]; arr[idx] = { ...arr[idx], activity: e.target.value }; setFormData(prev => ({ ...prev, rundown: arr })); }}
+                    className="w-full bg-transparent text-sm outline-none py-2"
+                    placeholder={L('項目內容，例如：恭候 (Activity, e.g. Reception)')}
+                  />
+                </div>
+                <div className="col-span-1 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, rundown: prev.rundown.filter((_, i) => i !== idx) }))}
+                    className="text-slate-300 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 1. Bus Arrangement */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-6">

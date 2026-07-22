@@ -8,6 +8,7 @@ import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useLang } from '../i18n/language';
 import { useAdminData, INITIAL_FORM_STATE } from '../hooks/useAdminData';
 import { getScopedSettings } from '../services/helpers';
 
@@ -52,6 +53,7 @@ export default function AdminLayout() {
 
   const { toasts, addToast, removeToast } = useToast();
   const { generatePdf } = usePdfGenerator();
+  const { L } = useLang();
 
   // --- Persistent Initialization Tracker ---
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -419,7 +421,7 @@ export default function AdminLayout() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-500">
         <Loader2 className="animate-spin mb-4 text-indigo-600" size={48} />
-        <p className="font-bold text-xs uppercase tracking-widest text-slate-400">正在啟動 VowsOS (Loading)...</p>
+        <p className="font-bold text-xs uppercase tracking-widest text-slate-400">{L('正在啟動 VowsOS (Loading)')}...</p>
       </div>
     );
   }
@@ -435,7 +437,7 @@ export default function AdminLayout() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-500">
         <Loader2 className="animate-spin mb-4 text-indigo-600" size={48} />
-        <p className="font-bold text-xs uppercase tracking-widest text-slate-400">載入中 (Loading)...</p>
+        <p className="font-bold text-xs uppercase tracking-widest text-slate-400">{L('載入中 (Loading)')}...</p>
       </div>
     );
   }
@@ -451,9 +453,9 @@ export default function AdminLayout() {
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
         <Card className="p-8 max-w-md w-full text-center">
           <ShieldAlert className="mx-auto text-amber-500 mb-4" size={48} />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">帳戶已暫停 (Account Suspended)</h2>
-          <p className="text-slate-500 mb-6 font-medium">此場地帳戶目前已被暫停使用。如有疑問，請聯絡平台管理員。</p>
-          <button onClick={handleSignOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all hover:bg-slate-700 active:scale-95">登出 (Sign Out)</button>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">{L('帳戶已暫停 (Account Suspended)')}</h2>
+          <p className="text-slate-500 mb-6 font-medium">{L('此場地帳戶目前已被暫停使用。如有疑問，請聯絡平台管理員。 (This venue account is currently suspended. Please contact the platform administrator.)')}</p>
+          <button onClick={handleSignOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all hover:bg-slate-700 active:scale-95">{L('登出 (Sign Out)')}</button>
         </Card>
       </div>
     );
@@ -491,16 +493,16 @@ export default function AdminLayout() {
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
         <Card className="p-8 max-w-md w-full text-center">
           <ShieldAlert className="mx-auto text-rose-500 mb-4" size={48} />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">存取被拒 (Access Denied)</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">{L('存取被拒 (Access Denied)')}</h2>
           <div className="text-slate-500 mb-6 space-y-2">
-            <p className="font-medium">您目前沒有權限存取管理介面。</p>
+            <p className="font-medium">{L('您目前沒有權限存取管理介面。 (You do not currently have permission to access the admin console.)')}</p>
             <p className="text-xs bg-slate-50 p-2 rounded border">
-              帳號: {user?.email}<br/>
-              身分: {userProfile?.role || 'Guest'}
+              {L('帳號 (Account)')}: {user?.email}<br/>
+              {L('身分 (Role)')}: {userProfile?.role || 'Guest'}
             </p>
-            <p className="text-[10px] text-slate-400">請聯絡系統管理員為您分配權限。</p>
+            <p className="text-[10px] text-slate-400">{L('請聯絡系統管理員為您分配權限。 (Please contact your system administrator to be assigned permissions.)')}</p>
           </div>
-          <button onClick={handleSignOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all hover:bg-slate-700 active:scale-95">安全登出</button>
+          <button onClick={handleSignOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all hover:bg-slate-700 active:scale-95">{L('安全登出 (Sign Out)')}</button>
         </Card>
       </div>
     );

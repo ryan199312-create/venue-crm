@@ -1,9 +1,11 @@
 import React from 'react';
 import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../i18n/language';
 
 export default function AdminSidebar({ activeTab, setActiveTab }) {
-  const { 
+  const { L, lang, setLang } = useLang();
+  const {
     hasPermission, 
     selectedVenueId, 
     setSelectedVenueId, 
@@ -40,7 +42,7 @@ export default function AdminSidebar({ activeTab, setActiveTab }) {
       {/* --- OUTLET SWITCHER --- */}
       <div className="px-4 pt-6 pb-2">
         <label className="text-[10px] font-bold text-slate-500 uppercase px-2 mb-2 block tracking-wider">
-          當前分店 (Active Outlet)
+          {L('當前分店 (Active Outlet)')}
         </label>
         <div className="relative group">
           <select 
@@ -49,7 +51,7 @@ export default function AdminSidebar({ activeTab, setActiveTab }) {
             className="w-full bg-slate-800/50 border border-slate-700 text-white text-sm rounded-lg px-3 py-2.5 appearance-none cursor-pointer hover:bg-slate-800 transition-colors focus:ring-2 focus:ring-indigo-500 focus:outline-none"
           >
             {hasPermission('manage_all_outlets') && (
-              <option value="all">🌐 所有分店 (Global HQ)</option>
+              <option value="all">🌐 {L('所有分店 (Global HQ)')}</option>
             )}
             {visibleVenues.map(v => (
               <option key={v.id} value={v.id}>🏢 {v.name}</option>
@@ -68,7 +70,7 @@ export default function AdminSidebar({ activeTab, setActiveTab }) {
           >
             <div className="flex items-center space-x-3 font-medium">
               <item.icon size={19} className={activeTab === item.id ? 'text-white' : 'text-slate-400'} />
-              <span>{item.label.split(' (')[0]}</span>
+              <span>{L(item.label)}</span>
             </div>
             {activeTab === item.id && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
           </button>
@@ -88,8 +90,16 @@ export default function AdminSidebar({ activeTab, setActiveTab }) {
             </div>
           </div>
         </div>
+        <div className="flex gap-1 bg-slate-800/60 rounded-lg p-1 mb-3 border border-slate-700/50">
+          {[{ id: 'zh', label: '中文' }, { id: 'en', label: 'English' }].map(o => (
+            <button key={o.id} type="button" onClick={() => setLang(o.id)}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-bold transition-all ${lang === o.id ? 'bg-white text-slate-900 shadow' : 'text-slate-400 hover:text-white'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
         <button onClick={handleSignOut} className="w-full flex items-center justify-center px-4 py-2.5 text-xs font-bold text-white bg-slate-800 hover:bg-rose-600 rounded-lg transition-all group shadow-sm border border-slate-700" title="登出">
-          <LogOut size={14} className="mr-2 group-hover:scale-110 transition-transform" /> 安全登出 (Sign Out)
+          <LogOut size={14} className="mr-2 group-hover:scale-110 transition-transform" /> {L('安全登出 (Sign Out)')}
         </button>
       </div>
     </aside>

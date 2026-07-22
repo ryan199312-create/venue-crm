@@ -30,8 +30,9 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const openPreview = (docId, menuId = null, language = null) => {
     setStagedSignature(null);
     setDocLang(null); // reset per-document language override to the venue default on open
-    if (language) {
-      setPreviewDoc(`MENU_CONFIRM_${language}_${menuId}`);
+    if (docId === 'MENU_CONFIRM' && menuId) {
+      // Menu confirmation defaults to bilingual; language is switched in the preview header.
+      setPreviewDoc(`MENU_CONFIRM_${language || 'BILINGUAL'}_${menuId}`);
     } else {
       setPreviewDoc(docId);
     }
@@ -158,10 +159,9 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     const isFullySigned = (!doc.clientSignable || hasClientSig) && (!doc.adminSignable || hasAdminSig);
     
     const DocIcon = doc.icon || FileText;
-    const isMenu = doc.id === 'MENU_CONFIRM';
 
     return (
-      <div key={doc.menuId ? `${doc.id}_${doc.menuId}` : doc.id} onClick={isMenu ? undefined : () => openPreview(doc.id, doc.menuId)} className={`flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 gap-3 transition-all duration-200 hover:shadow-sm hover:z-10 relative group ${isMenu ? '' : 'cursor-pointer active:scale-[0.995]'}`}>
+      <div key={doc.menuId ? `${doc.id}_${doc.menuId}` : doc.id} onClick={() => openPreview(doc.id, doc.menuId)} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 gap-3 transition-all duration-200 hover:shadow-sm hover:z-10 relative cursor-pointer active:scale-[0.995] group">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${isFullySigned ? 'bg-emerald-50 text-emerald-600' : (doc.clientSignable && isClientPortal && !hasClientSig ? 'bg-amber-50 text-amber-600 animate-pulse' : 'bg-slate-50 text-slate-400')}`}>
             <DocIcon size={18} className="shrink-0" />
@@ -181,32 +181,16 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
         </div>
         
         <div className="flex items-center gap-2 shrink-0 flex-wrap" onClick={(e) => e.stopPropagation()}>
-          {isMenu ? (
-            /* Menu confirmation: pick print language directly — no modal */
-            [
-              { lng: 'CHINESE', label: '中文' },
-              { lng: 'ENGLISH', label: 'English' },
-              { lng: 'BILINGUAL', label: '中英對照' },
-            ].map(o => (
-              <button key={o.lng} type="button" onClick={() => openPreview('MENU_CONFIRM', doc.menuId, o.lng)}
-                className="px-2.5 py-1.5 text-[10px] font-bold rounded border border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 transition-colors">
-                {o.label}
-              </button>
-            ))
-          ) : (
-            <>
-              {doc.clientSignable && isClientPortal && !hasClientSig && (
-                <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold shadow-sm flex items-center">
-                  <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
-                </button>
-              )}
+          {doc.clientSignable && isClientPortal && !hasClientSig && (
+            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold shadow-sm flex items-center">
+              <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
+            </button>
+          )}
 
-              {doc.adminSignable && !isClientPortal && !hasAdminSig && (
-                <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-colors font-bold shadow-sm flex items-center">
-                  <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
-                </button>
-              )}
-            </>
+          {doc.adminSignable && !isClientPortal && !hasAdminSig && (
+            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-colors font-bold shadow-sm flex items-center">
+              <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
+            </button>
           )}
         </div>
       </div>

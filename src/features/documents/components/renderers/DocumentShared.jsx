@@ -34,21 +34,37 @@ export const shouldShowField = (data, printMode, field, defaultClient, defaultIn
   return (isClient && showClient) || (isInternal && showInternal);
 };
 
+const HAN_RE = /[一-龥]/;
+const LATIN_RE = /[A-Za-z]/;
+
+// Keep only the Chinese of a bilingual block. Mixed lines keep their Chinese (the
+// English words are stripped); pure-English lines are dropped; price/number lines
+// (letters in neither script) are kept in both languages.
 export const onlyChinese = (text) => {
   if (!text) return '';
-  const lines = text.split('\n');
-  const filtered = lines.filter(line => 
-    /[\u4e00-\u9fa5]/.test(line) || (line.trim().length > 0 && /^[0-9\s.,()\-:：]*$/.test(line.trim()))
-  );
-  if (filtered.length === 0 && text.trim().length > 0) return text;
-  return filtered.join('\n');
+  const out = text.split('\n').map(line => {
+    if (HAN_RE.test(line)) {
+      return line.replace(/[A-Za-z][A-Za-z'&./-]*/g, '').replace(/[（(]\s*[)）]/g, '').replace(/[ \t]{2,}/g, ' ').replace(/\s+$/, '');
+    }
+    if (!LATIN_RE.test(line)) return line;
+    return null;
+  }).filter(l => l !== null && l.trim().length > 0);
+  return out.length ? out.join('\n') : text;
 };
 
+// Keep only the English of a bilingual block. Mixed lines keep their English (the
+// Chinese characters are stripped); pure-Chinese lines are dropped; price/number
+// lines are kept in both languages.
 export const onlyEnglish = (text) => {
   if (!text) return '';
-  return text.split('\n').filter(line => 
-    !/[\u4e00-\u9fa5]/.test(line)
-  ).join('\n');
+  const out = text.split('\n').map(line => {
+    if (LATIN_RE.test(line)) {
+      return line.replace(/[一-龥]+/g, '').replace(/[（(]\s*[)）]/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+    }
+    if (!HAN_RE.test(line)) return line;
+    return null;
+  }).filter(l => l !== null && l.trim().length > 0);
+  return out.length ? out.join('\n') : text;
 };
 
 export const cleanLocation = (loc) => loc ? loc.replace(/^,\s*/, '') : '';

@@ -353,7 +353,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                             </div>
                           </>
                         )}
-                        {( (data.generalRemarks && shouldShowField(data, printMode, 'generalRemarks', true, true)) || (data.remarks && shouldShowField(data, printMode, 'remarks', false, true)) ) && (
+                        {( (data.generalRemarks && shouldShowField(data, printMode, 'generalRemarks', true, true)) || (data.remarks && shouldShowField(data, printMode, 'remarks', false, true)) || ((data.noteLog || []).some(n => (n.text || '').trim()) && shouldShowField(data, printMode, 'remarks', false, true)) ) && (
                           <div className={`border-2 ${copy.type === 'STD' ? 'border-slate-800' : 'border-[var(--brand-accent)]/30'} ${copy.type === 'STD' ? 'bg-slate-50' : 'bg-[var(--brand-accent)]/5'} rounded-xl shadow-sm box-decoration-clone mb-4`}>
                             <div className={`${copy.type === 'STD' ? 'bg-slate-800 text-white' : 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]'} px-3 py-1.5 font-bold text-sm uppercase border-b border-slate-200 rounded-t-[10px]`}>
                               {copy.type === 'STD' ? '📋 Internal & General Remarks (管理備註)' : '備註 (Remarks)'}
@@ -369,6 +369,19 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                                 <div className="break-inside-avoid">
                                   <span className="text-[10px] text-red-600 block mb-1 uppercase tracking-tighter font-black">⚠️ Internal Staff Only:</span>
                                   {data.remarks}
+                                </div>
+                              ) : ''}
+                              {(data.noteLog || []).some(n => (n.text || '').trim()) && shouldShowField(data, printMode, 'remarks', false, true) ? (
+                                <div className="break-inside-avoid mt-2 pt-2 border-t border-slate-200">
+                                  <span className="text-[10px] text-red-600 block mb-1 uppercase tracking-tighter font-black">⚠️ Internal Notes (內部備註):</span>
+                                  <div className="space-y-1 font-normal">
+                                    {(data.noteLog || []).filter(n => (n.text || '').trim()).map(n => (
+                                      <div key={n.id} className="text-[11px] leading-snug">
+                                        <span className="text-slate-400 font-mono">{n.ts ? new Date(n.ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}{n.author ? ` · ${n.author}` : ''}: </span>
+                                        <span className="text-slate-900 font-bold whitespace-pre-wrap">{n.text}</span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               ) : ''}
                             </div>

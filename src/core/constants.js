@@ -145,21 +145,65 @@ export const DEFAULT_ROLE_PERMISSIONS = {
     }, {})
   },
   manager: {
-    label: 'Manager (經理)',
+    label: 'Manager (營運經理)',
     isFixed: false,
     permissions: {
-      dashboard: true, events: true, docs: true, settings: false, delete_eo: true,
+      dashboard: true, events: true, docs: true, settings: false, delete_eo: true, manage_all_outlets: false,
       print_download: true, send_messages: true, ai_assistant: true, admin_sign: true,
       edit_prices: true, confirm_payments: true, manage_own_only: false,
       doc_eo: true, doc_quotation: true, doc_contract: true, doc_invoice: true, doc_receipt: true, doc_menu: true, doc_floorplan: true,
       tab_basic: true, tab_fnb: true, tab_billing: true, tab_venue: true, tab_logistics: true, tab_remarks: true, tab_print: true, tab_save: true
     }
   },
-  staff: {
-    label: 'Staff (員工)',
+  sales: {
+    label: 'Sales (婚宴顧問)',
     isFixed: false,
     permissions: {
-      dashboard: true, events: true, docs: true, settings: false, delete_eo: false,
+      dashboard: true, events: true, docs: true, settings: false, delete_eo: false, manage_all_outlets: false,
+      print_download: true, send_messages: true, ai_assistant: true, admin_sign: false,
+      edit_prices: true, confirm_payments: false, manage_own_only: false,
+      doc_eo: false, doc_quotation: true, doc_contract: true, doc_invoice: true, doc_receipt: false, doc_menu: true, doc_floorplan: true,
+      tab_basic: true, tab_fnb: true, tab_billing: true, tab_venue: true, tab_logistics: true, tab_remarks: false, tab_print: true, tab_save: true
+    }
+  },
+  finance: {
+    label: 'Finance Manager (財務經理)',
+    isFixed: false,
+    permissions: {
+      dashboard: true, events: true, docs: true, settings: false, delete_eo: false, manage_all_outlets: false,
+      print_download: true, send_messages: true, ai_assistant: true, admin_sign: false,
+      edit_prices: true, confirm_payments: true, manage_own_only: false,
+      doc_eo: false, doc_quotation: true, doc_contract: true, doc_invoice: true, doc_receipt: true, doc_menu: false, doc_floorplan: false,
+      tab_basic: true, tab_fnb: false, tab_billing: true, tab_venue: false, tab_logistics: false, tab_remarks: false, tab_print: true, tab_save: true
+    }
+  },
+  coordinator: {
+    label: 'Coordinator (婚禮統籌)',
+    isFixed: false,
+    permissions: {
+      dashboard: true, events: true, docs: true, settings: false, delete_eo: false, manage_all_outlets: false,
+      print_download: true, send_messages: true, ai_assistant: true, admin_sign: false,
+      edit_prices: false, confirm_payments: false, manage_own_only: false,
+      doc_eo: true, doc_quotation: false, doc_contract: false, doc_invoice: false, doc_receipt: false, doc_menu: true, doc_floorplan: true,
+      tab_basic: true, tab_fnb: true, tab_billing: false, tab_venue: true, tab_logistics: true, tab_remarks: true, tab_print: true, tab_save: true
+    }
+  },
+  kitchen: {
+    label: 'Kitchen / F&B (廚房餐飲)',
+    isFixed: false,
+    permissions: {
+      dashboard: false, events: true, docs: true, settings: false, delete_eo: false, manage_all_outlets: false,
+      print_download: true, send_messages: false, ai_assistant: false, admin_sign: false,
+      edit_prices: false, confirm_payments: false, manage_own_only: false,
+      doc_eo: true, doc_quotation: false, doc_contract: false, doc_invoice: false, doc_receipt: false, doc_menu: true, doc_floorplan: false,
+      tab_basic: true, tab_fnb: true, tab_billing: false, tab_venue: false, tab_logistics: false, tab_remarks: false, tab_print: false, tab_save: false
+    }
+  },
+  staff: {
+    label: 'Staff (前線員工)',
+    isFixed: false,
+    permissions: {
+      dashboard: true, events: true, docs: true, settings: false, delete_eo: false, manage_all_outlets: false,
       print_download: true, send_messages: true, ai_assistant: true, admin_sign: false,
       edit_prices: false, confirm_payments: false, manage_own_only: true,
       doc_eo: true, doc_quotation: true, doc_contract: false, doc_invoice: false, doc_receipt: false, doc_menu: true, doc_floorplan: true,

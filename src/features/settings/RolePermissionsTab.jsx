@@ -126,7 +126,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                       >
                         <div className="flex flex-col items-center gap-1">
                           <Fingerprint size={16} className={hoverCol === role ? 'text-indigo-200' : 'text-slate-500'} />
-                          <span className="text-xs font-black whitespace-nowrap">{rolePermissions[role].label}</span>
+                          <span className="text-xs font-black whitespace-nowrap">{L(rolePermissions[role].label)}</span>
                           {!rolePermissions[role].isFixed && (
                             <button 
                               onClick={() => handleDeleteRole(role)}
@@ -148,7 +148,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                           <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                             <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
-                              {category.label}
+                              {L(category.label)}
                             </span>
                           </div>
                         </td>
@@ -164,7 +164,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                             <div className="flex items-center">
                               <ChevronRight size={14} className={`mr-2 transition-transform duration-200 ${hoverRow === p.id ? 'text-indigo-600 translate-x-1' : 'text-slate-300'}`} />
                               <span className={`text-xs font-bold transition-colors ${hoverRow === p.id ? 'text-indigo-700' : 'text-slate-600'}`}>
-                                {p.label}
+                                {L(p.label)}
                               </span>
                             </div>
                           </td>

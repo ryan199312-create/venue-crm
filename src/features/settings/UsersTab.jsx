@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { User, Mail, Phone, Trash2, Plus, Search, Edit2, Building2, Copy, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { User, Mail, Phone, Trash2, Plus, Search, Edit2, Building2, Copy, CheckCircle, Clock, Loader2, X } from 'lucide-react';
 import { Card } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_ROLE_PERMISSIONS } from '../../core/constants';
@@ -15,6 +16,7 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
   const [editingUserId, setEditingUserId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [provisioned, setProvisioned] = useState(null); // { identifier, type }
+  const [addOutletUserId, setAddOutletUserId] = useState(null); // which user's "add outlet" picker is open
 
   const roles = { ...DEFAULT_ROLE_PERMISSIONS, ...(appSettings.rolePermissions || {}) };
 
@@ -173,7 +175,7 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
               <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">
                 {Object.entries(roles).filter(([id]) => id !== 'super_admin').map(([id, config]) => (
-                  <option key={id} value={id}>{config.label}</option>
+                  <option key={id} value={id}>{L(config.label)}</option>
                 ))}
               </select>
             </div>
@@ -219,7 +221,7 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
                   </div>
                   <div>
                     <p className="font-bold text-slate-800 text-sm">{p.displayName || p.identifier}</p>
-                    <p className="text-xs text-slate-400 font-mono">{p.identifier} · {roles[p.role]?.label || p.role}</p>
+                    <p className="text-xs text-slate-400 font-mono">{p.identifier} · {L(roles[p.role]?.label || p.role)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -283,7 +285,7 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
                       {/* super_admin is the platform master — never assignable from a tenant.
                           (Kept as an option only if the user somehow already holds it, so the
                           select isn't broken.) */}
-                      {Object.entries(roles).filter(([id]) => id !== 'super_admin' || u.role === 'super_admin').map(([id, config]) => (<option key={id} value={id}>{config.label}</option>))}
+                      {Object.entries(roles).filter(([id]) => id !== 'super_admin' || u.role === 'super_admin').map(([id, config]) => (<option key={id} value={id}>{L(config.label)}</option>))}
                     </select>
                   </td>
                   <td className="p-4">
@@ -298,25 +300,9 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
                               <button onClick={() => handleUpdateVenues(u.id, u.accessibleVenues.filter(id => id !== vid))} className="text-slate-400 hover:text-red-500 transition-colors ml-0.5">×</button>
                             </span>
                           ))}
-                          <div className="relative group">
-                            <button className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center gap-1">
-                              <Plus size={10} /> {L('新增 (Add)')}
-                            </button>
-                            <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-10 hidden group-hover:block min-w-[200px] animate-in fade-in slide-in-from-top-1">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 tracking-wider">{L('選擇分店 (Select Outlet)')}</p>
-                              <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                                {outlets.filter(v => !u.accessibleVenues?.includes(v.id)).map(v => (
-                                  <button key={v.id} onClick={() => handleUpdateVenues(u.id, [...(u.accessibleVenues || []), v.id])}
-                                    className="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg transition-colors flex items-center gap-2">
-                                    <Building2 size={12} /> {v.name}
-                                  </button>
-                                ))}
-                                {outlets.filter(v => !u.accessibleVenues?.includes(v.id)).length === 0 && (
-                                  <p className="text-[10px] text-slate-400 px-2 italic">{L('已無更多分店 (No more outlets)')}</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                          <button onClick={() => setAddOutletUserId(u.id)} className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                            <Plus size={10} /> {L('新增 (Add)')}
+                          </button>
                         </>
                       )}
                     </div>
@@ -334,6 +320,33 @@ const UsersTab = ({ users, pendingUsers = [], appSettings, updateUserRole, updat
           </tbody>
         </table>
       </div>
+
+      {/* Add-outlet picker — rendered in a portal so it isn't clipped by the table's overflow */}
+      {addOutletUserId && createPortal((() => {
+        const u = users.find(x => x.id === addOutletUserId);
+        if (!u) return null;
+        const available = outlets.filter(v => !u.accessibleVenues?.includes(v.id));
+        return (
+          <div className="fixed inset-0 z-[5000] bg-black/40 flex items-center justify-center p-4" onClick={() => setAddOutletUserId(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2"><Building2 size={16} className="text-indigo-600" /> {L('選擇分店 (Select Outlet)')}</h4>
+                <button onClick={() => setAddOutletUserId(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3 truncate">{u.displayName}</p>
+              <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                {available.map(v => (
+                  <button key={v.id} onClick={() => { handleUpdateVenues(u.id, [...(u.accessibleVenues || []), v.id]); setAddOutletUserId(null); }}
+                    className="w-full text-left px-3 py-2 text-sm font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg transition-colors flex items-center gap-2">
+                    <Building2 size={14} /> {v.name}
+                  </button>
+                ))}
+                {available.length === 0 && <p className="text-[11px] text-slate-400 px-2 italic py-4 text-center">{L('已無更多分店 (No more outlets)')}</p>}
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
     </div>
   );
 };

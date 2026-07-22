@@ -22,9 +22,11 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const { generatePdf } = usePdfGenerator();
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Effective document language: per-document override, else the venue's default, else English.
+  // Document language: per-preview override, else this order's saved override, else the
+  // venue default, else English.
   const venueDocLang = appSettings?.venueProfiles?.[eventData?.venueId]?.documentLanguage || appSettings?.venueProfile?.documentLanguage || 'en';
-  const effectiveLang = docLang || venueDocLang;
+  const orderLang = eventData?.documentLanguage || venueDocLang;
+  const effectiveLang = docLang || orderLang;
 
   const openPreview = (docId, menuId = null, language = null) => {
     if (docId === 'MENU_CONFIRM' && menuId && !language) {
@@ -207,6 +209,20 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
 
   return (
     <div className="flex flex-col w-full bg-white">
+      {!isClientPortal && onUpdateData && (
+        <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{L('列印語言 (Print Language)')}</span>
+          <div className="flex gap-0.5 bg-slate-200 rounded-lg p-0.5">
+            {[{ id: 'en', label: 'English' }, { id: 'zh', label: '中文' }].map(o => (
+              <button key={o.id} type="button"
+                onClick={() => onUpdateData({ ...eventData, documentLanguage: o.id })}
+                className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${orderLang === o.id ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {!isClientPortal && internalDocs.length > 0 && (
         <>
           <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">

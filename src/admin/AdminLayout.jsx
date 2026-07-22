@@ -107,10 +107,10 @@ export default function AdminLayout() {
       await updateUserRoleSecure({ appId, uid: user.uid, newRole: 'admin' });
       
       await refreshUserClaims();
-      addToast("歡迎！管理員權限已就緒 (Admin Access Granted)", "success");
+      addToast(L("歡迎！管理員權限已就緒 (Admin Access Granted)"), "success");
     } catch (err) {
       console.error("[AdminLayout] Auto-claim error:", err);
-      addToast("權限獲取失敗，請重新整理", "error");
+      addToast(L("權限獲取失敗，請重新整理 (Failed to obtain permissions — please refresh)"), "error");
     } finally {
       setIsClaiming(false);
     }
@@ -128,12 +128,12 @@ export default function AdminLayout() {
       console.log("[AdminLayout] Saving settings...", newSettings);
       const docRef = doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config');
       await setDoc(docRef, newSettings, { merge: true });
-      addToast("設定已儲存！", "success");
+      addToast(L("設定已儲存 (Settings saved)"), "success");
       // 🌟 Senior Strategy: Avoid window.location.reload() for settings updates.
       // The AuthContext onSnapshot will naturally update appSettings and trigger a re-render.
-    } catch (err) { 
+    } catch (err) {
       console.error("[AdminLayout] Save error:", err);
-      addToast("儲存失敗", "error"); 
+      addToast(L("儲存失敗 (Save failed)"), "error");
     }
   };
 
@@ -175,19 +175,19 @@ export default function AdminLayout() {
       const savedId = await saveEvent(formData, editingEvent?.id);
       // Promote a new event to edit mode so the next save UPDATES it, not duplicates it.
       if (!editingEvent?.id && savedId) setEditingEvent({ id: savedId, ...formData });
-      addToast("訂單已儲存", "success");
-    } catch (err) { addToast("儲存失敗", "error"); }
+      addToast(L("訂單已儲存 (Order saved)"), "success");
+    } catch (err) { addToast(L("儲存失敗 (Save failed)"), "error"); }
     finally { savingRef.current = false; }
   };
 
   const handleDeleteEvent = async (id) => {
     setConfirmConfig({
-      isOpen: true, title: "刪除訂單", message: "確定要刪除嗎？",
+      isOpen: true, title: L("刪除訂單 (Delete Order)"), message: L("確定要刪除嗎？ (Are you sure you want to delete this?)"),
       onConfirm: async () => {
         try {
           await deleteEvent(id);
-          addToast("訂單已刪除", "success");
-        } catch (error) { addToast("刪除失敗", "error"); } 
+          addToast(L("訂單已刪除 (Order deleted)"), "success");
+        } catch (error) { addToast(L("刪除失敗 (Delete failed)"), "error"); }
         finally { setConfirmConfig({ ...confirmConfig, isOpen: false }); }
       }
     });
@@ -205,16 +205,16 @@ export default function AdminLayout() {
   };
 
   const handleDownloadPDF = async (docType) => {
-    addToast(`正在產生 ${docType} PDF...`, "info");
+    addToast(`${L('正在產生 (Generating)')} ${docType} PDF...`, "info");
     try {
       const scopedAppSettings = getScopedSettings(appSettings, formData.venueId);
       await generatePdf({ docType, data: formData, appSettings: scopedAppSettings, download: true });
-      addToast("產生完成！", "success");
-    } catch (error) { addToast(`產生失敗: ${error.message}`, "error"); }
+      addToast(L("產生完成 (Done)"), "success");
+    } catch (error) { addToast(`${L('產生失敗 (Generation failed)')}: ${error.message}`, "error"); }
   };
 
   const triggerPrint = async (m) => {
-    addToast("正在優化列印性能 (Optimizing Performance)...", "info");
+    addToast(L("正在優化列印性能 (Optimizing Performance)") + "...", "info");
     setIsPreparingPrint(true);
     setPrintData(formData);
     setPrintMode(m);
@@ -407,7 +407,7 @@ export default function AdminLayout() {
 
     } catch (err) {
       console.error("Print Error:", err);
-      addToast("列印啟動失敗，請再試一次", "error");
+      addToast(L("列印啟動失敗，請再試一次 (Printing failed — please try again)"), "error");
       setIsPreparingPrint(false);
     }
   };
@@ -551,7 +551,7 @@ export default function AdminLayout() {
             }
             if (newUrls.length > 0) setFormData(prev => ({ ...prev, [fieldName]: [...(prev[fieldName] || []), ...newUrls] }));
           }}
-          onRemoveProof={(key, url) => setConfirmConfig({ isOpen: true, title: '移除收據', message: '確定嗎？', onConfirm: () => setFormData(p => ({ ...p, [key]: p[key].filter(u => u !== url) })) })}
+          onRemoveProof={(key, url) => setConfirmConfig({ isOpen: true, title: L('移除收據 (Remove Receipt)'), message: L('確定嗎？ (Are you sure?)'), onConfirm: () => setFormData(p => ({ ...p, [key]: p[key].filter(u => u !== url) })) })}
           addToast={addToast} onOpenAi={() => setIsAiOpen(true)} 
           onPrint={triggerPrint}
         />

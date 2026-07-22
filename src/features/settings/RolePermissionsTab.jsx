@@ -9,10 +9,10 @@ import { useLang } from '../../i18n/language';
 
 const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) => {
   const { L } = useLang();
-  const initialPermissions = (settings.rolePermissions && Object.keys(settings.rolePermissions).length > 0) 
-    ? settings.rolePermissions 
-    : DEFAULT_ROLE_PERMISSIONS;
-    
+  // Always surface the built-in default roles (incl. Sales / Finance / Coordinator /
+  // Kitchen), with any tenant customisations overriding them.
+  const initialPermissions = { ...DEFAULT_ROLE_PERMISSIONS, ...(settings.rolePermissions || {}) };
+
   const [rolePermissions, setRolePermissions] = useState(initialPermissions);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleId, setNewRoleId] = useState('');

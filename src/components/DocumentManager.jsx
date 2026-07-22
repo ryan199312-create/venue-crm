@@ -16,7 +16,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const [stagedSignature, setStagedSignature] = useState(null);
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [isSubmittingSignature, setIsSubmittingSignature] = useState(false);
-  const [menuLangSelection, setMenuLangSelection] = useState(null);
   const [docLang, setDocLang] = useState(null); // per-document language override (null = use venue default)
 
   const { generatePdf } = usePdfGenerator();
@@ -29,11 +28,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   const effectiveLang = docLang || orderLang;
 
   const openPreview = (docId, menuId = null, language = null) => {
-    if (docId === 'MENU_CONFIRM' && menuId && !language) {
-      setMenuLangSelection({ docId, menuId });
-      return;
-    }
-    
     setStagedSignature(null);
     setDocLang(null); // reset per-document language override to the venue default on open
     if (language) {
@@ -42,7 +36,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       setPreviewDoc(docId);
     }
     setSelectedMenuId(menuId);
-    setMenuLangSelection(null);
   };
 
   const closePreview = () => {
@@ -57,8 +50,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       if (e.key === 'Escape') {
         if (isSigningModalOpen) {
           setIsSigningModalOpen(false);
-        } else if (menuLangSelection) {
-          setMenuLangSelection(null);
         } else if (previewDoc) {
           closePreview();
         }
@@ -66,7 +57,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewDoc, isSigningModalOpen, menuLangSelection]);
+  }, [previewDoc, isSigningModalOpen]);
 
   const handleConfirmSignature = async () => {
     setIsSubmittingSignature(true);
@@ -144,8 +135,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       permission: 'doc_menu'
     })),
     { id: 'QUOTATION', label: '報價單 (Quotation)', sub: 'Quotation', clientSignable: true, adminSignable: false, permission: 'doc_quotation' },
-    { id: 'CONTRACT', label: '英文合約 (Contract EN)', sub: 'Contract (EN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
-    { id: 'CONTRACT_CN', label: '中文合約 (Contract CN)', sub: 'Contract (CN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
+    { id: 'CONTRACT', label: '合約 (Contract)', sub: 'Contract', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
     { id: 'INVOICE', label: '發票 (Invoice)', sub: 'Invoice', clientSignable: false, adminSignable: false, permission: 'doc_invoice' },
     { id: 'RECEIPT', label: '收據 (Receipt)', sub: 'Receipt', clientSignable: false, adminSignable: false, permission: 'doc_receipt' },
     { id: 'ADDENDUM', label: '附加條款 (Addendum)', sub: 'Addendum', clientSignable: true, adminSignable: true, icon: Plus, permission: 'doc_contract' },
@@ -168,9 +158,10 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     const isFullySigned = (!doc.clientSignable || hasClientSig) && (!doc.adminSignable || hasAdminSig);
     
     const DocIcon = doc.icon || FileText;
-    
+    const isMenu = doc.id === 'MENU_CONFIRM';
+
     return (
-      <div key={doc.menuId ? `${doc.id}_${doc.menuId}` : doc.id} onClick={() => openPreview(doc.id, doc.menuId)} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 gap-3 transition-all duration-200 hover:shadow-sm hover:z-10 relative cursor-pointer active:scale-[0.995] group">
+      <div key={doc.menuId ? `${doc.id}_${doc.menuId}` : doc.id} onClick={isMenu ? undefined : () => openPreview(doc.id, doc.menuId)} className={`flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 gap-3 transition-all duration-200 hover:shadow-sm hover:z-10 relative group ${isMenu ? '' : 'cursor-pointer active:scale-[0.995]'}`}>
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${isFullySigned ? 'bg-emerald-50 text-emerald-600' : (doc.clientSignable && isClientPortal && !hasClientSig ? 'bg-amber-50 text-amber-600 animate-pulse' : 'bg-slate-50 text-slate-400')}`}>
             <DocIcon size={18} className="shrink-0" />
@@ -190,17 +181,32 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
         </div>
         
         <div className="flex items-center gap-2 shrink-0 flex-wrap" onClick={(e) => e.stopPropagation()}>
-          {/* Actions */}
-          {doc.clientSignable && isClientPortal && !hasClientSig && (
-            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold shadow-sm flex items-center">
-              <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
-            </button>
-          )}
+          {isMenu ? (
+            /* Menu confirmation: pick print language directly — no modal */
+            [
+              { lng: 'CHINESE', label: '中文' },
+              { lng: 'ENGLISH', label: 'English' },
+              { lng: 'BILINGUAL', label: '中英對照' },
+            ].map(o => (
+              <button key={o.lng} type="button" onClick={() => openPreview('MENU_CONFIRM', doc.menuId, o.lng)}
+                className="px-2.5 py-1.5 text-[10px] font-bold rounded border border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 transition-colors">
+                {o.label}
+              </button>
+            ))
+          ) : (
+            <>
+              {doc.clientSignable && isClientPortal && !hasClientSig && (
+                <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold shadow-sm flex items-center">
+                  <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
+                </button>
+              )}
 
-          {doc.adminSignable && !isClientPortal && !hasAdminSig && (
-            <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-colors font-bold shadow-sm flex items-center">
-              <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
-            </button>
+              {doc.adminSignable && !isClientPortal && !hasAdminSig && (
+                <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-colors font-bold shadow-sm flex items-center">
+                  <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -239,71 +245,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       )}
       
       {externalDocs.map(renderDocRow)}
-
-      {/* Language Selection Modal */}
-      {menuLangSelection && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-white/20">
-            <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <Utensils size={18} className="text-amber-400" />
-                <span className="text-white font-bold text-sm uppercase tracking-wider">{L('選擇列印語言 (Language)')}</span>
-              </div>
-              <button onClick={() => setMenuLangSelection(null)} className="text-slate-400 hover:text-white transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-3">
-              <button 
-                onClick={() => openPreview('MENU_CONFIRM', menuLangSelection.menuId, 'CHINESE')}
-                className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-100 hover:border-[var(--brand-primary)] hover:bg-slate-50 transition-all group"
-              >
-                <div className="text-left">
-                  <p className="font-bold text-slate-800">{L('中文 (Chinese)')}</p>
-                  <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">Chinese characters only</p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[var(--brand-primary)] group-hover:text-white transition-colors">
-                  <CheckCircle size={16} />
-                </div>
-              </button>
-
-              <button 
-                onClick={() => openPreview('MENU_CONFIRM', menuLangSelection.menuId, 'ENGLISH')}
-                className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-100 hover:border-[var(--brand-primary)] hover:bg-slate-50 transition-all group"
-              >
-                <div className="text-left">
-                  <p className="font-bold text-slate-800">{L('英文 (English)')}</p>
-                  <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">English translation only</p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[var(--brand-primary)] group-hover:text-white transition-colors">
-                  <CheckCircle size={16} />
-                </div>
-              </button>
-
-              <button 
-                onClick={() => openPreview('MENU_CONFIRM', menuLangSelection.menuId, 'BILINGUAL')}
-                className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-[var(--brand-primary)] bg-indigo-50/30 hover:bg-indigo-50 transition-all group"
-              >
-                <div className="text-left">
-                  <p className="font-bold text-slate-800">{L('中英對照 (Bilingual)')}</p>
-                  <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">Both Chinese & English</p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white transition-colors shadow-md">
-                  <CheckCircle size={16} />
-                </div>
-              </button>
-            </div>
-            
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
-               <button onClick={() => setMenuLangSelection(null)} className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
-                 {L('取消 (Cancel)')}
-               </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* Document Preview & Interactive Sign Modal */}
       {previewDoc && createPortal(

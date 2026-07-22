@@ -70,7 +70,7 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings, lang 
         </p>
       </div>
 
-      <div className="mb-8 rounded-xl border border-slate-200 overflow-hidden break-inside-avoid shadow-sm">
+      <div className="mb-8 rounded-xl border border-slate-200 shadow-sm">
         <table className="w-full text-xs text-left">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
@@ -145,12 +145,12 @@ export const AddendumRenderer = ({ data, onSign, onAdminSign, appSettings, lang 
               </>
             )}
           </tbody>
-          <tfoot>
-            <tr className="bg-slate-800 text-white font-bold border-t-4 border-[var(--brand-primary)]">
+          <tbody>
+            <tr className="bg-slate-800 text-white font-bold border-t-4 border-[var(--brand-primary)] break-inside-avoid">
               <td colSpan="3" className="py-3 px-4 text-right uppercase tracking-widest">{t.newGrandTotal}:</td>
               <td className="py-3 px-4 text-right font-mono text-lg">${formatMoney(billing.grandTotal)}</td>
             </tr>
-          </tfoot>
+          </tbody>
         </table>
       </div>
 

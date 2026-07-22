@@ -60,7 +60,7 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
         const noticeEn = profile.confidentialityNoticeEn
           || `This document and its attachments are issued by ${vEn} and are confidential for the use of the intended recipient only. They may not be reproduced or disclosed without prior approval. They should be kept secure and confidential and must not be used for any purpose unrelated to this event.`;
         return (
-          <div className="mt-8 p-4 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-500 italic leading-relaxed break-inside-avoid">
+          <div className="mt-8 p-4 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-500 italic leading-relaxed">
             <p className="mb-2 whitespace-pre-line">{noticeZh}</p>
             <p className="whitespace-pre-line">{noticeEn}</p>
           </div>

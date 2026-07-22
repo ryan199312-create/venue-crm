@@ -312,7 +312,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
 
                     {/* Right Column: Trio - Completely Independent */}
                     <div className="operational-column">
-                        <div className="border-2 border-slate-200 rounded-xl break-inside-avoid box-decoration-clone mb-4">
+                        <div className="border-2 border-slate-200 rounded-xl box-decoration-clone mb-4">
                           <div className="bg-[var(--brand-primary)] text-white px-3 py-1.5 font-bold text-sm uppercase flex justify-between items-center rounded-t-[10px]"><span>📋 Rundown (流程)</span></div>
                           <div className="p-3">
                             {(!data.rundown || data.rundown.length === 0) ? <p className="text-center text-slate-400 italic py-2">No Rundown Provided</p> : (
@@ -323,7 +323,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
 
                         {copy.type !== 'BQT' && (
                           <>
-                            <div className="border-2 border-slate-200 rounded-xl break-inside-avoid box-decoration-clone mb-4">
+                            <div className="border-2 border-slate-200 rounded-xl box-decoration-clone mb-4">
                               <div className="bg-[var(--brand-primary)] text-white px-3 py-1.5 font-bold text-sm uppercase rounded-t-[10px]">🚍 Logistics (物流)</div>
                               <div className="p-3 space-y-3">
                                 {data.busInfo && data.busInfo.enabled ? (
@@ -335,7 +335,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                                 <div className="flex justify-between items-center text-xs"><span className="font-bold text-slate-600">Parking:</span><span className="font-bold bg-slate-100 px-2 py-0.5 rounded">{(data.parkingInfo?.ticketQty) || 0} 張 x {(data.parkingInfo?.ticketHours) || 0} 小時</span></div>
                               </div>
                             </div>
-                            <div className="border-2 border-slate-200 rounded-xl break-inside-avoid box-decoration-clone mb-4">
+                            <div className="border-2 border-slate-200 rounded-xl box-decoration-clone mb-4">
                               <div className="bg-[var(--brand-primary)] text-white px-3 py-1.5 font-bold text-sm uppercase rounded-t-[10px]">🛠️ Setup (場地)</div>
                               <div className="p-3 grid grid-cols-2 gap-2 text-xs">
                                 <div className="p-2 bg-white border border-slate-200 rounded text-center"><span className="block text-[9px] text-slate-400 uppercase">Table Cloth</span><span className="block font-bold text-slate-900">{data.tableClothColor || 'Std'}</span></div>
@@ -354,7 +354,7 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                           </>
                         )}
                         {( (data.generalRemarks && shouldShowField(data, printMode, 'generalRemarks', true, true)) || (data.remarks && shouldShowField(data, printMode, 'remarks', false, true)) ) && (
-                          <div className={`border-2 ${copy.type === 'STD' ? 'border-slate-800' : 'border-[var(--brand-accent)]/30'} ${copy.type === 'STD' ? 'bg-slate-50' : 'bg-[var(--brand-accent)]/5'} rounded-xl shadow-sm break-inside-avoid box-decoration-clone mb-4`}>
+                          <div className={`border-2 ${copy.type === 'STD' ? 'border-slate-800' : 'border-[var(--brand-accent)]/30'} ${copy.type === 'STD' ? 'bg-slate-50' : 'bg-[var(--brand-accent)]/5'} rounded-xl shadow-sm box-decoration-clone mb-4`}>
                             <div className={`${copy.type === 'STD' ? 'bg-slate-800 text-white' : 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]'} px-3 py-1.5 font-bold text-sm uppercase border-b border-slate-200 rounded-t-[10px]`}>
                               {copy.type === 'STD' ? '📋 Internal & General Remarks (管理備註)' : '備註 (Remarks)'}
                             </div>

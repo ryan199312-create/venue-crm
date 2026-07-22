@@ -202,13 +202,13 @@ export const PaymentMethodBlock = ({ appSettings, venueId, printMode, lang = 'en
   if (activeMethods.length === 0) return null;
 
   return (
-    <div className="mt-6 bg-slate-50 p-5 rounded-2xl border border-slate-200 break-inside-avoid">
+    <div className="mt-6 bg-slate-50 p-5 rounded-2xl border border-slate-200">
       <h4 className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-widest mb-3 flex items-center gap-2">
         {t.paymentMethodsTitle}
       </h4>
       <div className="grid grid-cols-2 gap-x-8 gap-y-4">
         {activeMethods.map((m, idx) => (
-          <div key={idx} className="border-l-2 border-slate-200 pl-3">
+          <div key={idx} className="border-l-2 border-slate-200 pl-3 break-inside-avoid">
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight mb-1">{m.label}</p>
             <p className="text-[10px] text-slate-800 font-bold leading-tight whitespace-pre-wrap">{m.details}</p>
           </div>

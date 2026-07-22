@@ -1,5 +1,5 @@
 import React from 'react';
-import { Palette, Image as ImageIcon, Globe, MousePointer2, LayoutTemplate } from 'lucide-react';
+import { Palette, Image as ImageIcon, Globe, LayoutTemplate } from 'lucide-react';
 import { Card, FormInput } from '../../components/ui';
 import { DOC_STYLES, DOC_STYLE_ORDER } from '../documents/docStyles';
 
@@ -241,36 +241,6 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
                     }} />
                   </label>
                 </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-slate-900 text-white">
-            <h4 className="font-bold mb-2 flex items-center gap-2">
-              <MousePointer2 size={16} className="text-indigo-400" /> 即時預覽 (Live Preview)
-            </h4>
-            <p className="text-[10px] text-slate-400 mb-4">預覽當前顏色在介面上的效果</p>
-            
-            <div className="space-y-3">
-              <button 
-                className="w-full py-2 rounded-lg font-bold text-xs shadow-lg transition-transform active:scale-95"
-                style={{ backgroundColor: branding.primaryColor, color: '#fff' }}
-              >
-                主要按鈕 (Primary Button)
-              </button>
-              <button 
-                className="w-full py-2 rounded-lg font-bold text-xs border transition-colors"
-                style={{ borderColor: branding.primaryColor, color: branding.primaryColor }}
-              >
-                空心按鈕 (Outline Button)
-              </button>
-              <div className="flex gap-2">
-                <span className="px-2 py-1 rounded text-[9px] font-bold" style={{ backgroundColor: branding.accentColor + '20', color: branding.accentColor }}>
-                  標籤 (Badge)
-                </span>
-                <span className="px-2 py-1 rounded text-[9px] font-bold" style={{ backgroundColor: branding.primaryColor + '20', color: branding.primaryColor }}>
-                  標籤 2
-                </span>
               </div>
             </div>
           </Card>

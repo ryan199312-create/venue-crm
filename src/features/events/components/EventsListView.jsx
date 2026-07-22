@@ -3,9 +3,11 @@ import { Search, Plus, Calendar as CalendarIcon, Clock, Edit2, Trash2, ChevronLe
 import { formatMoney } from '../../../services/billingService';
 import { Card, Badge } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
+import { useLang } from '../../../i18n/language';
 
 const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete }) => {
   const { hasPermission, userProfile, selectedVenueId } = useAuth();
+  const { L } = useLang();
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('incomplete'); // 'incomplete', 'completed', 'all'
   const [currentPage, setCurrentPage] = useState(1);
@@ -84,7 +86,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             type="text"
-            placeholder="搜尋訂單編號、活動名稱或客戶..."
+            placeholder={L('搜尋訂單編號、活動名稱或客戶... (Search order ID, event name, or client...)')}
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -99,25 +101,25 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
               onClick={() => setStatusFilter('incomplete')}
               className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'incomplete' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              未完成
+              {L('未完成 (Incomplete)')}
             </button>
             <button
               onClick={() => setStatusFilter('completed')}
               className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'completed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              已完成
+              {L('已完成 (Completed)')}
             </button>
             <button
               onClick={() => setStatusFilter('all')}
               className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-all ${statusFilter === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              全部
+              {L('全部 (All)')}
             </button>
           </div>
 
           {hasPermission('tab_save') && (
             <button onClick={openNewEventModal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center font-medium shadow-sm whitespace-nowrap w-full sm:w-auto justify-center">
-              <Plus size={18} className="mr-2" /> 新增訂單 (New EO)
+              <Plus size={18} className="mr-2" /> {L('新增訂單 (New EO)')}
             </button>
           )}
         </div>
@@ -128,19 +130,19 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold sticky top-0 z-10 shadow-sm">
             <tr>
-              <th className="px-6 py-4">活動詳情 (Event)</th>
-              <th className="px-6 py-4">客戶 (Client)</th>
-              <th className="px-6 py-4">席數/人數 (Pax)</th>
-              <th className="px-6 py-4">狀態 (Status)</th>
-              <th className="px-6 py-4 text-right">總費用 (Total)</th>
-              <th className="px-6 py-4 text-center">操作</th>
+              <th className="px-6 py-4">{L('活動詳情 (Event)')}</th>
+              <th className="px-6 py-4">{L('客戶 (Client)')}</th>
+              <th className="px-6 py-4">{L('席數/人數 (Pax)')}</th>
+              <th className="px-6 py-4">{L('狀態 (Status)')}</th>
+              <th className="px-6 py-4 text-right">{L('總費用 (Total)')}</th>
+              <th className="px-6 py-4 text-center">{L('操作 (Actions)')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {tableRows.length === 0 ? (
               <tr>
                 <td colSpan="6" className="text-center py-12 text-slate-400">
-                  找不到符合條件的訂單 (No records found)
+                  {L('找不到符合條件的訂單 (No records found)')}
                 </td>
               </tr>
             ) : (
@@ -176,7 +178,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                         <div className="flex items-center gap-2 mb-1">
                           {!canManage && (
                             <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
-                              唯讀 (View Only)
+                              {L('唯讀 (View Only)')}
                             </span>
                           )}
                           <span className="font-bold text-slate-800 text-base group-hover:text-indigo-600 transition-colors">{event.eventName}</span>
@@ -184,11 +186,11 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                         <span className="text-xs text-indigo-600 font-mono">{event.orderId}</span>
                         {isVisionLead && (
                           <div className="flex items-center gap-3 mt-2">
-                            {event.vision?.occasion?.includes('Wedding') && <Badge status="confirmed" className="!bg-pink-100 !text-pink-700"><Heart size={12} className="mr-1"/> 婚宴</Badge>}
-                            {event.vision?.occasion?.includes('Corporate') && <Badge status="confirmed" className="!bg-blue-100 !text-blue-700"><Briefcase size={12} className="mr-1"/> 企業</Badge>}
+                            {event.vision?.occasion?.includes('Wedding') && <Badge status="confirmed" className="!bg-pink-100 !text-pink-700"><Heart size={12} className="mr-1"/> {L('婚宴 (Wedding)')}</Badge>}
+                            {event.vision?.occasion?.includes('Corporate') && <Badge status="confirmed" className="!bg-blue-100 !text-blue-700"><Briefcase size={12} className="mr-1"/> {L('企業 (Corporate)')}</Badge>}
                             {event.vision?.culinaryStyle && <Badge status="confirmed" className="!bg-amber-100 !text-amber-700"><Utensils size={12} className="mr-1"/> {event.vision.culinaryStyle.split(' ')[0]}</Badge>}
                             {event.vision?.wowFactors?.length > 0 && (
-                              <Badge status="confirmed" className="!bg-violet-100 !text-violet-700"><Star size={12} className="mr-1"/> {event.vision.wowFactors.length}個重點</Badge>
+                              <Badge status="confirmed" className="!bg-violet-100 !text-violet-700"><Star size={12} className="mr-1"/> {event.vision.wowFactors.length}{L('個重點 (Highlights)')}</Badge>
                             )}
                           </div>
                         )}
@@ -204,8 +206,8 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                       <p className="text-xs text-slate-500 mt-0.5">{event.clientPhone}</p>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      <div className="font-bold">{event.tableCount ? `${event.tableCount} 席` : '-'}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">{event.guestCount ? `${event.guestCount} 人` : '-'}</div>
+                      <div className="font-bold">{event.tableCount ? `${event.tableCount} ${L('席 (tables)')}` : '-'}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{event.guestCount ? `${event.guestCount} ${L('人 (guests)')}` : '-'}</div>
                     </td>
                     <td className="px-6 py-4">
                       <Badge status={event.status} />
@@ -215,11 +217,11 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => openEditModal(event)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors" title={canManage ? "編輯" : "檢視"}>
+                        <button onClick={() => openEditModal(event)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors" title={canManage ? L('編輯 (Edit)') : L('檢視 (View)')}>
                           <Edit2 size={16} />
                         </button>
                         {hasPermission('delete_eo') && canManage && (
-                          <button onClick={() => handleDelete(event.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="刪除">
+                          <button onClick={() => handleDelete(event.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-md transition-colors opacity-0 group-hover:opacity-100" title={L('刪除 (Delete)')}>
                             <Trash2 size={16} />
                           </button>
                         )}
@@ -237,7 +239,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl shrink-0">
           <span className="text-sm font-bold text-slate-500">
-            顯示第 {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSorted.length)} 項，共 {filteredAndSorted.length} 項
+            {L('顯示第 (Showing)')} {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSorted.length)} {L('項，共 (of)')} {filteredAndSorted.length} {L('項 (items)')}
           </span>
           <div className="flex items-center space-x-2">
             <button
@@ -245,7 +247,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
               disabled={currentPage === 1}
               className="px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors flex items-center"
             >
-              <ChevronLeft size={16} className="mr-1" /> 上一頁
+              <ChevronLeft size={16} className="mr-1" /> {L('上一頁 (Previous)')}
             </button>
             <div className="text-sm font-bold text-slate-700 px-3 font-mono">
               {currentPage} / {totalPages}
@@ -255,7 +257,7 @@ const EventsListView = ({ events, openNewEventModal, openEditModal, handleDelete
               disabled={currentPage === totalPages}
               className="px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors flex items-center"
             >
-              下一頁 <ChevronRight size={16} className="ml-1" />
+              {L('下一頁 (Next)')} <ChevronRight size={16} className="ml-1" />
             </button>
           </div>
         </div>

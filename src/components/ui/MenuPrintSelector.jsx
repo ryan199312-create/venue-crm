@@ -1,7 +1,9 @@
 import React from 'react';
 import { X, Printer } from 'lucide-react';
+import { useLang } from '../../i18n/language';
 
 export const MenuPrintSelector = ({ isOpen, onClose, menus, onSelect }) => {
+  const { L } = useLang();
   if (!isOpen) return null;
 
   return (
@@ -9,13 +11,13 @@ export const MenuPrintSelector = ({ isOpen, onClose, menus, onSelect }) => {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-800 flex items-center">
-            <Printer size={18} className="mr-2 text-slate-500" /> 選擇列印菜單 (Select Menu to Print)
+            <Printer size={18} className="mr-2 text-slate-500" /> {L('選擇列印菜單 (Select Menu to Print)')}
           </h3>
           <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600" /></button>
         </div>
 
         <div className="p-4 space-y-3">
-          <p className="text-xs text-slate-500 mb-2">此訂單包含多個菜單。請問您想列印哪一份？<br />(This order has multiple menus. Which one would you like to print?)</p>
+          <p className="text-xs text-slate-500 mb-2">{L('此訂單包含多個菜單，請問您想列印哪一份？ (This order has multiple menus. Which one would you like to print?)')}</p>
 
 
           <div className="border-t border-slate-100 my-2"></div>

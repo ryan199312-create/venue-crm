@@ -3,9 +3,11 @@ import { FileText, DollarSign, Users, Building2 } from 'lucide-react';
 import { FormInput, FormSelect, LocationSelector, TimeInput } from '../../../components/ui';
 import { EVENT_TYPES } from '../../../services/billingService';
 import { useAuth } from '../../../context/AuthContext';
+import { useLang } from '../../../i18n/language';
 
 const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInfo, users = [], scopedAppSettings }) => {
   const { getVisibleVenues, hasPermission, outlets } = useAuth();
+  const { L } = useLang();
   const visibleVenues = getVisibleVenues(outlets);
 
   const handleCheckboxChange = (userName) => {
@@ -22,10 +24,10 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-6">
-        <FormInput label="訂單編號 (Order ID)" name="orderId" required value={formData.orderId} onChange={handleInputChange} />
+        <FormInput label={L('訂單編號 (Order ID)')} name="orderId" required value={formData.orderId} onChange={handleInputChange} />
 
         <FormSelect
-          label="場地 (Outlet)"
+          label={L('場地 (Outlet)')}
           name="venueId"
           value={formData.venueId}
           onChange={handleInputChange}
@@ -33,27 +35,27 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
           options={visibleVenues.map(v => ({ value: v.id, label: v.name }))}
         />
 
-        <FormSelect 
-          label="狀態 (Status)" 
-          name="status" 
+        <FormSelect
+          label={L('狀態 (Status)')}
+          name="status"
           options={[
-            { value: 'tentative', label: '暫定 (Tentative)' }, 
-            { value: 'confirmed', label: '已確認 (Confirmed)' }, 
-            { value: 'completed', label: '已完成 (Completed)' }, 
-            { value: 'cancelled', label: '已取消 (Cancelled)' }
-          ]} 
-          value={formData.status} 
-          onChange={handleInputChange} 
+            { value: 'tentative', label: L('暫定 (Tentative)') },
+            { value: 'confirmed', label: L('已確認 (Confirmed)') },
+            { value: 'completed', label: L('已完成 (Completed)') },
+            { value: 'cancelled', label: L('已取消 (Cancelled)') }
+          ]}
+          value={formData.status}
+          onChange={handleInputChange}
         />
         <div className="space-y-3">
-          <FormSelect label="活動類型" name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
+          <FormSelect label={L('活動類型 (Event Type)')} name="eventType" options={EVENT_TYPES} value={formData.eventType} onChange={handleInputChange} />
           {formData.eventType === '其他 (Other)' && (
             <FormInput
-              label="自定義活動類型 (Custom Event Type)"
+              label={L('自定義活動類型 (Custom Event Type)')}
               name="customEventType"
               value={formData.customEventType || ''}
               onChange={handleInputChange}
-              placeholder="例如: 產品發佈會 / Product Launch"
+              placeholder={L('例如: 產品發佈會 (e.g. Product Launch)')}
               className="animate-in slide-in-from-top-2"
             />
           )}
@@ -63,15 +65,15 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
           <FileText size={18} className="text-indigo-600" />
-          <h4 className="font-bold text-slate-800">活動詳情 (Event Details)</h4>
+          <h4 className="font-bold text-slate-800">{L('活動詳情 (Event Details)')}</h4>
         </div>
-        <FormInput label="活動名稱 (Event Name)" name="eventName" required value={formData.eventName} onChange={handleInputChange} placeholder="e.g. 週年晚宴 / Annual Dinner" />
+        <FormInput label={L('活動名稱 (Event Name)')} name="eventName" required value={formData.eventName} onChange={handleInputChange} placeholder={L('例如: 週年晚宴 (e.g. Annual Dinner)')} />
         <div className="grid grid-cols-4 gap-4">
-          <FormInput label="活動日期" name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
-          <TimeInput label="開始時間 (Start)" name="startTime" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
+          <FormInput label={L('活動日期 (Event Date)')} name="date" type="date" required className="col-span-1" value={formData.date} onChange={handleInputChange} />
+          <TimeInput label={L('開始時間 (Start)')} name="startTime" required className="col-span-1" value={formData.startTime} onChange={handleInputChange} />
 
           <TimeInput
-            label="入席時間 (Serving)"
+            label={L('入席時間 (Serving)')}
             name="servingTime"
             className="col-span-1"
             value={formData.servingTime}
@@ -81,20 +83,20 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
           />
 
           <FormSelect
-            label="出餐方式 (Style)"
+            label={L('出餐方式 (Style)')}
             name="servingStyle"
             className="col-span-1"
             value={formData.servingStyle}
             onChange={handleInputChange}
             options={[
-              { value: '圍餐', label: '標準圍餐 (Banquet)' },
-              { value: '位上', label: '位上 (Indiv. Plating)' },
-              { value: 'Buffet', label: '自助餐 (Buffet)' },
-              { value: 'Other', label: '其他 (Other)' }
+              { value: '圍餐', label: L('標準圍餐 (Banquet)') },
+              { value: '位上', label: L('位上 (Indiv. Plating)') },
+              { value: 'Buffet', label: L('自助餐 (Buffet)') },
+              { value: 'Other', label: L('其他 (Other)') }
             ]}
           />
 
-          <TimeInput label="結束時間 (End)" name="endTime" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
+          <TimeInput label={L('結束時間 (End)')} name="endTime" required className="col-span-1" value={formData.endTime} onChange={handleInputChange} />
         </div>
         <div className="pt-4 border-t border-slate-100 mt-2">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -108,7 +110,7 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
                         <DollarSign size={14} />
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-indigo-600 block">最低消費 (Min Spend)</span>
+                        <span className="text-[10px] font-bold text-indigo-600 block">{L('最低消費 (Min Spend)')}</span>
                         <span className="text-base font-black font-mono tracking-tight">${minSpendInfo.amount.toLocaleString()}</span>
                       </div>
                     </div>
@@ -121,8 +123,8 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
             </div>
             <div className="lg:col-span-4">
               <div className="grid grid-cols-2 gap-3">
-                <FormInput label="圍數 (Tables)" name="tableCount" type="number" value={formData.tableCount} onChange={handleInputChange} placeholder="20" />
-                <FormInput label="人數 (Guests)" name="guestCount" type="number" value={formData.guestCount} onChange={handleInputChange} placeholder="240" />
+                <FormInput label={L('圍數 (Tables)')} name="tableCount" type="number" value={formData.tableCount} onChange={handleInputChange} placeholder="20" />
+                <FormInput label={L('人數 (Guests)')} name="guestCount" type="number" value={formData.guestCount} onChange={handleInputChange} placeholder="240" />
               </div>
             </div>
           </div>
@@ -132,15 +134,15 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
           <Users size={18} className="text-indigo-600" />
-          <h4 className="font-bold text-slate-800">聯絡資訊 (Contact Info)</h4>
+          <h4 className="font-bold text-slate-800">{L('聯絡資訊 (Contact Info)')}</h4>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormInput label="客戶姓名" name="clientName" required value={formData.clientName} onChange={handleInputChange} />
-          <FormInput label="電話" name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
-          <FormInput label="公司" name="companyName" value={formData.companyName} onChange={handleInputChange} />
+          <FormInput label={L('客戶姓名 (Client Name)')} name="clientName" required value={formData.clientName} onChange={handleInputChange} />
+          <FormInput label={L('電話 (Phone)')} name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
+          <FormInput label={L('公司 (Company)')} name="companyName" value={formData.companyName} onChange={handleInputChange} />
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase ml-1">負責同事 (Sales Representative)</label>
+            <label className="text-xs font-bold text-slate-500 uppercase ml-1">{L('負責同事 (Sales Representative)')}</label>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
               {users.filter(u => u.displayName).map(user => (
                 <label key={user.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded transition-colors group">
@@ -153,12 +155,12 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
                   <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900">{user.displayName}</span>
                 </label>
               ))}
-              {users.length === 0 && <span className="text-xs text-slate-400 italic">載入中...</span>}
+              {users.length === 0 && <span className="text-xs text-slate-400 italic">{L('載入中... (Loading...)')}</span>}
             </div>
           </div>
 
-          <FormInput label="Email" name="clientEmail" value={formData.clientEmail} onChange={handleInputChange} />
-          <FormInput label="地址" name="address" value={formData.address} onChange={handleInputChange} />
+          <FormInput label={L('電郵 (Email)')} name="clientEmail" value={formData.clientEmail} onChange={handleInputChange} />
+          <FormInput label={L('地址 (Address)')} name="address" value={formData.address} onChange={handleInputChange} />
         </div>
       </div>
     </div>

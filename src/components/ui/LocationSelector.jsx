@@ -1,10 +1,12 @@
 import React from 'react';
-import { 
-  isZoneSelected, 
-  getPreferredZoneLabel 
+import {
+  isZoneSelected,
+  getPreferredZoneLabel
 } from '../../services/billingService';
+import { useLang } from '../../i18n/language';
 
 export const LocationSelector = ({ formData, setFormData, className = "", appSettings }) => {
+  const { L } = useLang();
   const selectedLocs = formData.selectedLocations || [];
 
   // 1. Resolve Dynamic Zones from settings or fallback to legacy defaults
@@ -87,7 +89,7 @@ export const LocationSelector = ({ formData, setFormData, className = "", appSet
 
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-slate-700 mb-2">活動位置 (Venue Location)</label>
+      <label className="block text-sm font-medium text-slate-700 mb-2">{L('活動位置 (Venue Location)')}</label>
       <div className="flex flex-wrap gap-3 mb-2">
         {locationCheckboxes.map(loc => (
           <label key={loc} className={`flex items-center space-x-2 px-3 py-2 rounded border cursor-pointer transition-colors ${isChecked(loc) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
@@ -105,7 +107,7 @@ export const LocationSelector = ({ formData, setFormData, className = "", appSet
         type="text"
         name="locationOther"
         autoComplete="off"
-        placeholder="其他位置 (Other)"
+        placeholder={L('其他位置 (Other)')}
         value={formData.locationOther || ''}
         onChange={handleOtherChange}
         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none"

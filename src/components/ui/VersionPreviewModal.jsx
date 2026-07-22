@@ -1,7 +1,9 @@
 import React from 'react';
 import { X, AlertTriangle, History } from 'lucide-react';
+import { useLang } from '../../i18n/language';
 
 export const VersionPreviewModal = ({ isOpen, onClose, version, onRestore }) => {
+  const { L } = useLang();
   if (!isOpen || !version) return null;
 
   return (
@@ -10,7 +12,7 @@ export const VersionPreviewModal = ({ isOpen, onClose, version, onRestore }) => 
         {/* Header */}
         <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">版本預覽 (Version Preview)</h3>
+            <h3 className="text-lg font-bold text-slate-800">{L('版本預覽 (Version Preview)')}</h3>
             <p className="text-sm text-slate-500 font-bold">{version.name}</p>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
@@ -24,10 +26,9 @@ export const VersionPreviewModal = ({ isOpen, onClose, version, onRestore }) => 
             <div className="flex items-start">
               <AlertTriangle className="text-amber-600 mr-3 flex-shrink-0" size={20} />
               <div>
-                <h4 className="font-bold text-amber-800 text-sm">⚠️ 注意 (Warning)</h4>
+                <h4 className="font-bold text-amber-800 text-sm">⚠️ {L('注意 (Warning)')}</h4>
                 <p className="text-xs text-amber-700 mt-1">
-                  還原此版本將會<b>覆蓋</b>當前所有的菜單內容與設定。此操作無法復原。<br />
-                  Restoring this version will <b>overwrite</b> all current menu items and settings. This action cannot be undone.
+                  {L('還原此版本將會覆蓋當前所有的菜單內容與設定，此操作無法復原。 (Restoring this version will overwrite all current menu items and settings. This action cannot be undone.)')}
                 </p>
               </div>
             </div>
@@ -52,9 +53,9 @@ export const VersionPreviewModal = ({ isOpen, onClose, version, onRestore }) => 
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-200 bg-white flex justify-end space-x-3">
-          <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors">取消 (Cancel)</button>
+          <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors">{L('取消 (Cancel)')}</button>
           <button onClick={() => { onRestore(version); onClose(); }} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 shadow-md flex items-center transition-colors">
-            <History size={16} className="mr-2" /> 確認還原 (Confirm Restore)
+            <History size={16} className="mr-2" /> {L('確認還原 (Confirm Restore)')}
           </button>
         </div>
       </div>

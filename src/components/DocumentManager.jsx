@@ -5,9 +5,11 @@ import DocumentRouter from "../features/documents/components/DocumentRouter";
 import { SignaturePad } from './ui';
 import { usePdfGenerator } from "../features/documents/hooks/usePdfGenerator";
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../i18n/language';
 
 export default function DocumentManager({ eventData, appSettings, onSign, onPrint, onUpdateData, isClientPortal = false }) {
   const { hasPermission } = useAuth();
+  const { L } = useLang();
   const [isDownloading, setIsDownloading] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [selectedMenuId, setSelectedMenuId] = useState(null);
@@ -124,28 +126,28 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
   };
 
   const docs = [
-    { id: 'EO', label: '內部行政單', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
-    { id: 'INTERNAL_NOTES', label: '內部備註', sub: 'Internal Notes', clientSignable: false, adminSignable: false, internalOnly: true, icon: PenTool, permission: 'doc_eo' }
+    { id: 'EO', label: '內部行政單 (Event Order)', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
+    { id: 'INTERNAL_NOTES', label: '內部備註 (Internal Notes)', sub: 'Internal Notes', clientSignable: false, adminSignable: false, internalOnly: true, icon: PenTool, permission: 'doc_eo' }
   ];
 
   const externalDocsList = [
     ...(eventData.menus || []).map(m => ({
       id: 'MENU_CONFIRM',
       menuId: m.id,
-      label: `菜譜確認: ${m.title || '未命名'}`,
+      label: `${L('菜譜確認 (Menu Confirmation)')}: ${m.title || L('未命名 (Unnamed)')}`,
       sub: `Menu Confirmation - ${m.title || 'Unnamed'}`,
       clientSignable: true,
       adminSignable: false,
       icon: Utensils,
       permission: 'doc_menu'
     })),
-    { id: 'QUOTATION', label: '報價單', sub: 'Quotation', clientSignable: true, adminSignable: false, permission: 'doc_quotation' },
-    { id: 'CONTRACT', label: '英文合約', sub: 'Contract (EN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
-    { id: 'CONTRACT_CN', label: '中文合約', sub: 'Contract (CN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
-    { id: 'INVOICE', label: '發票', sub: 'Invoice', clientSignable: false, adminSignable: false, permission: 'doc_invoice' },
-    { id: 'RECEIPT', label: '收據', sub: 'Receipt', clientSignable: false, adminSignable: false, permission: 'doc_receipt' },
-    { id: 'ADDENDUM', label: '附加條款', sub: 'Addendum', clientSignable: true, adminSignable: true, icon: Plus, permission: 'doc_contract' },
-    { id: 'FLOORPLAN', label: '平面圖', sub: 'Floorplan', clientSignable: false, adminSignable: false, icon: Layout, permission: 'doc_floorplan' }
+    { id: 'QUOTATION', label: '報價單 (Quotation)', sub: 'Quotation', clientSignable: true, adminSignable: false, permission: 'doc_quotation' },
+    { id: 'CONTRACT', label: '英文合約 (Contract EN)', sub: 'Contract (EN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
+    { id: 'CONTRACT_CN', label: '中文合約 (Contract CN)', sub: 'Contract (CN)', clientSignable: true, adminSignable: true, permission: 'doc_contract' },
+    { id: 'INVOICE', label: '發票 (Invoice)', sub: 'Invoice', clientSignable: false, adminSignable: false, permission: 'doc_invoice' },
+    { id: 'RECEIPT', label: '收據 (Receipt)', sub: 'Receipt', clientSignable: false, adminSignable: false, permission: 'doc_receipt' },
+    { id: 'ADDENDUM', label: '附加條款 (Addendum)', sub: 'Addendum', clientSignable: true, adminSignable: true, icon: Plus, permission: 'doc_contract' },
+    { id: 'FLOORPLAN', label: '平面圖 (Floorplan)', sub: 'Floorplan', clientSignable: false, adminSignable: false, icon: Layout, permission: 'doc_floorplan' }
   ];
 
   const allDocs = [...docs, ...externalDocsList];
@@ -173,7 +175,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-700 leading-tight">{doc.label}</span>
+              <span className="text-sm font-bold text-slate-700 leading-tight">{L(doc.label)}</span>
               {doc.clientSignable && isClientPortal && !hasClientSig && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-amber-500 text-white shadow-sm">Action Required</span>
               )}
@@ -189,13 +191,13 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
           {/* Actions */}
           {doc.clientSignable && isClientPortal && !hasClientSig && (
             <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-[#A57C00] text-white hover:bg-[#8a6800] rounded transition-colors font-bold shadow-sm flex items-center">
-              <PenTool size={12} className="mr-1" /> 檢視及簽署
+              <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
             </button>
           )}
 
           {doc.adminSignable && !isClientPortal && !hasAdminSig && (
             <button type="button" onClick={() => { openPreview(doc.id, doc.menuId); setIsSigningModalOpen(true); }} className="px-2 py-1.5 text-[10px] bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-colors font-bold shadow-sm flex items-center">
-              <PenTool size={12} className="mr-1" /> 檢視及簽署
+              <PenTool size={12} className="mr-1" /> {L('檢視及簽署 (View & Sign)')}
             </button>
           )}
         </div>
@@ -208,7 +210,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       {!isClientPortal && internalDocs.length > 0 && (
         <>
           <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">內部文件 (Internal Documents)</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{L('內部文件 (Internal Documents)')}</span>
           </div>
           {internalDocs.map(renderDocRow)}
         </>
@@ -216,7 +218,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
       
       {!isClientPortal && externalDocs.length > 0 && (
         <div className={`px-4 py-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center ${internalDocs.length > 0 ? 'border-t' : ''}`}>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">外部文件 (External Documents)</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{L('外部文件 (External Documents)')}</span>
         </div>
       )}
       
@@ -229,7 +231,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
             <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Utensils size={18} className="text-amber-400" />
-                <span className="text-white font-bold text-sm uppercase tracking-wider">選擇列印語言 (Language)</span>
+                <span className="text-white font-bold text-sm uppercase tracking-wider">{L('選擇列印語言 (Language)')}</span>
               </div>
               <button onClick={() => setMenuLangSelection(null)} className="text-slate-400 hover:text-white transition-colors">
                 <X size={20} />
@@ -242,7 +244,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-100 hover:border-[var(--brand-primary)] hover:bg-slate-50 transition-all group"
               >
                 <div className="text-left">
-                  <p className="font-bold text-slate-800">中文 (Chinese)</p>
+                  <p className="font-bold text-slate-800">{L('中文 (Chinese)')}</p>
                   <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">Chinese characters only</p>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[var(--brand-primary)] group-hover:text-white transition-colors">
@@ -255,7 +257,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-100 hover:border-[var(--brand-primary)] hover:bg-slate-50 transition-all group"
               >
                 <div className="text-left">
-                  <p className="font-bold text-slate-800">英文 (English)</p>
+                  <p className="font-bold text-slate-800">{L('英文 (English)')}</p>
                   <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">English translation only</p>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[var(--brand-primary)] group-hover:text-white transition-colors">
@@ -268,7 +270,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-[var(--brand-primary)] bg-indigo-50/30 hover:bg-indigo-50 transition-all group"
               >
                 <div className="text-left">
-                  <p className="font-bold text-slate-800">中英對照 (Bilingual)</p>
+                  <p className="font-bold text-slate-800">{L('中英對照 (Bilingual)')}</p>
                   <p className="text-[10px] text-slate-400 font-medium uppercase mt-0.5">Both Chinese & English</p>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white transition-colors shadow-md">
@@ -279,7 +281,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
             
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
                <button onClick={() => setMenuLangSelection(null)} className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
-                 取消 (Cancel)
+                 {L('取消 (Cancel)')}
                </button>
             </div>
           </div>
@@ -295,7 +297,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
               <div className="flex items-center gap-2">
                 <Eye size={18} className="text-slate-400" />
                 <span className="font-bold text-sm">
-                  {stagedSignature ? "確認預覽 (Preview & Confirm)" : "文件預覽 (Document Preview)"} - {allDocs.find(d => d.id === previewDoc)?.label}
+                  {stagedSignature ? L("確認預覽 (Preview & Confirm)") : L("文件預覽 (Document Preview)")} - {L(allDocs.find(d => d.id === previewDoc)?.label)}
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -320,15 +322,15 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                 {stagedSignature ? (
                   <>
                     <button type="button" onClick={() => setIsSigningModalOpen(true)} disabled={isSubmittingSignature} className="flex items-center text-xs font-bold bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
-                      <PenTool size={14} className="mr-1.5" /> 重簽 (Redo)
+                      <PenTool size={14} className="mr-1.5" /> {L('重簽 (Redo)')}
                     </button>
                     <button type="button" onClick={() => setStagedSignature(null)} disabled={isSubmittingSignature} className="flex items-center text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
-                      <X size={14} className="mr-1.5" /> 取消 (Cancel)
+                      <X size={14} className="mr-1.5" /> {L('取消 (Cancel)')}
                     </button>
                     <div className="w-px h-4 bg-white/30 mx-1"></div>
                     <button type="button" onClick={handleConfirmSignature} disabled={isSubmittingSignature} className="flex items-center text-sm font-bold bg-white text-[var(--brand-primary)] hover:bg-slate-50 px-4 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
                       {isSubmittingSignature ? <Loader2 size={16} className="animate-spin mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
-                      確認並提交 (Submit)
+                      {L('確認並提交 (Submit)')}
                     </button>
                   </>
                 ) : (
@@ -358,7 +360,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                           className="flex items-center text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50"
                         >
                           {isGenerating ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Printer size={14} className="mr-1.5" />}
-                          {isGenerating ? '雲端列印 (PDF)' : 'PDF 列印'}
+                          {isGenerating ? L('雲端列印 (PDF)') : L('PDF 列印 (PDF Print)')}
                         </button>
 
                         <button 
@@ -367,7 +369,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                           className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                         >
                           <Printer size={14} className="mr-1.5" />
-                          原生列印 (Native)
+                          {L('原生列印 (Native)')}
                         </button>
                       </div>
                     )}
@@ -404,7 +406,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
 
       {isSigningModalOpen && (
         <SignaturePad
-          title={`線上簽署 (Sign Document)`}
+          title={L('線上簽署 (Sign Document)')}
           onSave={(base64) => { setStagedSignature(base64); setIsSigningModalOpen(false); }}
           onCancel={() => setIsSigningModalOpen(false)}
           isSubmitting={false}

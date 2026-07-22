@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, PenTool, Loader2 } from 'lucide-react';
+import { useLang } from '../../i18n/language';
 
 export const SignaturePad = ({ onSave, onCancel, isSubmitting, title = "線上簽署合約 (Sign Contract)" }) => {
+  const { L } = useLang();
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
@@ -55,7 +57,7 @@ export const SignaturePad = ({ onSave, onCancel, isSubmitting, title = "線上�
           <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
         </div>
         <div className="p-6 bg-white">
-          <p className="text-xs text-slate-500 mb-3">請在下方方框內簽名 (Please sign within the box below):</p>
+          <p className="text-xs text-slate-500 mb-3">{L('請在下方方框內簽名 (Please sign within the box below)')}:</p>
           <canvas
             ref={canvasRef}
             onPointerDown={startDrawing}
@@ -66,9 +68,9 @@ export const SignaturePad = ({ onSave, onCancel, isSubmitting, title = "線上�
           />
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between gap-3">
-          <button onClick={() => canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)} disabled={isSubmitting} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100">重簽 (Clear)</button>
+          <button onClick={() => canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)} disabled={isSubmitting} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100">{L('重簽 (Clear)')}</button>
           <button onClick={() => onSave(canvasRef.current.toDataURL('image/png'))} disabled={isSubmitting} className="flex-1 px-4 py-2 text-sm font-bold text-white bg-[#A57C00] rounded-lg hover:bg-[#8a6800] flex justify-center items-center transition-colors">
-            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={16}/> : <PenTool className="mr-2" size={16}/>} 套用簽名 (Apply)
+            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={16}/> : <PenTool className="mr-2" size={16}/>} {L('套用簽名 (Apply)')}
           </button>
         </div>
       </div>

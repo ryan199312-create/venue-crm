@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { X, Mail, MessageCircle, Sparkles, Copy, Check, Loader2, Send, Settings2 } from 'lucide-react';
 import { useAI } from '../hooks/useAI'; 
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../core/firebase'; 
+import { functions } from '../core/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../i18n/language';
 
 export default function AiAssistant({ formData, setFormData, onClose }) {
   const { appSettings } = useAuth();
+  const { L } = useLang();
   const venueProfile = appSettings?.venueProfile || {};
   const { generate, loading: aiLoading } = useAI();
   const [sending, setSending] = useState(false);
@@ -101,7 +103,7 @@ ${rundownSummary}
 
 const handleGenerate = async (channel, intent, customInstruction = null) => {
     if (!formData.clientName) {
-      alert("請先輸入客戶名稱 (Client Name Missing)");
+      alert(L("請先輸入客戶名稱 (Client Name Missing)"));
       return;
     }
 
@@ -212,7 +214,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
               <Sparkles size={20} className="text-white"/>
             </div>
             <div>
-              <h3 className="font-bold text-lg">AI 智能助手 & SleekFlow Hub</h3>
+              <h3 className="font-bold text-lg">{L('AI 智能助手 (AI Assistant)')} & SleekFlow Hub</h3>
               <p className="text-[10px] text-slate-400 font-mono">
                 {formData.clientName} | {formData.date} | {formData.venueLocation}
               </p>
@@ -231,7 +233,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
             <div className="p-1.5 bg-slate-100 rounded-md text-slate-500">
               <Settings2 size={16}/>
             </div>
-            <label className="text-sm font-bold text-slate-700">選擇語氣 (Tone):</label>
+            <label className="text-sm font-bold text-slate-700">{L('選擇語氣 (Tone)')}:</label>
             <div className="flex flex-wrap gap-2">
               {[
                 { id: 'professional', label: '專業有禮 (Professional)', color: 'indigo' },
@@ -248,7 +250,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
                       : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  {t.label}
+                  {L(t.label)}
                 </button>
               ))}
             </div>
@@ -259,10 +261,10 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
             {/* --- LEFT COLUMN: EMAIL --- */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col h-full">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="font-bold text-indigo-800 flex items-center gap-2"><Mail size={18}/> 正式電郵 (Email)</h4>
+                <h4 className="font-bold text-indigo-800 flex items-center gap-2"><Mail size={18}/> {L('正式電郵 (Email)')}</h4>
                 <div className="flex gap-2">
-                  <button onClick={() => handleGenerate('EMAIL', 'summary')} disabled={aiLoading} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-100 border border-indigo-200 font-bold disabled:opacity-50">確認信</button>
-                  <button onClick={() => handleGenerate('EMAIL', 'payment')} disabled={aiLoading} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-100 border border-indigo-200 font-bold disabled:opacity-50">追數信</button>
+                  <button onClick={() => handleGenerate('EMAIL', 'summary')} disabled={aiLoading} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-100 border border-indigo-200 font-bold disabled:opacity-50">{L('確認信 (Confirmation)')}</button>
+                  <button onClick={() => handleGenerate('EMAIL', 'payment')} disabled={aiLoading} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-100 border border-indigo-200 font-bold disabled:opacity-50">{L('追數信 (Payment Reminder)')}</button>
                 </div>
               </div>
               
@@ -272,7 +274,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
               
               <div className="mt-3 pt-3 border-t border-slate-100">
                  <button onClick={() => window.open(`mailto:${formData.clientEmail}?subject=${encodeURIComponent(formData.emailSubject)}&body=${encodeURIComponent(formData.emailBody)}`)} className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 flex justify-center items-center gap-2 transition-transform active:scale-[0.98]">
-                   <Mail size={16}/> 開啟郵件軟體
+                   <Mail size={16}/> {L('開啟郵件軟體 (Open Mail App)')}
                  </button>
               </div>
             </div>
@@ -284,8 +286,8 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="font-bold text-emerald-700 flex items-center gap-2"><MessageCircle size={18}/> WhatsApp</h4>
                   <div className="flex gap-2">
-                    <button onClick={() => handleGenerate('WHATSAPP', 'summary')} disabled={aiLoading} className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-100 border border-emerald-200 font-bold disabled:opacity-50">活動確認</button>
-                    <button onClick={() => handleGenerate('WHATSAPP', 'payment')} disabled={aiLoading} className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-100 border border-emerald-200 font-bold disabled:opacity-50">溫馨提示</button>
+                    <button onClick={() => handleGenerate('WHATSAPP', 'summary')} disabled={aiLoading} className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-100 border border-emerald-200 font-bold disabled:opacity-50">{L('活動確認 (Event Confirmation)')}</button>
+                    <button onClick={() => handleGenerate('WHATSAPP', 'payment')} disabled={aiLoading} className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-100 border border-emerald-200 font-bold disabled:opacity-50">{L('溫馨提示 (Friendly Reminder)')}</button>
                   </div>
                 </div>
                 
@@ -303,7 +305,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
                     className={`flex-1 py-2 text-white rounded-lg font-bold flex justify-center items-center gap-2 shadow-sm transition-all ${sending ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#25D366] hover:bg-[#1ebc57] active:scale-[0.98]'}`}
                   >
                      {sending ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                     {sending ? "發送中 (Sending)..." : "SleekFlow 發送"}
+                     {sending ? `${L("發送中 (Sending)")}...` : L("SleekFlow 發送 (Send)")}
                   </button>
                 </div>
               </div>
@@ -311,14 +313,14 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
               {/* --- CUSTOM AI COMMAND CENTER --- */}
               <div className="bg-gradient-to-r from-violet-50 to-indigo-50 p-4 rounded-xl border border-violet-100 shadow-sm shrink-0">
                 <label className="text-xs font-bold text-violet-700 mb-2 flex items-center gap-1">
-                  <Sparkles size={12}/> 自訂 AI 指令 (Custom AI Command)
+                  <Sparkles size={12}/> {L('自訂 AI 指令 (Custom AI Command)')}
                 </label>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
                     value={customPrompt} 
                     onChange={(e) => setCustomPrompt(e.target.value)} 
-                    placeholder="e.g. 寫一封禮貌的道歉信關於冷氣故障..." 
+                    placeholder={L("寫一封禮貌的道歉信... (e.g. Write a polite apology letter...)")}
                     className="flex-1 text-sm px-3 py-2 rounded-lg border border-violet-200 focus:border-violet-500 focus:outline-none"
                     onKeyDown={(e) => {
                       if(e.key === 'Enter' && customPrompt) handleGenerate('WHATSAPP', 'custom', customPrompt);
@@ -341,7 +343,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
         {/* FOOTER */}
         <div className="bg-slate-50 border-t border-slate-200 p-2 text-center text-xs text-slate-400 flex justify-between px-6">
            <span>Core: DeepSeek V3</span>
-           {aiLoading && <span className="flex items-center gap-2 text-violet-600 font-bold"><Loader2 size={12} className="animate-spin"/> AI 正在分析訂單資料...</span>}
+           {aiLoading && <span className="flex items-center gap-2 text-violet-600 font-bold"><Loader2 size={12} className="animate-spin"/> {`${L('AI 正在分析訂單資料 (AI is analyzing order data)')}...`}</span>}
            <span>Integration: SleekFlow API</span>
         </div>
       </div>

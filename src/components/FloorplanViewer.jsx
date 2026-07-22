@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout, ZoomIn, ZoomOut } from 'lucide-react';
 import { TOOL_GROUPS } from './FloorplanTools';
+import { useLang } from '../i18n/language';
 
 const STYLES = {
   gridBox: "bg-white p-6 rounded-2xl shadow-sm border border-slate-200",
@@ -8,6 +9,7 @@ const STYLES = {
 };
 
 const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
+  const { L } = useLang();
   const containerRef = useRef(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const [scaleInfo, setScaleInfo] = useState({ scale: 1, height: 400 });
@@ -77,8 +79,8 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
     return (
       <div className={`${STYLES.gridBox} mt-4 text-center p-8`}>
         <Layout size={32} className="mx-auto text-slate-300 mb-3" />
-        <h4 className="font-bold text-slate-700">尚未設定平面圖</h4>
-        <p className="text-xs text-slate-500 mt-1">Floorplan is not yet configured for this event.</p>
+        <h4 className="font-bold text-slate-700">{L('尚未設定平面圖 (Floorplan not set up)')}</h4>
+        <p className="text-xs text-slate-500 mt-1">{L('Floorplan is not yet configured for this event. (此活動尚未設定平面圖。)')}</p>
       </div>
     );
   }
@@ -86,10 +88,10 @@ const FloorplanViewer = ({ floorplan, selectedLocations = [] }) => {
   return (
     <div className={`${STYLES.gridBox} mt-4`}>
       <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-        <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Layout size={16} /> Venue Floorplan (場地平面圖)</h3>
+        <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Layout size={16} /> {L('Venue Floorplan (場地平面圖)')}</h3>
         {canZoom && (
           <button onClick={() => setIsZoomed(!isZoomed)} className="text-xs bg-[#A57C00]/10 text-[#A57C00] px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-[#A57C00]/20 transition-colors">
-            {isZoomed ? <><ZoomOut size={12} className="mr-1"/> 顯示全圖 (View All)</> : <><ZoomIn size={12} className="mr-1"/> 放大區域 (Zoom In)</>}
+            {isZoomed ? <><ZoomOut size={12} className="mr-1"/> {L('顯示全圖 (View All)')}</> : <><ZoomIn size={12} className="mr-1"/> {L('放大區域 (Zoom In)')}</>}
           </button>
         )}
       </div>

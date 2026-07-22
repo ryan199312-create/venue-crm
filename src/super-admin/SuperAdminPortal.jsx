@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import AdminLogin from '../admin/AdminLogin';
 import DataMigrationTool from './DataMigrationTool';
+import { useLang } from '../i18n/language';
 
 // ---------- Small presentational helpers ----------
 // Static class strings so the Tailwind build includes them (no dynamic interpolation).
@@ -46,6 +47,7 @@ const roleBadge = (role) => {
 };
 
 const SuperAdminPortal = () => {
+  const { L } = useLang();
   const { user, userProfile, loading: authLoading, login, signOut, error: authError } = useAuth();
 
   const [tenants, setTenants] = useState([]);
@@ -200,7 +202,7 @@ const SuperAdminPortal = () => {
       setNewTenant({ id: '', name: '', maxBranches: 1, maxUsers: 5 });
     } catch (err) {
       console.error('Error creating tenant:', err);
-      alert('建立租戶失敗: ' + err.message);
+      alert(L('建立租戶失敗 (Failed to create tenant)') + ': ' + err.message);
     } finally { setIsCreating(false); }
   };
 
@@ -208,7 +210,7 @@ const SuperAdminPortal = () => {
     const next = (tenant.status || 'active') === 'active' ? 'suspended' : 'active';
     try {
       await setDoc(doc(db, 'tenants', tenant.id), { status: next, updatedAt: serverTimestamp() }, { merge: true });
-    } catch (err) { alert('更新狀態失敗: ' + err.message); }
+    } catch (err) { alert(L('更新狀態失敗 (Failed to update status)') + ': ' + err.message); }
   };
 
   const openLicense = () => {
@@ -225,7 +227,7 @@ const SuperAdminPortal = () => {
       await setDoc(doc(db, 'tenants', selectedTenant.id),
         { maxBranches: Math.max(1, Number(licenseValue) || 1), maxUsers: Math.max(1, Number(licenseUsersValue) || 1), updatedAt: serverTimestamp() }, { merge: true });
       setIsLicenseOpen(false);
-    } catch (err) { alert('更新授權失敗: ' + err.message); }
+    } catch (err) { alert(L('更新授權失敗 (Failed to update license)') + ': ' + err.message); }
     finally { setIsSavingLicense(false); }
   };
 
@@ -248,18 +250,18 @@ const SuperAdminPortal = () => {
       setInviteForm({ identifier: '', identifierType: 'email', displayName: '', role: 'admin', firstUser: false });
       setInvitedCreds(info);
     } catch (err) {
-      alert('新增失敗: ' + (err.message || err));
+      alert(L('新增失敗 (Failed to add)') + ': ' + (err.message || err));
     } finally { setIsInviting(false); }
   };
 
   const changeRole = async (uid, newRole) => {
     if (!selectedTenant) return;
-    setBusyMsg(`更新 ${uid.slice(0, 5)} 權限中...`);
+    setBusyMsg(`${L('更新權限中 (Updating role)')}: ${uid.slice(0, 5)}...`);
     try {
       const fn = httpsCallable(functions, 'updateUserRoleSecure');
       await fn({ uid, newRole, appId: selectedTenant.id });
     } catch (err) {
-      alert('更新權限失敗: ' + (err.message || err));
+      alert(L('更新權限失敗 (Failed to update role)') + ': ' + (err.message || err));
     } finally { setBusyMsg(''); }
   };
 
@@ -274,7 +276,7 @@ const SuperAdminPortal = () => {
       setDeleteConfirm('');
       setSelectedTenantId(null);
     } catch (err) {
-      alert('刪除租戶失敗: ' + (err.message || err));
+      alert(L('刪除租戶失敗 (Failed to delete tenant)') + ': ' + (err.message || err));
     } finally { setIsDeleting(false); }
   };
 
@@ -292,11 +294,11 @@ const SuperAdminPortal = () => {
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
         <Card className="p-8 max-w-md w-full text-center">
           <Shield className="mx-auto text-rose-500 mb-4" size={48} />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">存取被拒 (Access Denied)</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">{L('存取被拒 (Access Denied)')}</h2>
           <p className="text-slate-500 mb-6 font-medium">
-            您目前以 <span className="text-slate-900 font-bold">{user?.email}</span> 登入，但沒有存取系統管理員門戶的權限。
+            {L('您目前登入的帳戶為 (You are signed in as)')} <span className="text-slate-900 font-bold">{user?.email}</span>。 {L('此帳戶沒有存取系統管理員門戶的權限。 (This account does not have permission to access the admin console.)')}
           </p>
-          <button onClick={signOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all hover:bg-slate-700">安全登出</button>
+          <button onClick={signOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold transition-all hover:bg-slate-700">{L('安全登出 (Sign Out)')}</button>
         </Card>
       </div>
     );
@@ -328,12 +330,12 @@ const SuperAdminPortal = () => {
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <NavBtn id="overview" icon={LayoutDashboard} label="總覽 (Overview)" />
-          <NavBtn id="tenants" icon={Building2} label="租戶管理 (Tenants)" />
+          <NavBtn id="overview" icon={LayoutDashboard} label={L('總覽 (Overview)')} />
+          <NavBtn id="tenants" icon={Building2} label={L('租戶管理 (Tenants)')} />
         </nav>
         <div className="p-4 border-t border-slate-800">
           <button onClick={signOut} className="w-full flex items-center justify-center px-4 py-2.5 text-xs font-bold text-white bg-slate-800 hover:bg-rose-600 rounded-lg transition-all">
-            <LogOut size={14} className="mr-2" /> 安全登出 (Sign Out)
+            <LogOut size={14} className="mr-2" /> {L('安全登出 (Sign Out)')}
           </button>
         </div>
       </aside>
@@ -345,12 +347,12 @@ const SuperAdminPortal = () => {
           <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <div>
               <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-                {activeTab === 'overview' ? '系統管理總覽' : (selectedTenant ? selectedTenant.name : '租戶管理 (Tenants)')}
+                {activeTab === 'overview' ? L('系統管理總覽 (Admin Overview)') : (selectedTenant ? selectedTenant.name : L('租戶管理 (Tenants)'))}
               </h2>
               <p className="text-sm text-slate-500 font-medium mt-1">
                 {activeTab === 'overview'
-                  ? '平台整體容量與需要關注的租戶'
-                  : (selectedTenant ? `ID: ${selectedTenant.id} · ${selectedTenant.id}.vowsos.com` : `目前共有 ${tenants.length} 個租戶`)}
+                  ? L('平台整體容量與需要關注的租戶 (Platform capacity and tenants needing attention)')
+                  : (selectedTenant ? `ID: ${selectedTenant.id} · ${selectedTenant.id}.vowsos.com` : `${L('目前共有 (Total tenants)')}: ${tenants.length}`)}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -374,19 +376,19 @@ const SuperAdminPortal = () => {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <KpiCard icon={Building2} label="租戶 (Tenants)" value={tenants.length} sub={`${kpis.activeCount} active`} accent="violet" />
-                <KpiCard icon={Layers} label="分店 (Branches)" value={`${kpis.used} / ${kpis.licensed}`} sub="used / licensed" accent="emerald" />
-                <KpiCard icon={Users} label="用戶 (Users)" value={kpis.users} sub="across all tenants" accent="blue" />
-                <KpiCard icon={Gauge} label="需關注 (At Cap)" value={kpis.atCap} sub="tenants at branch limit" accent={kpis.atCap > 0 ? 'rose' : 'slate'} />
+                <KpiCard icon={Building2} label={L('租戶 (Tenants)')} value={tenants.length} sub={`${kpis.activeCount} active`} accent="violet" />
+                <KpiCard icon={Layers} label={L('分店 (Branches)')} value={`${kpis.used} / ${kpis.licensed}`} sub="used / licensed" accent="emerald" />
+                <KpiCard icon={Users} label={L('用戶 (Users)')} value={kpis.users} sub="across all tenants" accent="blue" />
+                <KpiCard icon={Gauge} label={L('需關注 (At Cap)')} value={kpis.atCap} sub="tenants at branch limit" accent={kpis.atCap > 0 ? 'rose' : 'slate'} />
               </div>
 
               <Card className="p-6">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <AlertTriangle size={18} className="text-amber-500" /> 需要關注 (Needs Attention)
+                  <AlertTriangle size={18} className="text-amber-500" /> {L('需要關注 (Needs Attention)')}
                 </h3>
                 {attentionTenants.length === 0 ? (
                   <div className="text-center py-8 text-slate-400 italic text-sm flex items-center justify-center gap-2">
-                    <CheckCircle size={16} className="text-emerald-400" /> 一切正常，沒有租戶超額或被停用。
+                    <CheckCircle size={16} className="text-emerald-400" /> {L('一切正常，沒有租戶超額或被停用。 (All good — no tenants over cap or suspended.)')}
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
@@ -406,8 +408,8 @@ const SuperAdminPortal = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {suspended && <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">Suspended</span>}
-                            {overCap && <span className="text-[10px] font-black px-2 py-0.5 rounded bg-rose-100 text-rose-600 uppercase">分店額滿 {u}/{max}</span>}
+                            {suspended && <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">{L('已停用 (Suspended)')}</span>}
+                            {overCap && <span className="text-[10px] font-black px-2 py-0.5 rounded bg-rose-100 text-rose-600 uppercase">{L('分店額滿 (Branches Full)')} {u}/{max}</span>}
                             <ChevronRight size={16} className="text-slate-300" />
                           </div>
                         </button>
@@ -425,13 +427,13 @@ const SuperAdminPortal = () => {
               <div className="flex items-center justify-between gap-4">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="搜尋租戶名稱或 ID..." value={tenantSearch}
+                  <input type="text" placeholder={L('搜尋租戶名稱或 ID (Search tenant name or ID)') + '...'} value={tenantSearch}
                     onChange={e => setTenantSearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-violet-500/20 transition-all shadow-sm" />
                 </div>
                 <button onClick={() => setIsCreateOpen(true)}
                   className="bg-violet-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-violet-700 transition-all shadow-md active:scale-95 whitespace-nowrap">
-                  <Plus size={18} /> 新增租戶
+                  <Plus size={18} /> {L('新增租戶 (New Tenant)')}
                 </button>
               </div>
 
@@ -440,19 +442,19 @@ const SuperAdminPortal = () => {
               ) : visibleTenants.length === 0 ? (
                 <Card className="p-12 text-center bg-white">
                   <Building2 className="mx-auto text-slate-200 mb-4" size={64} />
-                  <h3 className="text-lg font-bold text-slate-800 mb-2">沒有符合的租戶</h3>
-                  <p className="text-slate-500 mb-6">新增您的第一個租戶以啟用平台功能。</p>
+                  <h3 className="text-lg font-bold text-slate-800 mb-2">{L('沒有符合的租戶 (No matching tenants)')}</h3>
+                  <p className="text-slate-500 mb-6">{L('新增您的第一個租戶以啟用平台功能。 (Create your first tenant to get started.)')}</p>
                 </Card>
               ) : (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">租戶 (Tenant)</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">狀態</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">分店 (Branches)</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">用戶</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] text-right">管理</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">{L('租戶 (Tenant)')}</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">{L('狀態 (Status)')}</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">{L('分店 (Branches)')}</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">{L('用戶 (Users)')}</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] text-right">{L('管理 (Manage)')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -497,7 +499,7 @@ const SuperAdminPortal = () => {
           {activeTab === 'tenants' && selectedTenant && (
             <div className="space-y-6">
               <button onClick={() => setSelectedTenantId(null)} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">
-                <ArrowLeft size={16} /> 返回租戶列表
+                <ArrowLeft size={16} /> {L('返回租戶列表 (Back to Tenants)')}
               </button>
 
               {/* Info + status */}
@@ -507,16 +509,16 @@ const SuperAdminPortal = () => {
                     <div className="p-3 bg-violet-50 rounded-xl"><Building2 className="text-violet-600" size={26} /></div>
                     <div>
                       <h3 className="text-xl font-black text-slate-800">{selectedTenant.name}</h3>
-                      <p className="text-xs text-slate-400 font-mono">{selectedTenant.id}.vowsos.com · 建立於 {selectedTenant.createdAt?.toDate ? selectedTenant.createdAt.toDate().toLocaleDateString() : 'N/A'}</p>
+                      <p className="text-xs text-slate-400 font-mono">{selectedTenant.id}.vowsos.com · {L('建立於 (Created)')} {selectedTenant.createdAt?.toDate ? selectedTenant.createdAt.toDate().toLocaleDateString() : 'N/A'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${(selectedTenant.status || 'active') === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{selectedTenant.status || 'active'}</span>
                     <button onClick={() => toggleStatus(selectedTenant)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-all">
-                      <Power size={14} /> {(selectedTenant.status || 'active') === 'active' ? '停用 (Suspend)' : '啟用 (Activate)'}
+                      <Power size={14} /> {(selectedTenant.status || 'active') === 'active' ? L('停用 (Suspend)') : L('啟用 (Activate)')}
                     </button>
                     <button onClick={() => jumpTo(selectedTenant.id)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-all">
-                      <ExternalLink size={14} /> 進入系統
+                      <ExternalLink size={14} /> {L('進入系統 (Open App)')}
                     </button>
                   </div>
                 </div>
@@ -525,8 +527,8 @@ const SuperAdminPortal = () => {
               {/* License */}
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Layers size={18} className="text-emerald-500" /> 分店授權 (Branch License)</h4>
-                  <button onClick={openLicense} className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700"><Pencil size={13} /> 調整</button>
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Layers size={18} className="text-emerald-500" /> {L('分店授權 (Branch License)')}</h4>
+                  <button onClick={openLicense} className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700"><Pencil size={13} /> {L('調整 (Adjust)')}</button>
                 </div>
                 {(() => {
                   const max = typeof selectedTenant.maxBranches === 'number' ? selectedTenant.maxBranches : null;
@@ -537,7 +539,7 @@ const SuperAdminPortal = () => {
                     <div>
                       <div className="flex items-end justify-between mb-2">
                         <span className="text-3xl font-black text-slate-800">{u} <span className="text-lg text-slate-400">/ {max ?? '∞'}</span></span>
-                        <span className={`text-xs font-bold ${over ? 'text-rose-600' : 'text-slate-400'}`}>{max === null ? '未設定授權 (unlimited)' : (over ? '已達上限' : `剩餘 ${max - u}`)}</span>
+                        <span className={`text-xs font-bold ${over ? 'text-rose-600' : 'text-slate-400'}`}>{max === null ? L('未設定授權 (unlimited)') : (over ? L('已達上限 (At limit)') : `${L('剩餘 (Remaining)')} ${max - u}`)}</span>
                       </div>
                       {max !== null && (
                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -552,8 +554,8 @@ const SuperAdminPortal = () => {
               {/* User License */}
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Gauge size={18} className="text-blue-500" /> 用戶授權 (User License)</h4>
-                  <button onClick={openLicense} className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700"><Pencil size={13} /> 調整</button>
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Gauge size={18} className="text-blue-500" /> {L('用戶授權 (User License)')}</h4>
+                  <button onClick={openLicense} className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700"><Pencil size={13} /> {L('調整 (Adjust)')}</button>
                 </div>
                 {(() => {
                   const max = typeof selectedTenant.maxUsers === 'number' ? selectedTenant.maxUsers : null;
@@ -564,7 +566,7 @@ const SuperAdminPortal = () => {
                     <div>
                       <div className="flex items-end justify-between mb-2">
                         <span className="text-3xl font-black text-slate-800">{u} <span className="text-lg text-slate-400">/ {max ?? '∞'}</span></span>
-                        <span className={`text-xs font-bold ${over ? 'text-rose-600' : 'text-slate-400'}`}>{max === null ? '未設定授權 (unlimited)' : (over ? '已達上限' : `剩餘 ${max - u}`)}</span>
+                        <span className={`text-xs font-bold ${over ? 'text-rose-600' : 'text-slate-400'}`}>{max === null ? L('未設定授權 (unlimited)') : (over ? L('已達上限 (At limit)') : `${L('剩餘 (Remaining)')} ${max - u}`)}</span>
                       </div>
                       {max !== null && (
                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -579,13 +581,13 @@ const SuperAdminPortal = () => {
               {/* Users */}
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Users size={18} className="text-blue-500" /> 用戶 ({tenantUsers.length})</h4>
-                  <button onClick={() => setIsInviteOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-all"><UserPlus size={14} /> 邀請用戶</button>
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2"><Users size={18} className="text-blue-500" /> {L('用戶 (Users)')} ({tenantUsers.length})</h4>
+                  <button onClick={() => setIsInviteOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-all"><UserPlus size={14} /> {L('邀請用戶 (Invite User)')}</button>
                 </div>
                 {loadingUsers ? (
                   <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 className="animate-spin" size={28} /></div>
                 ) : tenantUsers.length === 0 ? (
-                  <p className="text-center py-8 text-slate-400 italic text-sm">此租戶尚無用戶。</p>
+                  <p className="text-center py-8 text-slate-400 italic text-sm">{L('此租戶尚無用戶。 (No users in this tenant yet.)')}</p>
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {tenantUsers.map(u => (
@@ -593,7 +595,7 @@ const SuperAdminPortal = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600">{(u.displayName || u.email || 'U').charAt(0).toUpperCase()}</div>
                           <div>
-                            <p className="text-sm font-bold text-slate-800">{u.displayName || 'Unknown'}</p>
+                            <p className="text-sm font-bold text-slate-800">{u.displayName || L('未命名 (Unknown)')}</p>
                             <p className="text-[11px] text-slate-400 font-mono">{u.email}</p>
                           </div>
                         </div>
@@ -614,13 +616,13 @@ const SuperAdminPortal = () => {
 
               {/* Migrate */}
               <Card className="p-6">
-                <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><Database size={18} className="text-indigo-500" /> 資料匯入 (Migrate Data In)</h4>
-                <p className="text-xs text-slate-500 mb-4">將另一個來源租戶的資料（設定、活動、用戶、日曆）複製進 <b>{selectedTenant.id}</b>。來源資料不會被更動。</p>
+                <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><Database size={18} className="text-indigo-500" /> {L('資料匯入 (Migrate Data In)')}</h4>
+                <p className="text-xs text-slate-500 mb-4">{L('將另一個來源租戶的資料（設定、活動、用戶、日曆）複製進 (Copy another source tenant\'s data — settings, events, users, calendar — into)')} <b>{selectedTenant.id}</b>。{L('來源資料不會被更動。 (The source data is not modified.)')}</p>
                 <div className="flex items-center gap-3 mb-4">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">來源</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('來源 (Source)')}</label>
                   <select value={migrateSource} onChange={e => setMigrateSource(e.target.value)}
                     className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-violet-500/20">
-                    <option value="">— 選擇來源租戶 —</option>
+                    <option value="">{L('— 選擇來源租戶 — (— Select source tenant —)')}</option>
                     <option value="my-venue-crm">my-venue-crm (default)</option>
                     {tenants.filter(t => t.id !== selectedTenant.id).map(t => (
                       <option key={t.id} value={t.id}>{t.name} ({t.id})</option>
@@ -634,11 +636,11 @@ const SuperAdminPortal = () => {
 
               {/* Danger zone */}
               <Card className="p-6 border-l-4 border-l-rose-500">
-                <h4 className="font-bold text-rose-600 flex items-center gap-2 mb-2"><AlertTriangle size={18} /> 危險區域 (Danger Zone)</h4>
+                <h4 className="font-bold text-rose-600 flex items-center gap-2 mb-2"><AlertTriangle size={18} /> {L('危險區域 (Danger Zone)')}</h4>
                 <div className="flex items-center justify-between gap-4">
-                  <p className="text-xs text-slate-500">永久刪除此租戶及其所有資料、設定與檔案。此操作無法復原。</p>
+                  <p className="text-xs text-slate-500">{L('永久刪除此租戶及其所有資料、設定與檔案。此操作無法復原。 (Permanently delete this tenant and all its data, settings, and files. This cannot be undone.)')}</p>
                   <button onClick={() => { setDeleteConfirm(''); setIsDeleteOpen(true); }}
-                    className="shrink-0 flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-all"><Trash2 size={14} /> 刪除租戶</button>
+                    className="shrink-0 flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-all"><Trash2 size={14} /> {L('刪除租戶 (Delete Tenant)')}</button>
                 </div>
               </Card>
             </div>
@@ -647,15 +649,15 @@ const SuperAdminPortal = () => {
       </main>
 
       {/* CREATE MODAL */}
-      <Modal isOpen={isCreateOpen} onClose={() => !isCreating && setIsCreateOpen(false)} title="建立新租戶 (New Tenant)">
+      <Modal isOpen={isCreateOpen} onClose={() => !isCreating && setIsCreateOpen(false)} title={L('建立新租戶 (New Tenant)')}>
         <form onSubmit={handleCreate} className="space-y-6 p-6 bg-slate-50">
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">租戶名稱 (Tenant Name)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('租戶名稱 (Tenant Name)')}</label>
             <input type="text" required value={newTenant.name} onChange={e => setNewTenant(p => ({ ...p, name: e.target.value }))}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" placeholder="例如: 璟瓏軒 (King Lung Heen)" />
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" placeholder={L('例如：璟瓏軒 (e.g. King Lung Heen)')} />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">租戶代碼 (Subdomain ID)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('租戶代碼 (Subdomain ID)')}</label>
             <div className="flex items-center gap-2">
               <input type="text" required value={newTenant.id} onChange={e => setNewTenant(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s/g, '') }))}
                 className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-mono font-bold shadow-sm" placeholder="kinglungheen" />
@@ -664,61 +666,61 @@ const SuperAdminPortal = () => {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">分店授權 (Branches)</label>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('分店授權 (Branches)')}</label>
               <input type="number" min="1" required value={newTenant.maxBranches} onChange={e => setNewTenant(p => ({ ...p, maxBranches: e.target.value }))}
                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">用戶授權 (Users)</label>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('用戶授權 (Users)')}</label>
               <input type="number" min="1" required value={newTenant.maxUsers} onChange={e => setNewTenant(p => ({ ...p, maxUsers: e.target.value }))}
                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
+            <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">{L('取消 (Cancel)')}</button>
             <button type="submit" disabled={isCreating} className="flex-[2] py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-              {isCreating ? <Loader2 className="animate-spin" size={20} /> : '確認建立租戶'}
+              {isCreating ? <Loader2 className="animate-spin" size={20} /> : L('確認建立租戶 (Create Tenant)')}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* LICENSE MODAL */}
-      <Modal isOpen={isLicenseOpen} onClose={() => !isSavingLicense && setIsLicenseOpen(false)} title="調整分店授權 (Adjust License)">
+      <Modal isOpen={isLicenseOpen} onClose={() => !isSavingLicense && setIsLicenseOpen(false)} title={L('調整分店授權 (Adjust License)')}>
         <form onSubmit={handleSaveLicense} className="space-y-6 p-6 bg-slate-50">
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">授權分店數量 (Max Branches)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('授權分店數量 (Max Branches)')}</label>
             <input type="number" min="1" required value={licenseValue} onChange={e => setLicenseValue(e.target.value)}
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
-            <p className="text-[10px] text-slate-400 font-medium">目前使用中: <b>{selectedTenant ? (usageMap[selectedTenant.id] ?? '–') : '–'}</b> 個分店。</p>
+            <p className="text-[10px] text-slate-400 font-medium">{L('目前使用中 (Currently in use)')}: <b>{selectedTenant ? (usageMap[selectedTenant.id] ?? '–') : '–'}</b> {L('個分店。 (branches.)')}</p>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">授權用戶數量 (Max Users)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('授權用戶數量 (Max Users)')}</label>
             <input type="number" min="1" required value={licenseUsersValue} onChange={e => setLicenseUsersValue(e.target.value)}
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" />
-            <p className="text-[10px] text-slate-400 font-medium">目前使用中: <b>{selectedTenant ? (userCountMap[selectedTenant.id] ?? '–') : '–'}</b> 位用戶。調低不會刪除既有用戶，但該租戶將無法再新增。</p>
+            <p className="text-[10px] text-slate-400 font-medium">{L('目前使用中 (Currently in use)')}: <b>{selectedTenant ? (userCountMap[selectedTenant.id] ?? '–') : '–'}</b> {L('位用戶。調低不會刪除既有用戶，但該租戶將無法再新增。 (users. Lowering this does not remove existing users, but the tenant cannot add more.)')}</p>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setIsLicenseOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
+            <button type="button" onClick={() => setIsLicenseOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">{L('取消 (Cancel)')}</button>
             <button type="submit" disabled={isSavingLicense} className="flex-[2] py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-              {isSavingLicense ? <Loader2 className="animate-spin" size={20} /> : '儲存授權'}
+              {isSavingLicense ? <Loader2 className="animate-spin" size={20} /> : L('儲存授權 (Save License)')}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* INVITE MODAL */}
-      <Modal isOpen={isInviteOpen} onClose={() => !isInviting && setIsInviteOpen(false)} title="新增用戶 (Add User)">
+      <Modal isOpen={isInviteOpen} onClose={() => !isInviting && setIsInviteOpen(false)} title={L('新增用戶 (Add User)')}>
         <form onSubmit={handleInvite} className="space-y-5 p-6 bg-slate-50">
-          <p className="text-xs text-slate-500 font-medium">登記的用戶將被加入 <b>{selectedTenant?.name}</b> ({selectedTenant?.id})，之後自行前往啟用頁面設定密碼。</p>
+          <p className="text-xs text-slate-500 font-medium">{L('登記的用戶將被加入以下租戶 (The registered user will be added to)')} <b>{selectedTenant?.name}</b> ({selectedTenant?.id}){L('，之後自行前往啟用頁面設定密碼。 (, then set their own password on the activation page.)')}</p>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">登入方式 (Login ID)</label>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('登入方式 (Login ID)')}</label>
               <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
                 {['email', 'phone'].map(t => (
                   <button key={t} type="button" onClick={() => setInviteForm(p => ({ ...p, identifierType: t, firstUser: t === 'phone' ? false : p.firstUser }))}
                     className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${inviteForm.identifierType === t ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500'}`}>
-                    {t === 'email' ? 'Email' : '電話'}
+                    {t === 'email' ? 'Email' : L('電話 (Phone)')}
                   </button>
                 ))}
               </div>
@@ -729,12 +731,12 @@ const SuperAdminPortal = () => {
               placeholder={inviteForm.identifierType === 'phone' ? '91234567' : 'user@example.com'} />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">名稱 (Display Name)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('名稱 (Display Name)')}</label>
             <input type="text" value={inviteForm.displayName} onChange={e => setInviteForm(p => ({ ...p, displayName: e.target.value }))}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" placeholder="王小明" />
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm" placeholder={L('王小明 (e.g. John Wong)')} />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">權限 (Role)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('權限 (Role)')}</label>
             <select value={inviteForm.role} onChange={e => setInviteForm(p => ({ ...p, role: e.target.value }))}
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 font-bold shadow-sm">
               <option value="staff">Staff</option>
@@ -744,61 +746,61 @@ const SuperAdminPortal = () => {
           {inviteForm.identifierType === 'email' && (
             <label className="flex items-center gap-2.5 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer">
               <input type="checkbox" checked={inviteForm.firstUser} onChange={e => setInviteForm(p => ({ ...p, firstUser: e.target.checked }))} className="rounded text-violet-600" />
-              <span className="text-[11px] font-bold text-slate-600">擁有者帳戶 — 需 Email 驗證 (Owner — requires email verification)</span>
+              <span className="text-[11px] font-bold text-slate-600">{L('擁有者帳戶 — 需 Email 驗證 (Owner — requires email verification)')}</span>
             </label>
           )}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setIsInviteOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
+            <button type="button" onClick={() => setIsInviteOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">{L('取消 (Cancel)')}</button>
             <button type="submit" disabled={isInviting} className="flex-[2] py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-              {isInviting ? <Loader2 className="animate-spin" size={20} /> : '登記用戶'}
+              {isInviting ? <Loader2 className="animate-spin" size={20} /> : L('登記用戶 (Register User)')}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* PROVISION SUCCESS — activation link */}
-      <Modal isOpen={!!invitedCreds} onClose={() => setInvitedCreds(null)} title="已登記 (User Added)">
+      <Modal isOpen={!!invitedCreds} onClose={() => setInvitedCreds(null)} title={L('已登記 (User Added)')}>
         <div className="p-6 bg-slate-50 space-y-5">
           <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
             <CheckCircle className="text-emerald-500 shrink-0" size={22} />
-            <p className="text-sm font-bold text-emerald-800">已登記！請通知對方啟用帳戶。</p>
+            <p className="text-sm font-bold text-emerald-800">{L('已登記！請通知對方啟用帳戶。 (Registered! Please tell them to activate their account.)')}</p>
           </div>
           <p className="text-sm text-slate-600 leading-relaxed">
-            請對方前往以下網址，使用其 <b>{invitedCreds?.type === 'phone' ? '電話號碼' : 'Email'}</b>
+            {L('請對方前往以下網址，使用其 (Ask them to visit the link below and use their)')} <b>{invitedCreds?.type === 'phone' ? L('電話號碼 (phone number)') : 'Email'}</b>
             <code className="mx-1 px-1.5 py-0.5 bg-slate-100 rounded font-mono text-xs">{invitedCreds?.identifier}</code>
-            啟用帳戶並自行設定密碼：
+            {L('啟用帳戶並自行設定密碼： (to activate the account and set their own password:)')}
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 px-4 py-3 bg-white border border-violet-200 rounded-xl font-mono text-sm font-bold text-violet-700 break-all">{invitedCreds ? tenantActivateUrl(invitedCreds.tenantId) : ''}</code>
-            <button onClick={() => navigator.clipboard?.writeText(invitedCreds ? tenantActivateUrl(invitedCreds.tenantId) : '')} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title="複製連結"><Copy size={16} /></button>
+            <button onClick={() => navigator.clipboard?.writeText(invitedCreds ? tenantActivateUrl(invitedCreds.tenantId) : '')} className="px-3 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50" title={L('複製連結 (Copy Link)')}><Copy size={16} /></button>
           </div>
           {invitedCreds?.type === 'email' && (
-            <p className="text-[11px] text-slate-500 bg-amber-50 border border-amber-100 rounded-lg p-3">擁有者帳戶啟用後需完成 Email 驗證。</p>
+            <p className="text-[11px] text-slate-500 bg-amber-50 border border-amber-100 rounded-lg p-3">{L('擁有者帳戶啟用後需完成 Email 驗證。 (Owner accounts must complete email verification after activation.)')}</p>
           )}
-          <button onClick={() => setInvitedCreds(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all">完成</button>
+          <button onClick={() => setInvitedCreds(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all">{L('完成 (Done)')}</button>
         </div>
       </Modal>
 
       {/* DELETE MODAL */}
-      <Modal isOpen={isDeleteOpen} onClose={() => !isDeleting && setIsDeleteOpen(false)} title="刪除租戶 (Delete Tenant)">
+      <Modal isOpen={isDeleteOpen} onClose={() => !isDeleting && setIsDeleteOpen(false)} title={L('刪除租戶 (Delete Tenant)')}>
         <form onSubmit={handleDelete} className="space-y-6 p-6 bg-slate-50">
           <div className="p-4 bg-rose-50 rounded-xl border border-rose-100 flex gap-3 shadow-sm">
             <AlertTriangle className="text-rose-600 shrink-0" size={20} />
             <div>
-              <p className="text-sm font-bold text-rose-800">警告：此操作不可復原</p>
-              <p className="text-[10px] text-rose-700 leading-relaxed font-medium mt-1">您即將刪除租戶 <b>{selectedTenant?.name} ({selectedTenant?.id})</b>，將永久移除所有活動、設定、用戶與檔案。</p>
+              <p className="text-sm font-bold text-rose-800">{L('警告：此操作不可復原 (Warning: this cannot be undone)')}</p>
+              <p className="text-[10px] text-rose-700 leading-relaxed font-medium mt-1">{L('您即將刪除租戶 (You are about to delete tenant)')} <b>{selectedTenant?.name} ({selectedTenant?.id})</b>{L('，將永久移除所有活動、設定、用戶與檔案。 (. This permanently removes all events, settings, users, and files.)')}</p>
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">請輸入租戶 ID <span className="text-rose-600 font-mono">"{selectedTenant?.id}"</span> 以確認：</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{L('請輸入租戶 ID (Type the tenant ID)')} <span className="text-rose-600 font-mono">"{selectedTenant?.id}"</span> {L('以確認： (to confirm:)')}</label>
             <input type="text" required value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)}
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-rose-500/20 font-mono font-bold shadow-sm" placeholder={selectedTenant?.id} />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setIsDeleteOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">取消</button>
+            <button type="button" onClick={() => setIsDeleteOpen(false)} className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 shadow-sm">{L('取消 (Cancel)')}</button>
             <button type="submit" disabled={isDeleting || deleteConfirm !== selectedTenant?.id}
               className="flex-[2] py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-              {isDeleting ? <Loader2 className="animate-spin" size={20} /> : '確認永久刪除'}
+              {isDeleting ? <Loader2 className="animate-spin" size={20} /> : L('確認永久刪除 (Confirm Delete)')}
             </button>
           </div>
         </form>

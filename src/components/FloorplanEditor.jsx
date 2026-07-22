@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Trash2, RotateCw, Move, Image as ImageIcon, MousePointer2, Maximize, Minimize, Copy, Eraser, MoveHorizontal, MoveVertical, Undo2, Redo2, Link, Unlink, ChevronsUp, ChevronsDown, Grid, Save, AlignLeft, AlignRight, ArrowUpToLine, ArrowDownToLine, PenTool, ZoomIn, ZoomOut, X } from 'lucide-react';
 import { TOOL_GROUPS } from './FloorplanTools';
+import { useLang } from '../i18n/language';
 
-export default function FloorplanEditor({ 
+export default function FloorplanEditor({
   formData, 
   setFormData, 
   defaultBgImage = '', 
@@ -14,6 +15,7 @@ export default function FloorplanEditor({
   initialFullscreen = false,
   liteMode = false
 }) {
+  const { L } = useLang();
   const canvasRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
@@ -541,14 +543,14 @@ export default function FloorplanEditor({
     const baseEl = floorplan.elements.find(el => el.id === selectedIds[0]);
     if (!baseEl) return;
     
-    const gridInput = window.prompt("請輸入行列數量 (Rows x Columns), 例如: 5x10", "5x10");
+    const gridInput = window.prompt(L("請輸入行列數量 (Enter rows x columns), 例如: 5x10"), "5x10");
     if (!gridInput) return;
     const parts = gridInput.toLowerCase().split('x');
     const rows = parseInt(parts[0]?.trim());
     const cols = parseInt(parts[1]?.trim());
-    if (isNaN(rows) || isNaN(cols) || rows <= 0 || cols <= 0) return window.alert("格式錯誤 (Invalid format). 請輸入有效的數字，例如: 5x10");
+    if (isNaN(rows) || isNaN(cols) || rows <= 0 || cols <= 0) return window.alert(L("格式錯誤，請輸入有效的數字，例如 5x10 (Invalid format. Enter valid numbers, e.g. 5x10)"));
 
-    const spacingInput = window.prompt("請輸入物件間距 (Spacing in meters), 例如: 0.5", "0.5");
+    const spacingInput = window.prompt(L("請輸入物件間距 (Enter spacing in meters), 例如: 0.5"), "0.5");
     if (spacingInput === null) return;
     const spacingM = parseFloat(spacingInput) || 0;
 
@@ -572,20 +574,20 @@ export default function FloorplanEditor({
 
   const handleClearAll = () => {
     if (floorplan.elements.length === 0) return;
-    if (window.confirm("確定要清除所有項目嗎？ (Are you sure you want to clear all items?)")) {
+    if (window.confirm(L("確定要清除所有項目嗎？ (Are you sure you want to clear all items?)"))) {
       updateFloorplan({ elements: [] });
       setSelectedIds([]);
     }
   };
 
   const handleSavePreset = () => {
-    if (floorplan.elements.length === 0) return window.alert("無物件可儲存 (Empty layout).");
-    const name = window.prompt("請輸入預設佈置名稱 (Enter preset name):", "My Setup");
+    if (floorplan.elements.length === 0) return window.alert(L("無物件可儲存 (Empty layout)."));
+    const name = window.prompt(L("請輸入預設佈置名稱 (Enter preset name):"), "My Setup");
     if (!name) return;
     const newPresets = [...presets, { id: Date.now(), name, elements: floorplan.elements }];
     localStorage.setItem('vms_floorplan_presets', JSON.stringify(newPresets));
     setPresets(newPresets);
-    window.alert("佈置已儲存為預設 (Saved successfully)!");
+    window.alert(L("佈置已儲存為預設 (Saved successfully)!"));
   };
 
   const handleLoadPresetOrEvent = (val) => {
@@ -601,7 +603,7 @@ export default function FloorplanEditor({
     }
 
     if (elementsToLoad.length > 0) {
-      if (floorplan.elements.length > 0 && !window.confirm("這會覆蓋目前的佈置，確定嗎？ (This will overwrite current layout. Are you sure?)")) return;
+      if (floorplan.elements.length > 0 && !window.confirm(L("這會覆蓋目前的佈置，確定嗎？ (This will overwrite current layout. Are you sure?)"))) return;
       const newElements = elementsToLoad.map(el => ({ ...el, id: Date.now().toString() + Math.random().toString() }));
       updateFloorplan({ elements: newElements });
       setSelectedIds([]);
@@ -634,7 +636,7 @@ export default function FloorplanEditor({
       {!bgImage && (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 pointer-events-none">
           <ImageIcon size={48} className="mb-4 opacity-10" />
-          <p className="font-medium text-sm opacity-50">1x1m 比例網格 (1m x 1m Reference Grid)</p>
+          <p className="font-medium text-sm opacity-50">{L('1x1m 比例網格 (1m x 1m Reference Grid)')}</p>
         </div>
       )}
 
@@ -729,7 +731,7 @@ export default function FloorplanEditor({
           >
             {el.type === 'text' ? (
               <div className="w-full h-full flex items-center justify-center overflow-visible">
-                <span className="font-bold text-slate-800 whitespace-nowrap text-sm">{el.label || (isInteractive ? '自訂文字 (Type label...)' : '')}</span>
+                <span className="font-bold text-slate-800 whitespace-nowrap text-sm">{el.label || (isInteractive ? L('自訂文字 (Type label...)') : '')}</span>
               </div>
             ) : (
               displayContent
@@ -756,12 +758,12 @@ export default function FloorplanEditor({
          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200 print:hidden">
            <div>
              <h4 className="font-bold text-slate-800 flex items-center">
-               <ImageIcon size={18} className="mr-2 text-slate-500" /> 平面圖總覽 (Floorplan Snapshot)
+               <ImageIcon size={18} className="mr-2 text-slate-500" /> {L('平面圖總覽 (Floorplan Snapshot)')}
              </h4>
-             <p className="text-xs text-slate-500 mt-0.5">點擊全螢幕以新增或移動物件。 (Fullscreen to edit)</p>
+             <p className="text-xs text-slate-500 mt-0.5">{L('點擊全螢幕以新增或移動物件。 (Fullscreen to edit)')}</p>
            </div>
            <button type="button" onClick={() => setIsFullscreen(true)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm font-bold shadow-md">
-             <Maximize size={16} /> 全螢幕編輯 (Edit)
+             <Maximize size={16} /> {L('全螢幕編輯 (Edit)')}
            </button>
          </div>
          
@@ -772,7 +774,7 @@ export default function FloorplanEditor({
          >
             <div className="absolute inset-0 z-20 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
                <div className="bg-white px-5 py-2.5 rounded-xl font-bold text-slate-800 shadow-xl opacity-0 group-hover:opacity-100 transition-all flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0">
-                   <Maximize size={18} className="text-indigo-600"/> 點擊全螢幕編輯 (Click to Edit)
+                   <Maximize size={18} className="text-indigo-600"/> {L('點擊全螢幕編輯 (Click to Edit)')}
                </div>
             </div>
             <div className="relative pointer-events-none transition-transform duration-300" style={{ transform: `scale(${previewScale})`, transformOrigin: 'center center' }}>
@@ -796,7 +798,7 @@ export default function FloorplanEditor({
         <div className="flex items-center gap-4">
           {!liteMode && (
             <div className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase">比例 (Scale)</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase">{L('比例 (Scale)')}</span>
               <input 
                 type="range" 
                 min="10" 
@@ -811,39 +813,39 @@ export default function FloorplanEditor({
 
           <button type="button" onClick={handleClearAll} className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors text-sm font-bold text-slate-700 shadow-sm select-none">
             <Eraser size={16} />
-            <span>清除全部 (Clear)</span>
+            <span>{L('清除全部 (Clear)')}</span>
           </button>
 
           <div className="flex items-center gap-2 border-l border-slate-300 pl-4 ml-2">
             <button type="button" onClick={handleSavePreset} className="flex items-center gap-1.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm select-none">
-              <Save size={16} /> <span className="hidden sm:inline">儲存佈置 (Save)</span>
+              <Save size={16} /> <span className="hidden sm:inline">{L('儲存佈置 (Save)')}</span>
             </button>
               <select 
                 onChange={(e) => { 
-                  if(e.target.value === 'clear_all') { 
-                    if(window.confirm("確定刪除所有已儲存的預設佈置？ (Delete all presets?)")) { localStorage.removeItem('vms_floorplan_presets'); setPresets([]); } 
-                  } else if (e.target.value) { 
+                  if(e.target.value === 'clear_all') {
+                    if(window.confirm(L("確定刪除所有已儲存的預設佈置？ (Delete all presets?)"))) { localStorage.removeItem('vms_floorplan_presets'); setPresets([]); }
+                  } else if (e.target.value) {
                     handleLoadPresetOrEvent(e.target.value); 
                   } 
                   e.target.value = ''; 
                 }} 
                 className="text-sm font-bold text-slate-600 bg-white border border-slate-300 px-2 py-1.5 rounded-lg hover:bg-slate-50 outline-none shadow-sm cursor-pointer w-40"
               >
-                <option value="">📂 載入地圖 (Load)</option>
+                <option value="">{L('📂 載入地圖 (Load)')}</option>
                 {presets.length > 0 && (
-                  <optgroup label="預設範本 (Templates)">
+                  <optgroup label={L('預設範本 (Templates)')}>
                     {presets.map(p => <option key={p.id} value={`preset_${p.id}`}>{p.name}</option>)}
                   </optgroup>
                 )}
                 {events && events.filter(e => e.floorplan?.elements?.length > 0).length > 0 && (
-                  <optgroup label="過往訂單 (Previous Events)">
+                  <optgroup label={L('過往訂單 (Previous Events)')}>
                     {events.filter(e => e.floorplan?.elements?.length > 0).map(e => <option key={e.id} value={`event_${e.id}`}>{e.eventName} ({e.date})</option>)}
                   </optgroup>
                 )}
                 {presets.length > 0 && (
                   <>
                 <option disabled>──────────</option>
-                <option value="clear_all">刪除所有 (Delete All)</option>
+                <option value="clear_all">{L('刪除所有 (Delete All)')}</option>
                   </>
                 )}
               </select>
@@ -852,52 +854,52 @@ export default function FloorplanEditor({
 
         <div className="flex gap-4 items-center">
           <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-1 shadow-sm select-none">
-            <button type="button" onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors" title="縮小 (Zoom Out)"><ZoomOut size={16}/></button>
-            <button type="button" onClick={() => setZoom(1)} className="px-2 text-[10px] font-black text-indigo-600 hover:bg-slate-100 rounded transition-colors" title="重設縮放 (Reset Zoom)">{Math.round(zoom * 100)}%</button>
-            <button type="button" onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors" title="放大 (Zoom In)"><ZoomIn size={16}/></button>
+            <button type="button" onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors" title={L("縮小 (Zoom Out)")}><ZoomOut size={16}/></button>
+            <button type="button" onClick={() => setZoom(1)} className="px-2 text-[10px] font-black text-indigo-600 hover:bg-slate-100 rounded transition-colors" title={L("重設縮放 (Reset Zoom)")}>{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition-colors" title={L("放大 (Zoom In)")}><ZoomIn size={16}/></button>
           </div>
 
           <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-1 shadow-sm select-none">
-            <button type="button" onClick={handleUndo} disabled={historyStepRef.current === 0} className="p-1.5 hover:bg-slate-100 disabled:opacity-30 rounded text-slate-600 transition-colors" title="復原 (Undo - Ctrl+Z)"><Undo2 size={16}/></button>
-            <button type="button" onClick={handleRedo} disabled={historyStepRef.current >= historyRef.current.length - 1} className="p-1.5 hover:bg-slate-100 disabled:opacity-30 rounded text-slate-600 transition-colors" title="重做 (Redo - Ctrl+Y)"><Redo2 size={16}/></button>
+            <button type="button" onClick={handleUndo} disabled={historyStepRef.current === 0} className="p-1.5 hover:bg-slate-100 disabled:opacity-30 rounded text-slate-600 transition-colors" title={L("復原 (Undo - Ctrl+Z)")}><Undo2 size={16}/></button>
+            <button type="button" onClick={handleRedo} disabled={historyStepRef.current >= historyRef.current.length - 1} className="p-1.5 hover:bg-slate-100 disabled:opacity-30 rounded text-slate-600 transition-colors" title={L("重做 (Redo - Ctrl+Y)")}><Redo2 size={16}/></button>
           </div>
 
           {selectedIds.length > 0 && (
           <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded border border-indigo-100 animate-in fade-in">
-            <span className="text-xs font-bold text-indigo-800 mr-2 flex items-center"><MousePointer2 size={14} className="mr-1"/> 已選取 ({selectedIds.length})</span>
-            
-            <button type="button" onClick={handleBringToFront} title="移至最前 (Bring to Front)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ChevronsUp size={16} /></button>
-            <button type="button" onClick={handleSendToBack} title="移至最後 (Send to Back)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ChevronsDown size={16} /></button>
+            <span className="text-xs font-bold text-indigo-800 mr-2 flex items-center"><MousePointer2 size={14} className="mr-1"/> {L('已選取 (Selected)')} ({selectedIds.length})</span>
+
+            <button type="button" onClick={handleBringToFront} title={L("移至最前 (Bring to Front)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ChevronsUp size={16} /></button>
+            <button type="button" onClick={handleSendToBack} title={L("移至最後 (Send to Back)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ChevronsDown size={16} /></button>
             <div className="h-4 w-px bg-indigo-200 mx-1"></div>
             
             {selectedIds.length > 1 && (
               <>
-                <button type="button" onClick={handleAlignTop} title="向上對齊 (Align Top)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ArrowUpToLine size={16} /></button>
-                <button type="button" onClick={handleAlignBottom} title="向下對齊 (Align Bottom)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ArrowDownToLine size={16} /></button>
-                <button type="button" onClick={handleAlignLeft} title="向左對齊 (Align Left)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><AlignLeft size={16} /></button>
-                <button type="button" onClick={handleAlignRight} title="向右對齊 (Align Right)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><AlignRight size={16} /></button>
-                
+                <button type="button" onClick={handleAlignTop} title={L("向上對齊 (Align Top)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ArrowUpToLine size={16} /></button>
+                <button type="button" onClick={handleAlignBottom} title={L("向下對齊 (Align Bottom)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><ArrowDownToLine size={16} /></button>
+                <button type="button" onClick={handleAlignLeft} title={L("向左對齊 (Align Left)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><AlignLeft size={16} /></button>
+                <button type="button" onClick={handleAlignRight} title={L("向右對齊 (Align Right)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><AlignRight size={16} /></button>
+
                 {selectedIds.length > 2 && (
                   <>
                     <div className="h-4 w-px bg-indigo-200 mx-0.5"></div>
-                    <button type="button" onClick={handleDistributeHorizontal} title="水平均分 (Distribute Horizontally)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><MoveHorizontal size={16} /></button>
-                    <button type="button" onClick={handleDistributeVertical} title="垂直均分 (Distribute Vertically)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><MoveVertical size={16} /></button>
+                    <button type="button" onClick={handleDistributeHorizontal} title={L("水平均分 (Distribute Horizontally)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><MoveHorizontal size={16} /></button>
+                    <button type="button" onClick={handleDistributeVertical} title={L("垂直均分 (Distribute Vertically)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><MoveVertical size={16} /></button>
                   </>
                 )}
                 <div className="h-4 w-px bg-indigo-200 mx-0.5"></div>
-                <button type="button" onClick={handleGroup} title="組成群組 (Group)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><Link size={16} /></button>
+                <button type="button" onClick={handleGroup} title={L("組成群組 (Group)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><Link size={16} /></button>
               </>
             )}
             {selectedIds.some(id => floorplan.elements.find(el => el.id === id)?.groupId) && (
-                <button type="button" onClick={handleUngroup} title="取消群組 (Ungroup)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><Unlink size={16} /></button>
+                <button type="button" onClick={handleUngroup} title={L("取消群組 (Ungroup)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><Unlink size={16} /></button>
             )}
             {selectedIds.length === 1 && (
                 <>
                   <div className="h-4 w-px bg-indigo-200 mx-1"></div>
                   <div className="flex items-center bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden animate-in fade-in">
-                    <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 border-r border-slate-300">標籤:</span>
-                    <input 
-                      type="text" 
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-1.5 border-r border-slate-300">{L('標籤 (Label)')}:</span>
+                    <input
+                      type="text"
                       value={floorplan.elements.find(el => el.id === selectedIds[0])?.label || ''}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -905,18 +907,18 @@ export default function FloorplanEditor({
                           elements: floorplan.elements.map(el => el.id === selectedIds[0] ? { ...el, label: val } : el)
                         });
                       }}
-                      placeholder="e.g. VIP 1"
+                      placeholder={L("e.g. VIP 1 (例: 貴賓 1)")}
                       className="w-24 px-2 py-1 text-[10px] outline-none text-indigo-800 font-bold"
                     />
                   </div>
-                  <button type="button" onClick={handleCreateGrid} title="建立陣列網格 (Array Grid)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors ml-1"><Grid size={16} /></button>
+                  <button type="button" onClick={handleCreateGrid} title={L("建立陣列網格 (Array Grid)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors ml-1"><Grid size={16} /></button>
                 </>
             )}
             <div className="h-4 w-px bg-indigo-200 mx-1"></div>
 
-            <button type="button" onClick={handleDuplicate} title="複製 (Duplicate)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><Copy size={16} /></button>
-            <button type="button" onClick={handleRotate} title="旋轉 (Rotate)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><RotateCw size={16} /></button>
-            <button type="button" onClick={handleDelete} title="刪除 (Delete)" className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+            <button type="button" onClick={handleDuplicate} title={L("複製 (Duplicate)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><Copy size={16} /></button>
+            <button type="button" onClick={handleRotate} title={L("旋轉 (Rotate)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-indigo-600 transition-colors"><RotateCw size={16} /></button>
+            <button type="button" onClick={handleDelete} title={L("刪除 (Delete)")} className="bg-white p-1.5 rounded shadow-sm text-slate-600 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
           </div>
           )}
           <button 
@@ -927,7 +929,7 @@ export default function FloorplanEditor({
             }} 
             className="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700 shadow-sm"
           >
-            <Minimize size={16} /> 縮小完成 (Done)
+            <Minimize size={16} /> {L('縮小完成 (Done)')}
           </button>
         </div>
       </div>
@@ -937,7 +939,7 @@ export default function FloorplanEditor({
           {!liteMode && (
             <div>
               <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2 border-b border-indigo-100 pb-1 flex items-center justify-between">
-                <span>區域繪製 (Zone Drawing)</span>
+                <span>{L('區域繪製 (Zone Drawing)')}</span>
                 {isDrawingZone && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>}
               </h4>
               <div className="space-y-2">
@@ -949,12 +951,12 @@ export default function FloorplanEditor({
                   }}
                   className={`w-full py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-2 ${isDrawingZone ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                 >
-                  {isDrawingZone ? <><MousePointer2 size={14}/> 停止繪製 (Stop)</> : <><PenTool size={14}/> 開始繪製 (Draw Zones)</>}
+                  {isDrawingZone ? <><MousePointer2 size={14}/> {L('停止繪製 (Stop)')}</> : <><PenTool size={14}/> {L('開始繪製 (Draw Zones)')}</>}
                 </button>
-                
+
                 {isDrawingZone && (
                   <div className="p-2 bg-white rounded-lg border border-red-100 space-y-2 animate-in slide-in-from-top-2">
-                    <p className="text-[10px] text-slate-500 mb-2 leading-tight">選擇一個區域並點擊右側地圖來繪製頂點</p>
+                    <p className="text-[10px] text-slate-500 mb-2 leading-tight">{L('選擇一個區域並點擊右側地圖來繪製頂點 (Select a zone and click the map to add vertices)')}</p>
                     <select 
                       value={drawingZoneId || ''} 
                       onChange={(e) => setDrawingZoneId(e.target.value)}
@@ -973,7 +975,7 @@ export default function FloorplanEditor({
                         }}
                         className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold transition-colors"
                       >
-                        清除目前
+                        {L('清除目前 (Clear Current)')}
                       </button>
                       <button 
                         type="button" 
@@ -988,7 +990,7 @@ export default function FloorplanEditor({
                         }}
                         className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold transition-colors"
                       >
-                        復原點
+                        {L('復原點 (Undo Point)')}
                       </button>
                     </div>
                   </div>
@@ -999,7 +1001,7 @@ export default function FloorplanEditor({
 
           {TOOL_GROUPS.map((group, gIdx) => (
             <div key={gIdx}>
-              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">{group.name}</h4>
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">{L(group.name)}</h4>
               <div className="grid grid-cols-2 gap-2">
                 {group.items.map(tool => (
                   <div
@@ -1012,7 +1014,7 @@ export default function FloorplanEditor({
                     <div className={`${tool.style} flex items-center justify-center overflow-hidden`} style={{ width: Math.min(tool.w_m * 40, 40), height: Math.min(tool.h_m * 40, 40) }}>
                       {tool.content}
                     </div>
-                    <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 text-center leading-tight mt-2">{tool.label}</span>
+                    <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 text-center leading-tight mt-2">{L(tool.label)}</span>
                   </div>
                 ))}
               </div>

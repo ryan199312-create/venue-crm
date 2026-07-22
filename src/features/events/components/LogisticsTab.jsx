@@ -2,9 +2,11 @@ import React from 'react';
 import { Clock, Truck, Trash2, Plus, MapPin, Info, PenTool } from 'lucide-react';
 import { FormTextArea, TimeInput } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
+import { useLang } from '../../../i18n/language';
 
 const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibilityToggles }) => {
   const { appSettings } = useAuth();
+  const { L } = useLang();
   const venueName = appSettings?.venueProfile?.nameZh || '場地';
 
   return (
@@ -15,8 +17,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Truck size={20} /></div>
             <div>
-              <h3 className="font-bold text-slate-800">接送巴士安排 (Bus Arrangement)</h3>
-              <p className="text-xs text-slate-500">設置時間、地點與車牌資訊</p>
+              <h3 className="font-bold text-slate-800">{L('接送巴士安排 (Bus Arrangement)')}</h3>
+              <p className="text-xs text-slate-500">{L('設置時間、地點與車牌資訊 (Set times, locations, and vehicle plates)')}</p>
             </div>
           </div>
           <label className="flex items-center cursor-pointer">
@@ -29,7 +31,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
               />
               <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
             </div>
-            <span className="ml-3 text-sm font-bold text-slate-700">已啟用 (Enabled)</span>
+            <span className="ml-3 text-sm font-bold text-slate-700">{L('已啟用 (Enabled)')}</span>
           </label>
         </div>
 
@@ -38,7 +40,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
             {/* Arrivals */}
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-bold text-slate-700">去程 (Arrival): 各區接送 {'>'} {venueName}</span>
+                <span className="text-sm font-bold text-slate-700">{L('去程 (Arrival)')}: {L('各區接送 (Pickup from districts)')} {'>'} {venueName}</span>
                 <button 
                   type="button" 
                   onClick={() => setFormData(prev => ({ 
@@ -50,7 +52,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                   }))} 
                   className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 font-bold"
                 >
-                  + 新增去程
+                  {L('+ 新增去程 (+ Add Arrival)')}
                 </button>
               </div>
               <div className="space-y-2">
@@ -79,8 +81,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                           newArr[idx].location = e.target.value; 
                           setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newArr } })); 
                         }} 
-                        className="w-full bg-transparent text-sm outline-none" 
-                        placeholder="接送地點" 
+                        className="w-full bg-transparent text-sm outline-none"
+                        placeholder={L('接送地點 (Pickup Location)')}
                       />
                     </div>
                     <div className="col-span-2 flex items-center bg-white border border-slate-300 rounded px-2">
@@ -92,8 +94,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                           newArr[idx].plate = e.target.value; 
                           setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, arrivals: newArr } })); 
                         }} 
-                        className="w-full bg-transparent text-sm outline-none" 
-                        placeholder="車牌" 
+                        className="w-full bg-transparent text-sm outline-none"
+                        placeholder={L('車牌 (Plate)')}
                       />
                     </div>
                     <div className="col-span-1 flex justify-center items-center">
@@ -116,7 +118,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
             {/* Departures */}
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-bold text-slate-700">回程 (Departure): {venueName} {'>'} 各區回程</span>
+                <span className="text-sm font-bold text-slate-700">{L('回程 (Departure)')}: {venueName} {'>'} {L('各區回程 (Dropoff to districts)')}</span>
                 <button 
                   type="button" 
                   onClick={() => setFormData(prev => ({ 
@@ -128,7 +130,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                   }))} 
                   className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 font-bold"
                 >
-                  + 新增回程
+                  {L('+ 新增回程 (+ Add Departure)')}
                 </button>
               </div>
               <div className="space-y-2">
@@ -157,8 +159,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                           newDep[idx].location = e.target.value; 
                           setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newDep } })); 
                         }} 
-                        className="w-full bg-transparent text-sm outline-none" 
-                        placeholder="回程地點" 
+                        className="w-full bg-transparent text-sm outline-none"
+                        placeholder={L('回程地點 (Dropoff Location)')}
                       />
                     </div>
                     <div className="col-span-2 flex items-center bg-white border border-slate-300 rounded px-2">
@@ -170,8 +172,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                           newDep[idx].plate = e.target.value; 
                           setFormData(prev => ({ ...prev, busInfo: { ...prev.busInfo, departures: newDep } })); 
                         }} 
-                        className="w-full bg-transparent text-sm outline-none" 
-                        placeholder="車牌" 
+                        className="w-full bg-transparent text-sm outline-none"
+                        placeholder={L('車牌 (Plate)')}
                       />
                     </div>
                     <div className="col-span-1 flex justify-center items-center">
@@ -193,17 +195,17 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
 
             <div className="flex flex-col md:flex-row gap-6 items-start">
                <div className="flex-1 w-full">
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">接送備註 (Bus/Truck Notes)</label>
-                 <FormTextArea 
-                    name="busNotes" 
-                    rows={3} 
-                    value={formData.busNotes} 
-                    onChange={handleInputChange} 
-                    placeholder="例如: 司機資料、特殊要求、貨車入倉安排..." 
+                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{L('接送備註 (Bus/Truck Notes)')}</label>
+                 <FormTextArea
+                    name="busNotes"
+                    rows={3}
+                    value={formData.busNotes}
+                    onChange={handleInputChange}
+                    placeholder={L('例如: 司機資料、特殊要求、貨車入倉安排... (e.g. Driver details, special requests, truck loading arrangements...)')}
                  />
                </div>
                <div className="w-full md:w-48 pt-6 flex flex-col items-center p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                 <span className="text-[10px] font-bold text-indigo-700 uppercase mb-1">接送總費用</span>
+                 <span className="text-[10px] font-bold text-indigo-700 uppercase mb-1">{L('接送總費用 (Total Transport Fee)')}</span>
                  <div className="flex items-center gap-1">
                    <span className="text-xs text-slate-400 font-bold">$</span>
                    <input 
@@ -215,7 +217,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                     placeholder="0" 
                    />
                  </div>
-                 <p className="text-[9px] text-slate-400 mt-2 text-center">手動填寫總計費用，<br/>會自動計入訂單總額與餘額中。</p>
+                 <p className="text-[9px] text-slate-400 mt-2 text-center">{L('手動填寫總計費用，會自動計入訂單總額與餘額中。 (Enter the total fee manually; it is automatically added to the order total and balance.)')}</p>
                </div>
             </div>
           </div>
@@ -227,8 +229,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><MapPin size={20} /></div>
           <div>
-            <h3 className="font-bold text-slate-800">泊車安排 (Parking)</h3>
-            <p className="text-xs text-slate-500">設置免費泊車與車牌記錄</p>
+            <h3 className="font-bold text-slate-800">{L('泊車安排 (Parking)')}</h3>
+            <p className="text-xs text-slate-500">{L('設置免費泊車與車牌記錄 (Set free parking and plate records)')}</p>
           </div>
         </div>
 
@@ -236,7 +238,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase">泊車券數量</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase">{L('泊車券數量 (Parking Tickets)')}</label>
                 <input 
                   type="number" 
                   value={formData.parkingInfo?.ticketQty || ''} 
@@ -249,7 +251,7 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase">每張時數</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase">{L('每張時數 (Hours per Ticket)')}</label>
                 <input 
                   type="number" 
                   value={formData.parkingInfo?.ticketHours || ''} 
@@ -263,16 +265,16 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
               </div>
             </div>
             <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase">車牌記錄 (License Plates)</label>
-              <textarea 
-                value={formData.parkingInfo?.plates || ''} 
-                onChange={e => setFormData(prev => ({ 
-                  ...prev, 
-                  parkingInfo: { ...(prev.parkingInfo || {}), plates: e.target.value } 
-                }))} 
-                rows={4} 
-                className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none" 
-                placeholder="輸入車牌號碼..." 
+              <label className="block text-xs font-bold text-slate-500 uppercase">{L('車牌記錄 (License Plates)')}</label>
+              <textarea
+                value={formData.parkingInfo?.plates || ''}
+                onChange={e => setFormData(prev => ({
+                  ...prev,
+                  parkingInfo: { ...(prev.parkingInfo || {}), plates: e.target.value }
+                }))}
+                rows={4}
+                className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
+                placeholder={L('輸入車牌號碼... (Enter license plate numbers...)')}
               />
             </div>
           </div>
@@ -280,16 +282,16 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
           <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
              <div className="flex gap-2 text-indigo-700 mb-2">
                <Info size={16} className="mt-0.5" />
-               <span className="text-xs font-bold uppercase tracking-wider">泊車須知 (Notice)</span>
+               <span className="text-xs font-bold uppercase tracking-wider">{L('泊車須知 (Notice)')}</span>
              </div>
              <p className="text-xs text-slate-600 leading-relaxed">
-               1. 泊車券僅限當日於場地停泊時使用。<br/>
-               2. 免費泊車時數若超過，需按時付費。<br/>
-               3. 具體泊車位置與車牌資訊，請依場地同事現場指引為準。
+               {L('1. 泊車券僅限當日於場地停泊時使用。 (1. Parking tickets are valid only for same-day parking at the venue.)')}<br/>
+               {L('2. 免費泊車時數若超過，需按時付費。 (2. Parking beyond the free hours is charged by the hour.)')}<br/>
+               {L('3. 具體泊車位置與車牌資訊，請依場地同事現場指引為準。 (3. Actual parking location and plate details are subject to on-site staff guidance.)')}
              </p>
              <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-500">總計免費小時：</span>
-                <span className="text-sm font-black text-indigo-700">{(formData.parkingInfo?.ticketQty || 0) * (formData.parkingInfo?.ticketHours || 0)} 小時</span>
+                <span className="text-xs font-bold text-slate-500">{L('總計免費小時： (Total Free Hours:)')}</span>
+                <span className="text-sm font-black text-indigo-700">{(formData.parkingInfo?.ticketQty || 0) * (formData.parkingInfo?.ticketHours || 0)} {L('小時 (hrs)')}</span>
              </div>
           </div>
         </div>
@@ -300,13 +302,13 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><PenTool size={20} /></div>
           <div>
-            <h3 className="font-bold text-slate-800">營運備註 (Operational Notes)</h3>
-            <p className="text-xs text-slate-500">活動執行细節與特殊要求提醒</p>
+            <h3 className="font-bold text-slate-800">{L('營運備註 (Operational Notes)')}</h3>
+            <p className="text-xs text-slate-500">{L('活動執行细節與特殊要求提醒 (Event execution details and special-request reminders)')}</p>
           </div>
         </div>
         <div className="space-y-4">
           <FormTextArea
-            label="特殊提醒 (Special Reminders)"
+            label={L('特殊提醒 (Special Reminders)')}
             name="otherNotes"
             rows={5}
             value={formData.otherNotes} onChange={handleInputChange}
@@ -315,8 +317,8 @@ const LogisticsTab = ({ formData, setFormData, handleInputChange, DocumentVisibi
             field="otherNotes" 
             defaultClient={true} 
             defaultInternal={true} 
-            clientDocs="報價單、合約、附加協議"
-            internalDocs="宴會通知單 (EO)"
+            clientDocs={L('報價單、合約、附加協議 (Quotation, Contract, Addendum)')}
+            internalDocs={L('宴會通知單 (EO)')}
           />
         </div>
       </div>

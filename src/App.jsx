@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { isRootDomain } from './core/tenantResolver';
+import { useLang } from './i18n/language';
 
 // Helpers
 import ScrollToTop from './components/ScrollToTop';
@@ -40,11 +41,14 @@ class GlobalErrorBoundary extends React.Component {
 }
 
 // A simple loading spinner to show while the specific route is downloading
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">
-    <Loader2 className="animate-spin mr-2" size={24} /> 載入中 (Loading)...
-  </div>
-);
+const PageLoader = () => {
+  const { L } = useLang();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">
+      <Loader2 className="animate-spin mr-2" size={24} /> {L('載入中 (Loading)')}...
+    </div>
+  );
+};
 
 export default function App() {
   const rootDomain = isRootDomain();

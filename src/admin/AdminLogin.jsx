@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, AlertCircle, Mail, Key } from 'lucide-react';
+import { useLang } from '../i18n/language';
 
 const AdminLogin = ({ onLogin, error, appSettings }) => {
+  const { L } = useLang();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -39,7 +41,7 @@ const AdminLogin = ({ onLogin, error, appSettings }) => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email 或電話 (Email or Phone)</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">{L('Email 或電話 (Email or Phone)')}</label>
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
                 <input
@@ -47,14 +49,14 @@ const AdminLogin = ({ onLogin, error, appSettings }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 outline-none transition-all font-medium"
-                  placeholder="name@company.com 或 91234567"
+                  placeholder={L('name@company.com 或 91234567 (name@company.com or 91234567)')}
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">{L('密碼 (Password)')}</label>
               <div className="relative group">
                 <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
                 <input
@@ -72,17 +74,16 @@ const AdminLogin = ({ onLogin, error, appSettings }) => {
               type="submit" 
               className="w-full bg-indigo-600 hover:opacity-90 text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
             >
-              登入管理系統 (Login)
+              {L('登入管理系統 (Login)')}
             </button>
           </form>
 
           <div className="mt-6 pt-6 border-t border-slate-100 text-center">
             <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
-              第一次使用？請先啟用您的帳戶並設定密碼。
-              <span className="text-slate-300">First time? Activate your account.</span>
+              {L('第一次使用？請先啟用您的帳戶並設定密碼。 (First time? Activate your account and set a password.)')}
             </p>
             <Link to="/activate" className="inline-block text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors">
-              啟用帳戶 (Activate Account) →
+              {L('啟用帳戶 (Activate Account)')} →
             </Link>
           </div>
         </div>

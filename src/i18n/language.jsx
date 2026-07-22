@@ -17,6 +17,9 @@ export function splitBilingual(str, lang) {
   if (!m) return str;
   const base = m[1].trim();
   const paren = m[2].trim();
+  // A parenthetical containing a digit is a measurement/percentage/quantity
+  // ("(10%)", "(1.2m)", "(6ft)"), never a translation — leave the whole string.
+  if (/\d/.test(paren)) return str;
   const han = /[一-鿿]/;
   const latin = /[A-Za-z]/;
   // "中文 (English)"

@@ -17,6 +17,7 @@ import { useEventForm } from '../hooks/useEventForm';
 import { useAI } from '../../../hooks/useAI';
 import { useAuth } from '../../../context/AuthContext';
 import { getScopedSettings } from '../../../services/helpers';
+import { useLang } from '../../../i18n/language';
 
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings, users,
@@ -25,6 +26,7 @@ export default function EventFormModal({
 }) {
   const { hasPermission, userProfile } = useAuth();
   const { generate } = useAI();
+  const { L } = useLang();
 
   // --- RESOLVE SCOPED SETTINGS ---
   const scopedAppSettings = React.useMemo(() => 
@@ -141,7 +143,7 @@ export default function EventFormModal({
         return m;
       })
     }));
-    addToast(`已恢復至快照版本: ${snapshot.name}`, "success");
+    addToast(`${L('已恢復至快照版本: (Restored to snapshot version:)')} ${snapshot.name}`, "success");
     setPreviewVersion(null);
   };
 
@@ -162,10 +164,10 @@ export default function EventFormModal({
 
   const saveMenuSnapshot = (menuId) => {
     const menuToSave = formData.menus?.find(m => m.id === menuId);
-    if (!menuToSave) return addToast("找不到菜單快照來源", "error");
+    if (!menuToSave) return addToast(L('找不到菜單快照來源 (Menu snapshot source not found)'), "error");
 
     const defaultName = `Ver ${(menuToSave.versions?.length || 0) + 1}`;
-    let snapshotName = prompt("請輸入版本名稱 (Enter Version Name):", defaultName);
+    let snapshotName = prompt(L('請輸入版本名稱: (Enter Version Name:)'), defaultName);
     if (snapshotName === null) return;
     if (snapshotName.trim() === "") snapshotName = defaultName;
 
@@ -193,7 +195,7 @@ export default function EventFormModal({
         return m;
       })
     }));
-    addToast(`快照已儲存: ${snapshotName}`, "success");
+    addToast(`${L('快照已儲存: (Snapshot saved:)')} ${snapshotName}`, "success");
   };
 
   const moveMenu = (index, direction) => {
@@ -223,33 +225,34 @@ export default function EventFormModal({
   };
 
   const DocumentVisibilityToggles = ({ field, defaultClient, defaultInternal, clientDocs, internalDocs }) => {
+    const { L } = useLang();
     const clientKey = `${field}ShowClient`;
     const internalKey = `${field}ShowInternal`;
     const showClient = formData[clientKey] !== undefined ? formData[clientKey] : defaultClient;
     const showInternal = formData[internalKey] !== undefined ? formData[internalKey] : defaultInternal;
 
-    const defaultClientDocs = "報價單、合約、發票、收據、附加協議";
-    const defaultInternalDocs = "宴會通知單 (EO)";
+    const defaultClientDocs = L('報價單、合約、發票、收據、附加協議 (Quotation, Contract, Invoice, Receipt, Addendum)');
+    const defaultInternalDocs = L('宴會通知單 (EO)');
 
     const cDocs = clientDocs || defaultClientDocs;
     const iDocs = internalDocs || defaultInternalDocs;
 
     return (
       <div className="flex items-center gap-4 mt-2 mb-3 ml-1">
-        <label 
+        <label
           className="flex items-center text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none group/tooltip"
-          title={`此項目將顯示在以下客戶文件：\n${cDocs}`}
+          title={`${L('此項目將顯示在以下客戶文件： (This item will appear on the following client documents:)')}\n${cDocs}`}
         >
           <input type="checkbox" checked={showClient} onChange={e => setFormData(prev => ({ ...prev, [clientKey]: e.target.checked }))} className="mr-1.5 rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
-          <span>顯示於客戶文件 (Client Docs)</span>
+          <span>{L('顯示於客戶文件 (Client Docs)')}</span>
           <Info size={12} className="ml-1 opacity-40 group-hover/tooltip:opacity-100 transition-opacity" />
         </label>
-        <label 
+        <label
           className="flex items-center text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none group/tooltip"
-          title={`此項目將顯示在以下內部文件：\n${iDocs}`}
+          title={`${L('此項目將顯示在以下內部文件： (This item will appear on the following internal documents:)')}\n${iDocs}`}
         >
           <input type="checkbox" checked={showInternal} onChange={e => setFormData(prev => ({ ...prev, [internalKey]: e.target.checked }))} className="mr-1.5 rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
-          <span>顯示於內部文件 (Internal Docs)</span>
+          <span>{L('顯示於內部文件 (Internal Docs)')}</span>
           <Info size={12} className="ml-1 opacity-40 group-hover/tooltip:opacity-100 transition-opacity" />
         </label>
       </div>
@@ -291,15 +294,15 @@ export default function EventFormModal({
           updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: isMatch ? 'MATCH' : 'MISMATCH' };
           return { ...prev, clientUploadedProofs: updatedProofs };
        });
-       if (isMatch) addToast("AI 驗證成功 (Amount Matches)", "success");
-       else addToast("AI 驗證失敗：金額不符", "error");
+       if (isMatch) addToast(L('AI 驗證成功 (Amount Matches)'), "success");
+       else addToast(L('AI 驗證失敗：金額不符 (Verification Failed: Amount Mismatch)'), "error");
     } catch(e) {
        setFormData(prev => {
           const updatedProofs = [...prev.clientUploadedProofs];
           updatedProofs[proofIdx] = { ...updatedProofs[proofIdx], ocrResult: 'ERROR' };
           return { ...prev, clientUploadedProofs: updatedProofs };
        });
-       addToast("AI 驗證出錯", "error");
+       addToast(L('AI 驗證出錯 (Verification Error)'), "error");
     } finally {
        setVerifyingProofIdx(null);
     }
@@ -320,9 +323,9 @@ export default function EventFormModal({
       if (editingEvent) {
         await onSaveSignature(docType, base64, 'admin');
       }
-      addToast("管理員已簽署 (Document Signed)", "success");
+      addToast(L('管理員已簽署 (Document Signed)'), "success");
     } catch (e) {
-      addToast("簽署儲存失敗 (Signature Failed)", "error");
+      addToast(L('簽署儲存失敗 (Signature Failed)'), "error");
       throw e;
     }
   };
@@ -332,7 +335,7 @@ export default function EventFormModal({
   const canManageEvent = isAdmin || !hasPermission('manage_own_only') || isOwner;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editingEvent ? (canManageEvent ? "修改活動訂單" : "檢視活動詳情 (唯讀)") : "新增活動訂單"}>
+    <Modal isOpen={isOpen} onClose={onClose} title={editingEvent ? (canManageEvent ? L('修改活動訂單 (Edit Event Order)') : L('檢視活動詳情 - 唯讀 (View Event Details - Read Only)')) : L('新增活動訂單 (New Event Order)')}>
       <form 
         onSubmit={onSubmit} 
         className="flex flex-col h-full min-h-[60vh]"
@@ -341,13 +344,13 @@ export default function EventFormModal({
         {/* Tabs */}
         <div className="flex border-b border-slate-200 bg-white sticky top-0 z-[60] overflow-x-auto no-scrollbar shadow-sm">
           {[
-            { id: 'basic', label: '基本資料', icon: FileText, permission: 'tab_basic' },
-            { id: 'fnb', label: '餐飲與酒水', icon: Utensils, permission: 'tab_fnb' },
-            { id: 'billing', label: '帳務與支付', icon: CreditCard, permission: 'tab_billing' },
-            { id: 'venue', label: '場地佈置', icon: Monitor, permission: 'tab_venue' },
-            { id: 'logistics', label: '接送安排', icon: Truck, permission: 'tab_logistics' },
-            { id: 'remarks', label: '內部備註', icon: PenTool, permission: 'tab_remarks' },
-            { id: 'printConfig', label: '列印設定', icon: Printer, permission: 'tab_print' },
+            { id: 'basic', label: L('基本資料 (Basics)'), icon: FileText, permission: 'tab_basic' },
+            { id: 'fnb', label: L('餐飲與酒水 (F&B)'), icon: Utensils, permission: 'tab_fnb' },
+            { id: 'billing', label: L('帳務與支付 (Billing)'), icon: CreditCard, permission: 'tab_billing' },
+            { id: 'venue', label: L('場地佈置 (Venue)'), icon: Monitor, permission: 'tab_venue' },
+            { id: 'logistics', label: L('接送安排 (Logistics)'), icon: Truck, permission: 'tab_logistics' },
+            { id: 'remarks', label: L('內部備註 (Remarks)'), icon: PenTool, permission: 'tab_remarks' },
+            { id: 'printConfig', label: L('列印設定 (Print Settings)'), icon: Printer, permission: 'tab_print' },
           ].filter(t => hasPermission(t.permission)).map(tab => (
             <button
               key={tab.id}
@@ -467,7 +470,7 @@ export default function EventFormModal({
             {hasPermission('ai_assistant') && (
               <button type="button" onClick={onOpenAi} className="group relative px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm">
                 <Sparkles size={16} className="text-yellow-200" />
-                <span>AI 活動助理</span>
+                <span>{L('AI 活動助理 (AI Assistant)')}</span>
               </button>
             )}
 
@@ -481,13 +484,13 @@ export default function EventFormModal({
                   className={`px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${showDocManager ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
                 >
                   <FileText size={16} />
-                  <span>管理文件</span>
+                  <span>{L('管理文件 (Manage Documents)')}</span>
                   <ChevronUp size={14} className={`transition-transform duration-200 ${showDocManager ? 'rotate-180' : ''}`} />
                 </button>
                 {showDocManager && (
                   <div className="absolute bottom-full left-0 mb-2 w-[24rem] bg-white border border-slate-200 shadow-2xl rounded-xl py-0 z-50 animate-in fade-in slide-in-from-bottom-2 overflow-hidden">
                     <div className="px-4 py-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">文件管理面板 (Documents)</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{L('文件管理面板 (Documents)')}</span>
                     </div>
                     <div className="max-h-[60vh] overflow-y-auto">
                       <DocumentManager 
@@ -507,9 +510,9 @@ export default function EventFormModal({
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition-colors">關閉</button>
+            <button type="button" onClick={onClose} className="px-5 py-2.5 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition-colors">{L('關閉 (Close)')}</button>
             {hasPermission('tab_save') && canManageEvent && (
-              <button type="submit" className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg transition-colors">儲存活動</button>
+              <button type="submit" className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg transition-colors">{L('儲存活動 (Save Event)')}</button>
             )}
           </div>
         </div>

@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Clock } from 'lucide-react';
+import { useLang } from '../../i18n/language';
 
-export const TimeInput = ({ 
-  label, 
-  name, 
-  value, 
-  onChange, 
-  className = "", 
-  inputClassName = "", 
+export const TimeInput = ({
+  label,
+  name,
+  value,
+  onChange,
+  className = "",
+  inputClassName = "",
   labelClassName = "",
-  required 
+  required
 }) => {
+  const { L } = useLang();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -62,7 +64,7 @@ export const TimeInput = ({
         {isOpen && (
           <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 shadow-2xl rounded-xl z-[100] max-h-80 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1">
             <div className="p-3 border-b border-slate-100 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-2 px-1">快速選擇 (Quick Select)</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-2 px-1">{L('快速選擇 (Quick Select)')}</span>
               <div className="grid grid-cols-4 gap-1.5">
                 {commonTimes.map(t => (
                   <button

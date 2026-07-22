@@ -5,8 +5,10 @@ import {
 } from 'lucide-react';
 import { Card } from '../../components/ui';
 import { PERMISSION_CATEGORIES as CATEGORIES, DEFAULT_ROLE_PERMISSIONS } from '../../core/constants';
+import { useLang } from '../../i18n/language';
 
 const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) => {
+  const { L } = useLang();
   const initialPermissions = (settings.rolePermissions && Object.keys(settings.rolePermissions).length > 0) 
     ? settings.rolePermissions 
     : DEFAULT_ROLE_PERMISSIONS;
@@ -46,12 +48,12 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
       setLocalSettings(updatedSettings);
     }
     setHasUnsavedChanges(false);
-    addToast("權限設定已成功儲存 (Permissions Saved)", "success");
+    addToast(L("權限設定已成功儲存 (Permissions Saved)"), "success");
   };
 
   const handleAddRole = () => {
-    if (!newRoleId || !newRoleName) return addToast("請輸入角色代碼及名稱", "error");
-    if (rolePermissions[newRoleId]) return addToast("角色代碼已存在", "error");
+    if (!newRoleId || !newRoleName) return addToast(L("請輸入角色代碼及名稱 (Enter role ID and name)"), "error");
+    if (rolePermissions[newRoleId]) return addToast(L("角色代碼已存在 (Role ID already exists)"), "error");
 
     const updated = {
       ...rolePermissions,
@@ -66,19 +68,19 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
     setHasUnsavedChanges(true);
     setNewRoleId('');
     setNewRoleName('');
-    addToast("角色已新增，請記得儲存變更", "info");
+    addToast(L("角色已新增，請記得儲存變更 (Role added, remember to save)"), "info");
   };
 
   const handleDeleteRole = (roleId) => {
     if (rolePermissions[roleId].isFixed) return;
-    if (!window.confirm(`確定要刪除角色「${rolePermissions[roleId].label}」嗎？`)) return;
+    if (!window.confirm(`${L('確定要刪除角色 (Delete this role)')}「${rolePermissions[roleId].label}」？`)) return;
 
     const updated = { ...rolePermissions };
     delete updated[roleId];
     
     setRolePermissions(updated);
     setHasUnsavedChanges(true);
-    addToast("角色已移除，請記得儲存變更", "info");
+    addToast(L("角色已移除，請記得儲存變更 (Role removed, remember to save)"), "info");
   };
 
   return (
@@ -88,9 +90,9 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
         <div>
           <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
             <Shield className="text-indigo-600" size={24} />
-            權限矩陣管理 (RBAC Matrix)
+            {L('權限矩陣管理 (RBAC Matrix)')}
           </h2>
-          <p className="text-sm text-slate-500 font-medium">定義不同角色的系統操作與資料存取權限</p>
+          <p className="text-sm text-slate-500 font-medium">{L('定義不同角色的系統操作與資料存取權限 (Define each role\'s system actions and data access)')}</p>
         </div>
         
         {hasUnsavedChanges && (
@@ -99,7 +101,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
             className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all animate-bounce-subtle"
           >
             <Save size={18} />
-            儲存變更 (Save Changes)
+            {L('儲存變更 (Save Changes)')}
           </button>
         )}
       </div>
@@ -113,7 +115,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                 <thead>
                   <tr className="bg-slate-900 text-white">
                     <th className="p-5 text-[10px] font-black uppercase tracking-widest w-1/2 border-r border-slate-800 sticky left-0 z-20 bg-slate-900">
-                      系統功能權限矩陣
+                      {L('系統功能權限矩陣 (Feature Permission Matrix)')}
                     </th>
                     {roles.map(role => (
                       <th 
@@ -130,7 +132,7 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                               onClick={() => handleDeleteRole(role)}
                               className="text-[9px] text-rose-400 hover:text-rose-200 transition-colors uppercase font-bold tracking-tighter"
                             >
-                              [ 刪除 ]
+                              {L('[ 刪除 ] ([ Delete ])')}
                             </button>
                           )}
                         </div>
@@ -204,8 +206,8 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
                 <AlertCircle size={20} />
              </div>
              <div>
-                <p className="text-xs font-black text-slate-700">尚未儲存變更？</p>
-                <p className="text-[10px] text-slate-500 font-medium">所有的權限更動在點擊右上方「儲存變更」按鈕前都不會生效。</p>
+                <p className="text-xs font-black text-slate-700">{L('尚未儲存變更？ (Unsaved changes?)')}</p>
+                <p className="text-[10px] text-slate-500 font-medium">{L('所有的權限更動在點擊右上方「儲存變更」按鈕前都不會生效。 (Permission changes take effect only after you click Save Changes above.)')}</p>
              </div>
           </div>
         </div>
@@ -216,47 +218,47 @@ const RolePermissionsTab = ({ settings, onSave, setLocalSettings, addToast }) =>
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
               <UserPlus size={20} />
             </div>
-            <h3 className="font-black text-slate-800">新增角色 (New Role)</h3>
+            <h3 className="font-black text-slate-800">{L('新增角色 (New Role)')}</h3>
           </div>
           
           <div className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">角色名稱 (Label)</label>
-              <input 
-                type="text" 
-                value={newRoleName} 
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{L('角色名稱 (Label)')}</label>
+              <input
+                type="text"
+                value={newRoleName}
                 onChange={e => setNewRoleName(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all text-sm font-bold"
-                placeholder="例如: 高級銷售 (Senior Sales)"
+                placeholder={L('例如: 高級銷售 (e.g. Senior Sales)')}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">角色代碼 (Unique ID)</label>
-              <input 
-                type="text" 
-                value={newRoleId} 
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{L('角色代碼 (Unique ID)')}</label>
+              <input
+                type="text"
+                value={newRoleId}
                 onChange={e => setNewRoleId(e.target.value.toLowerCase().replace(/\s/g, ''))}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all text-sm font-mono font-bold"
-                placeholder="例如: senior_sales"
+                placeholder={L('例如 (e.g.)') + ': senior_sales'}
               />
             </div>
             <button 
               onClick={handleAddRole}
               className="w-full py-3 bg-slate-900 text-white rounded-xl font-black hover:bg-indigo-600 transition-all shadow-md active:scale-[0.98]"
             >
-              建立新角色
+              {L('建立新角色 (Create Role)')}
             </button>
           </div>
 
           <div className="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
             <div className="flex gap-2 text-amber-800 mb-1">
               <Info size={16} className="shrink-0 mt-0.5" />
-              <span className="text-xs font-black">使用提示 (Tips)</span>
+              <span className="text-xs font-black">{L('使用提示 (Tips)')}</span>
             </div>
             <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
-              • Admin 及 Super Admin 權限是固定的，不可修改。<br/>
-              • 變更權限後，相關人員需重新整理頁面生效。<br/>
-              • 「存取限制」可限制員工僅能看到自己負責的訂單。
+              {L('• Admin 及 Super Admin 權限是固定的，不可修改。 (Admin and Super Admin permissions are fixed and cannot be changed.)')}<br/>
+              {L('• 變更權限後，相關人員需重新整理頁面生效。 (After changing permissions, affected users must refresh the page.)')}<br/>
+              {L('• 「存取限制」可限制員工僅能看到自己負責的訂單。 (Access Restriction limits staff to only the orders they own.)')}
             </p>
           </div>
         </Card>

@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { X, Send, Bot, Loader2, Sparkles, BarChart3 } from 'lucide-react';
 import { useAI } from '../hooks/useAI';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../i18n/language';
 
 // Escape HTML first (so model output like <img onerror=…> becomes inert text),
 // then apply simple **bold**, then sanitize as defense-in-depth.
@@ -15,11 +16,12 @@ function formatAiMessage(text) {
 
 export default function AnalysisAssistant({ events, onClose }) {
   const { appSettings } = useAuth();
+  const { L } = useLang();
   const venueProfile = appSettings?.venueProfile || {};
   const { generate, loading } = useAI();
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
-    { role: 'ai', text: `你好！我是 ${venueProfile.nameZh || 'VowsOS'} 的 AI 數據分析助理。你可以問我關於整個資料庫的任何問題！` }
+    { role: 'ai', text: `${L('你好！我是 (Hello! I am)')} ${venueProfile.nameZh || 'VowsOS'} ${L('的 AI 數據分析助理。你可以問我關於整個資料庫的任何問題！ (AI data analysis assistant. Ask me anything about the entire database!)')}` }
   ]);
   const chatEndRef = useRef(null);
 
@@ -59,7 +61,7 @@ const handleDataChat = async () => {
     if (response) {
       setChatHistory(prev => [...prev, { role: 'ai', text: response }]);
     } else {
-      setChatHistory(prev => [...prev, { role: 'ai', text: '抱歉，分析數據時發生錯誤。請再試一次。' }]);
+      setChatHistory(prev => [...prev, { role: 'ai', text: L('抱歉，分析數據時發生錯誤。請再試一次。 (Sorry, an error occurred while analyzing the data. Please try again.)') }]);
     }
   };
 
@@ -74,7 +76,7 @@ const handleDataChat = async () => {
               <BarChart3 size={20} className="text-white"/>
             </div>
             <div>
-              <h3 className="font-bold text-lg">AI 數據分析助理 (Database Query)</h3>
+              <h3 className="font-bold text-lg">{L('AI 數據分析助理 (Database Query)')}</h3>
               <p className="text-[10px] text-emerald-300 font-mono flex items-center gap-1">
                 <Sparkles size={10}/> DeepSeek V3 Core • {events?.length || 0} Records Loaded
               </p>
@@ -94,7 +96,7 @@ const handleDataChat = async () => {
                   ? 'bg-emerald-600 text-white rounded-br-none' 
                   : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
               }`}>
-                {msg.role === 'ai' && <div className="flex items-center gap-2 mb-2 border-b border-slate-100 pb-1 text-xs font-bold text-emerald-600"><Bot size={14}/> 數據助理</div>}
+                {msg.role === 'ai' && <div className="flex items-center gap-2 mb-2 border-b border-slate-100 pb-1 text-xs font-bold text-emerald-600"><Bot size={14}/> {L('數據助理 (Data Assistant)')}</div>}
                 
                 {/* Safe markdown parsing for simple bolding */}
                 <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: formatAiMessage(msg.text) }} />
@@ -104,7 +106,7 @@ const handleDataChat = async () => {
           {loading && (
             <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2">
               <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-none px-5 py-3 shadow-sm flex items-center gap-2 text-emerald-600 text-sm font-bold">
-                <Loader2 size={16} className="animate-spin"/> 正在運算與分析數據庫...
+                <Loader2 size={16} className="animate-spin"/> {L('正在運算與分析數據庫... (Computing and analyzing the database...)')}
               </div>
             </div>
           )}
@@ -118,7 +120,7 @@ const handleDataChat = async () => {
                 type="text" 
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                placeholder="問我關於營業額、預訂情況的問題... (e.g. 幫我總結今年第四季的婚宴數量與預計收入)"
+                placeholder={L('問我關於營業額、預訂情況的問題... (Ask me about revenue or booking status...)')}
                 className="w-full bg-transparent pl-5 pr-12 py-3.5 text-sm outline-none text-slate-700 font-medium"
                 onKeyDown={(e) => {
                   if(e.key === 'Enter' && chatInput) handleDataChat();
@@ -133,7 +135,7 @@ const handleDataChat = async () => {
               </button>
            </div>
            <div className="text-center mt-2 text-[10px] text-slate-400">
-              AI 根據目前已同步的訂單數據進行計算，結果僅供參考。
+              {L('AI 根據目前已同步的訂單數據進行計算，結果僅供參考。 (AI calculates based on currently synced order data; results are for reference only.)')}
            </div>
         </div>
 

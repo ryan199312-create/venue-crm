@@ -3,9 +3,11 @@ import { BarChart3, AlertTriangle, Bell, CheckCircle, DollarSign, TrendingUp, Ca
 import { formatMoney } from '../services/billingService';
 import { Card, Badge } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../i18n/language';
 
 const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
   const { selectedVenueId, outlets, hasPermission, userProfile } = useAuth();
+  const { L } = useLang();
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // --- FILTERED EVENTS (Venue + Ownership) ---
@@ -100,9 +102,9 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
         }
       };
 
-      check(e.deposit1, e.deposit1Received, e.deposit1Date, '付款 1');
-      check(e.deposit2, e.deposit2Received, e.deposit2Date, '付款 2');
-      check(e.deposit3, e.deposit3Received, e.deposit3Date, '付款 3');
+      check(e.deposit1, e.deposit1Received, e.deposit1Date, L('付款 1 (Payment 1)'));
+      check(e.deposit2, e.deposit2Received, e.deposit2Date, L('付款 2 (Payment 2)'));
+      check(e.deposit3, e.deposit3Received, e.deposit3Date, L('付款 3 (Payment 3)'));
 
       // Balance check
       let balanceDate = e.date;
@@ -113,11 +115,11 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
       }
       const balanceVal = Number(e.totalAmount) - Number(e.deposit1 || 0) - Number(e.deposit2 || 0) - Number(e.deposit3 || 0);
       if (balanceVal > 0 && !e.balanceReceived && balanceDate < todayStr) {
-        list.push({ id: e.id, name: e.eventName, type: '尾數 (Balance)', date: balanceDate, amount: balanceVal, venueId: e.venueId });
+        list.push({ id: e.id, name: e.eventName, type: L('尾數 (Balance)'), date: balanceDate, amount: balanceVal, venueId: e.venueId });
       }
     });
     return list;
-  }, [filteredEvents]);
+  }, [filteredEvents, L]);
 
   // --- UPCOMING PAYMENTS (14 DAYS) ---
   const upcomingPayments = useMemo(() => {
@@ -138,9 +140,9 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
         }
       };
 
-      check(e.deposit1, e.deposit1Received, e.deposit1Date, '付款 1');
-      check(e.deposit2, e.deposit2Received, e.deposit2Date, '付款 2');
-      check(e.deposit3, e.deposit3Received, e.deposit3Date, '付款 3');
+      check(e.deposit1, e.deposit1Received, e.deposit1Date, L('付款 1 (Payment 1)'));
+      check(e.deposit2, e.deposit2Received, e.deposit2Date, L('付款 2 (Payment 2)'));
+      check(e.deposit3, e.deposit3Received, e.deposit3Date, L('付款 3 (Payment 3)'));
 
       // Balance check
       let balanceDate = e.date;
@@ -153,12 +155,12 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
       if (balanceVal > 0 && !e.balanceReceived) {
         const checkDate = balanceDate || e.date;
         if (checkDate >= todayStr && checkDate <= next14DaysStr) {
-          list.push({ id: e.id, name: e.eventName, type: '尾數 (Balance)', date: checkDate, amount: balanceVal, venueId: e.venueId });
+          list.push({ id: e.id, name: e.eventName, type: L('尾數 (Balance)'), date: checkDate, amount: balanceVal, venueId: e.venueId });
         }
       }
     });
     return list.sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [filteredEvents]);
+  }, [filteredEvents, L]);
 
   // --- UPCOMING EVENTS ---
   const upcomingEvents = useMemo(() => {
@@ -204,10 +206,10 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-            {selectedVenueId === 'all' ? '集團概覽 (HQ Overview)' : '分店儀表板 (Outlet Dashboard)'}
+            {selectedVenueId === 'all' ? L('集團概覽 (HQ Overview)') : L('分店儀表板 (Outlet Dashboard)')}
           </h2>
           <p className="text-sm text-slate-500 font-medium mt-1">
-            {selectedVenueId === 'all' ? '所有分店的彙總數據' : `當前分店: ${outlets.find(o => o.id === selectedVenueId)?.name}`}
+            {selectedVenueId === 'all' ? L('所有分店的彙總數據 (Aggregated data across all branches)') : `${L('當前分店 (Current Branch)')}: ${outlets.find(o => o.id === selectedVenueId)?.name}`}
           </p>
         </div>
         <button
@@ -215,7 +217,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
           className="group relative px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm"
         >
           <BarChart3 size={18} className="text-emerald-100 group-hover:-translate-y-0.5 transition-transform" />
-          <span>AI 數據分析 (Ask DB)</span>
+          <span>{L('AI 數據分析 (Ask DB)')}</span>
         </button>
       </div>
 
@@ -224,17 +226,17 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
         <Card className="overflow-hidden border-t-4 border-t-indigo-500">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <h3 className="font-bold text-slate-800 flex items-center">
-              <Building2 size={18} className="mr-2 text-indigo-500" /> 分店業績排行 (Outlet Performance)
+              <Building2 size={18} className="mr-2 text-indigo-500" /> {L('分店業績排行 (Outlet Performance)')}
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
-                  <th className="px-4 py-3">分店 (Outlet)</th>
-                  <th className="px-4 py-3 text-right">本月營收</th>
-                  <th className="px-4 py-3 text-right">年度營收</th>
-                  <th className="px-4 py-3 text-right">訂單總數</th>
+                  <th className="px-4 py-3">{L('分店 (Outlet)')}</th>
+                  <th className="px-4 py-3 text-right">{L('本月營收 (Monthly Revenue)')}</th>
+                  <th className="px-4 py-3 text-right">{L('年度營收 (Annual Revenue)')}</th>
+                  <th className="px-4 py-3 text-right">{L('訂單總數 (Total Orders)')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -259,7 +261,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
         {overduePayments.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
             <h3 className="text-red-800 font-bold flex items-center mb-3">
-              <AlertTriangle size={20} className="mr-2" /> 逾期款項 (Overdue)
+              <AlertTriangle size={20} className="mr-2" /> {L('逾期款項 (Overdue)')}
             </h3>
             <div className="space-y-2">
               {overduePayments.map((item, idx) => (
@@ -268,7 +270,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
                     <div className="font-bold text-slate-800 text-sm">{item.name}</div>
                     <div className="text-xs text-red-600 font-medium">
                       {selectedVenueId === 'all' && <span className="text-slate-400 mr-1">[{outlets.find(o => o.id === item.venueId)?.name}]</span>}
-                      {item.type} • 應付: {item.date}
+                      {item.type} • {L('應付 (Due)')}: {item.date}
                     </div>
                   </div>
                   <div className="text-red-700 font-bold font-mono">${formatMoney(item.amount)}</div>
@@ -281,13 +283,13 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
         <Card className={`border-t-4 border-t-amber-400 ${overduePayments.length === 0 ? 'lg:col-span-2' : ''}`}>
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <h3 className="font-bold text-slate-800 flex items-center">
-              <Bell size={18} className="mr-2 text-amber-500" /> 即將到期款項 (14 Days)
+              <Bell size={18} className="mr-2 text-amber-500" /> {L('即將到期款項 (14 Days)')}
             </h3>
-            <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-bold">{upcomingPayments.length} 筆</span>
+            <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-bold">{upcomingPayments.length} {L('筆 (items)')}</span>
           </div>
           <div className="p-4 space-y-2 max-h-[300px] overflow-y-auto">
             {upcomingPayments.length === 0 ? (
-              <div className="text-center text-slate-400 py-4 text-sm">未來 14 天無到期款項</div>
+              <div className="text-center text-slate-400 py-4 text-sm">{L('未來 14 天無到期款項 (No payments due in the next 14 days)')}</div>
             ) : (
               upcomingPayments.map((item, idx) => (
                 <div key={idx} className="flex justify-between items-center p-3 bg-transparent hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all cursor-pointer" onClick={() => openEditModal(events.find(e => e.id === item.id))}>
@@ -295,7 +297,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
                     <div className="font-bold text-slate-700 text-sm">{item.name}</div>
                     <div className="text-xs text-slate-500">
                       {selectedVenueId === 'all' && <span className="text-slate-400 mr-1">[{outlets.find(o => o.id === item.venueId)?.name}]</span>}
-                      {item.type} • 到期: <span className="text-amber-600 font-bold">{item.date}</span>
+                      {item.type} • {L('到期 (Due)')}: <span className="text-amber-600 font-bold">{item.date}</span>
                     </div>
                   </div>
                   <div className="font-mono font-bold text-slate-700">${formatMoney(item.amount)}</div>
@@ -311,21 +313,21 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
         <Card className="p-5 flex items-center space-x-4 border-l-4 border-l-indigo-600">
           <div className="p-3 bg-indigo-50 rounded-full text-indigo-600"><CheckCircle size={24} /></div>
           <div>
-            <p className="text-sm text-slate-500 font-bold">已確認單 (Confirmed)</p>
+            <p className="text-sm text-slate-500 font-bold">{L('已確認單 (Confirmed)')}</p>
             <h3 className="text-2xl font-black text-slate-800">{stats.confirmedCount}</h3>
           </div>
         </Card>
         <Card className="p-5 flex items-center space-x-4 border-l-4 border-l-emerald-500">
           <div className="p-3 bg-emerald-50 rounded-full text-emerald-600"><DollarSign size={24} /></div>
           <div>
-            <p className="text-sm text-slate-500 font-bold">本月營收 (Monthly)</p>
+            <p className="text-sm text-slate-500 font-bold">{L('本月營收 (Monthly)')}</p>
             <h3 className="text-2xl font-black text-slate-800">${formatMoney(stats.monthRevenue)}</h3>
           </div>
         </Card>
         <Card className="p-5 flex items-center space-x-4 border-l-4 border-l-violet-500">
           <div className="p-3 bg-violet-50 rounded-full text-violet-600"><TrendingUp size={24} /></div>
           <div>
-            <p className="text-sm text-slate-500 font-bold">年度營業額 (Annual)</p>
+            <p className="text-sm text-slate-500 font-bold">{L('年度營業額 (Annual)')}</p>
             <h3 className="text-2xl font-black text-slate-800">${formatMoney(stats.annualRevenue)}</h3>
           </div>
         </Card>
@@ -338,12 +340,12 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
           <Card className="border-t-4 border-t-indigo-500">
             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <h3 className="font-bold text-slate-800 flex items-center">
-                <CalendarIcon size={18} className="mr-2 text-indigo-500" /> 近期活動 (Upcoming)
+                <CalendarIcon size={18} className="mr-2 text-indigo-500" /> {L('近期活動 (Upcoming)')}
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
               {upcomingEvents.length === 0 ? (
-                <div className="text-center text-slate-400 py-8 text-sm">暫無近期活動</div>
+                <div className="text-center text-slate-400 py-8 text-sm">{L('暫無近期活動 (No upcoming events)')}</div>
               ) : (
                 upcomingEvents.map(event => (
                   <div key={event.id} className="p-4 bg-white hover:bg-slate-50 flex items-center space-x-4 cursor-pointer transition-all" onClick={() => openEditModal(event)}>
@@ -357,7 +359,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
                         <Clock size={12} className="mr-1" /> {event.startTime} - {event.endTime}
                         <span className="mx-2 text-slate-300">|</span>
                         <MapPin size={12} className="mr-1" /> 
-                        {selectedVenueId === 'all' ? (outlets.find(o => o.id === event.venueId)?.name || '未定') : (event.venueLocation || '未定')}
+                        {selectedVenueId === 'all' ? (outlets.find(o => o.id === event.venueId)?.name || L('未定 (TBD)')) : (event.venueLocation || L('未定 (TBD)'))}
                       </div>
                     </div>
                     <Badge status={event.status} />
@@ -404,7 +406,7 @@ const AdminDashboard = ({ events, openEditModal, setIsDataAiOpen }) => {
             </div>
             <div className="flex-1 border-t border-slate-100 bg-slate-50/30 overflow-hidden flex flex-col min-h-[300px]">
               <div className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 flex justify-between items-center">
-                <span>本月活動 ({currentMonthEvents.length})</span>
+                <span>{L('本月活動 (This Month)')} ({currentMonthEvents.length})</span>
               </div>
               <div className="overflow-y-auto flex-1">
                 {currentMonthEvents.map(event => (

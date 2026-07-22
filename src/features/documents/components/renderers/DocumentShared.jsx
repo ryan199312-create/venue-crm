@@ -376,7 +376,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
       </thead>
       <tbody className="divide-y divide-slate-100">
         {billing.parsedMenus.map((m, i) => (
-          <tr key={`m-${i}`} className="bg-white break-inside-avoid">
+          <tr key={`m-${i}`} className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
               <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">
@@ -389,7 +389,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         ))}
         {billing.plating && (
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900">{t.platingFee}</p>
             </td>
@@ -399,7 +399,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         )}
         {billing.drinks && (
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{t.beveragePackage}</p>
               <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">{billing.drinks.label}</p>
@@ -410,7 +410,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         )}
         {billing.setupPackagePrice > 0 && (
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{t.setupPackage}</p>
               <p className="text-xs text-slate-700 leading-snug">{setupStr}</p>
@@ -421,7 +421,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         )}
         {billing.avPackagePrice > 0 && (
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{t.avPackage}</p>
               <p className="text-xs text-slate-700 leading-snug">{avStr}</p>
@@ -432,7 +432,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         )}
         {billing.decorPackagePrice > 0 && (
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{t.decorPackage}</p>
               <p className="text-xs text-slate-700 leading-snug">{decorStr}</p>
@@ -443,7 +443,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         )}
         {billing.bus && (
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{t.busArrangement}</p>
               <p className="text-[10px] text-slate-500 whitespace-pre-wrap leading-snug">
@@ -459,7 +459,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           </tr>
         )}
         {billing.parsedCustomItems.map((item, i) => (
-          <tr key={`c-${i}`} className="bg-white break-inside-avoid">
+          <tr key={`c-${i}`} className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900">{item.name}</p>
             </td>
@@ -538,7 +538,7 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
               <td className="py-1 px-4 text-right font-mono font-medium">${formatMoney(p.amount)}</td>
             </tr>
           ))}
-          <tr className="bg-white break-inside-avoid">
+          <tr className="bg-white">
             <td colSpan="3" className="py-2 px-4 text-right font-bold text-slate-500 uppercase">{t.totalPaid}</td>
             <td className="py-2 px-4 text-right font-mono font-bold text-emerald-600">${formatMoney(billing.totalPaid)}</td>
           </tr>

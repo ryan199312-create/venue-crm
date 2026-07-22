@@ -18,7 +18,7 @@ import { FloorplanAppendix } from './FloorplanRenderer';
 
 export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, false) : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, false, appSettings) : { setupStr: '', avStr: '', decorStr: '' };
 
   const COPIES = [
     { name: '行政存檔 (Manager Copy)', type: 'STD', showBilling: false, showOps: true, showAllocation: false, color: 'bg-[var(--brand-primary)]' },

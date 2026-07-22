@@ -1,11 +1,8 @@
 import React from 'react';
-import {
-  Monitor, Layout, Users, Mic2, Coffee, Info, Type, Cake, Tv, Video,
-  Maximize, Smartphone, Sun, RotateCw, Zap, Mic, Palette, Image as ImageIcon,
-  Star, Flower2, FileText, PenTool, Wind, Frame, Columns, Grid, Mail, Armchair, X, MapPin
-} from 'lucide-react';
+import { Monitor, Layout, Users, Info, Tv, Palette, Image as ImageIcon, X, MapPin } from 'lucide-react';
 import { FormSelect, FormCheckbox } from '../../components/ui';
 import { DECOR_COLORS } from '../../services/billingService';
+import { getItemOptions } from '../../core/constants';
 import FloorplanEditor from '../../components/FloorplanEditor';
 import { useLang } from '../../i18n/language';
 
@@ -14,6 +11,40 @@ const VenueTab = ({
   appSettings, events, onMultiImageUpload, DocumentVisibilityToggles
 }) => {
   const { L } = useLang();
+  const itemOptions = getItemOptions(appSettings);
+
+  // Render one configurable option: checkbox + optional note / quantity input.
+  // `bucket` is the event-data object the option's key lives in ('equipment' or 'decoration').
+  const renderOption = (o, bucket) => {
+    const checked = !!formData[bucket]?.[o.key];
+    const toggle = (v) => setFormData(prev => ({ ...prev, [bucket]: { ...(prev[bucket] || {}), [o.key]: v } }));
+    return (
+      <div key={o.key} className="flex items-center gap-2">
+        <FormCheckbox label={L(o.label)} name={`${bucket}.${o.key}`} checked={checked} onChange={(e) => toggle(e.target.checked)} />
+        {o.noteField && checked && (
+          <input
+            className="flex-1 min-w-0 text-[10px] border rounded px-2 py-1 bg-white outline-none focus:border-indigo-400 transition-all"
+            placeholder={L(o.notePlaceholder || '') + '...'}
+            value={formData[o.noteField] || ''}
+            onChange={(e) => setFormData(prev => ({ ...prev, [o.noteField]: e.target.value }))}
+          />
+        )}
+        {o.qtyField && checked && (
+          <div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
+            <input
+              type="number"
+              className="w-10 text-xs bg-transparent text-slate-700 font-bold outline-none text-center"
+              placeholder="0"
+              value={formData[o.qtyField] || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, [o.qtyField]: e.target.value }))}
+            />
+            <span className="text-[9px] text-slate-400 font-bold ml-1">{L(o.qtyUnit || '')}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
@@ -112,43 +143,20 @@ const VenueTab = ({
           <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-widest border-b border-indigo-200 pb-1 mb-2 flex items-center gap-1"><Users size={14} /> {L('舞台與接待設備 (Stage & Reception)')}</h4>
             <div className="grid grid-cols-1 gap-2">
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14} /></div><FormCheckbox label={L('禮堂舞台 7.2x2.5m (Stage)')} name="equipment.stage" checked={formData.equipment?.stage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, stage: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Mic2 size={14} /></div><FormCheckbox label={L('講台 (Podium)')} name="equipment.podium" checked={formData.equipment?.podium} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, podium: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Coffee size={14} /></div><FormCheckbox label={L('接待桌 180x60cm (Reception Table)')} name="equipment.receptionTable" checked={formData.equipment?.receptionTable} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, receptionTable: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Info size={14} /></div><FormCheckbox label={L('標示牌 x2 (Signage x2)')} name="equipment.signage" checked={formData.equipment?.signage} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, signage: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Type size={14} /></div><FormCheckbox label={L('禮堂字牌 (Name Sign)')} name="equipment.nameSign" checked={formData.equipment?.nameSign} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, nameSign: e.target.checked } }))} />{formData.equipment?.nameSign && (<input className="flex-1 text-[10px] border rounded px-2 py-1 bg-white outline-none focus:border-indigo-400 transition-all" placeholder={L('輸入字牌內容 (Enter sign text)') + '...'} value={formData.nameSignText || ''} onChange={(e) => setFormData(prev => ({ ...prev, nameSignText: e.target.value }))} />)}</div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Cake size={14} /></div><FormCheckbox label={L('婚宴蛋糕 (Cake)')} name="equipment.hasCake" checked={formData.equipment?.hasCake} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, hasCake: e.target.checked } }))} />{formData.equipment?.hasCake && (<div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200"><input type="number" className="w-10 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" placeholder="0" value={formData.cakePounds || ''} onChange={(e) => setFormData(prev => ({ ...prev, cakePounds: e.target.value }))} /><span className="text-[9px] text-slate-400 font-bold ml-1">Lbs</span></div>)}</div>
+              {itemOptions.setup.map(o => renderOption(o, 'equipment'))}
             </div>
           </div>
           <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-widest border-b border-indigo-200 pb-1 mb-2 flex items-center gap-1"><Tv size={14} /> {L('影音設備 (AV)')}</h4>
             <div className="grid grid-cols-1 gap-1.5">
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Video size={14} /></div><FormCheckbox label={L('大禮堂投影機 (Grand Hall Projector)')} name="equipment.grandHallProjector" checked={formData.equipment?.grandHallProjector} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, grandHallProjector: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Monitor size={14} /></div><FormCheckbox label={L('小禮堂 LED 顯示屏 (Small Hall LED Screen)')} name="equipment.smallHallLED" checked={formData.equipment?.smallHallLED} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, smallHallLED: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Maximize size={14} /></div><FormCheckbox label={L('LED 顯示屏 W6.4 x H4m (LED Screen)')} name="equipment.ledScreen" checked={formData.equipment?.ledScreen} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, ledScreen: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Smartphone size={14} className="rotate-90" /></div><FormCheckbox label={L('60寸電視-直 (60" TV - Vertical)')} name="equipment.tvVertical" checked={formData.equipment?.tvVertical} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, tvVertical: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Smartphone size={14} /></div><FormCheckbox label={L('60寸電視-橫 (60" TV - Horizontal)')} name="equipment.tvHorizontal" checked={formData.equipment?.tvHorizontal} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, tvHorizontal: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Sun size={14} /></div><FormCheckbox label={L('聚光燈 (Spotlight)')} name="equipment.spotlight" checked={formData.equipment?.spotlight} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, spotlight: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><RotateCw size={14} /></div><FormCheckbox label={L('電腦燈 (Moving Head Light)')} name="equipment.movingHead" checked={formData.equipment?.movingHead} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, movingHead: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Zap size={14} /></div><FormCheckbox label={L('進場燈 (Entrance Light)')} name="equipment.entranceLight" checked={formData.equipment?.entranceLight} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, entranceLight: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Mic size={14} /></div><FormCheckbox label={L('無線手持麥克風 x4 (Wireless Mic x4)')} name="equipment.wirelessMic" checked={formData.equipment?.wirelessMic} onChange={(e) => setFormData(prev => ({ ...prev, equipment: { ...prev.equipment, wirelessMic: e.target.checked } }))} /></div>
+              {itemOptions.av.map(o => renderOption(o, 'equipment'))}
             </div>
             <input type="text" placeholder={L('其他 AV 補充 (Other AV notes)')} className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs mt-2" value={formData.avOther || ''} onChange={e => setFormData(prev => ({ ...prev, avOther: e.target.value }))} />
           </div>
           <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <h4 className="text-xs font-bold text-rose-800 uppercase tracking-widest border-b border-rose-200 pb-1 mb-2 flex items-center gap-1"><Palette size={14} /> {L('場地佈置與細項 (Decoration & Details)')}</h4>
             <div className="grid grid-cols-1 gap-2">
-              <div className="flex items-center gap-2"><div className="text-slate-400"><ImageIcon size={14} /></div><FormCheckbox label={L('舞台背景佈置 (Stage Backdrop)')} name="decoration.backdrop" checked={formData.decoration?.backdrop} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, backdrop: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Star size={14} /></div><FormCheckbox label={L('接待處佈置 (Reception Decoration)')} name="decoration.receptionDecor" checked={formData.decoration?.receptionDecor} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, receptionDecor: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Flower2 size={14} /></div><FormCheckbox label={L('絲花擺設 (Silk Flower Arrangement)')} name="decoration.silkFlower" checked={formData.decoration?.silkFlower} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, silkFlower: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><FileText size={14} /></div><FormCheckbox label={L('證婚桌 (Ceremony Table)')} name="decoration.ceremonyTable" checked={formData.decoration?.ceremonyTable} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, ceremonyTable: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><PenTool size={14} /></div><FormCheckbox label={L('簽名冊 (Guest Signature Book)')} name="decoration.signingBook" checked={formData.decoration?.signingBook} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, signingBook: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Wind size={14} /></div><FormCheckbox label={L('花圈 (Floral Aisle)')} name="decoration.flowerAisle" checked={formData.decoration?.flowerAisle} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, flowerAisle: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2"><div className="text-slate-400"><Frame size={14} /></div><FormCheckbox label={L('畫架 (Easel)')} name="decoration.easel" checked={formData.decoration?.easel} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, easel: e.target.checked } }))} /></div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Columns size={14} /></div><FormCheckbox label={L('花柱佈置 (Flower Pillars)')} name="decoration.hasFlowerPillar" checked={formData.decoration?.hasFlowerPillar} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasFlowerPillar: e.target.checked } }))} />{formData.decoration?.hasFlowerPillar && (<div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200"><input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.flowerPillarQty || ''} onChange={(e) => setFormData(prev => ({ ...prev, flowerPillarQty: e.target.value }))} /><span className="text-[9px] text-slate-400 font-bold ml-1">{L('支 (pcs)')}</span></div>)}</div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Grid size={14} /></div><FormCheckbox label={L('麻雀枱 (Mahjong Tables)')} name="decoration.hasMahjong" checked={formData.decoration?.hasMahjong} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasMahjong: e.target.checked } }))} />{formData.decoration?.hasMahjong && (<div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200"><input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.mahjongTableQty || ''} onChange={(e) => setFormData(prev => ({ ...prev, mahjongTableQty: e.target.value }))} /><span className="text-[9px] text-slate-400 font-bold ml-1">{L('張 (pcs)')}</span></div>)}</div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Mail size={14} /></div><FormCheckbox label={L('喜帖 (Invitations)')} name="decoration.hasInvitation" checked={formData.decoration?.hasInvitation} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasInvitation: e.target.checked } }))} />{formData.decoration?.hasInvitation && (<div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200"><input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.invitationQty || ''} onChange={(e) => setFormData(prev => ({ ...prev, invitationQty: e.target.value }))} /><span className="text-[9px] text-slate-400 font-bold ml-1">{L('套 (sets)')}</span></div>)}</div>
-              <div className="flex items-center gap-2 mt-1"><div className="text-slate-400"><Armchair size={14} /></div><FormCheckbox label={L('證婚椅子 (Chairs)')} name="decoration.hasCeremonyChair" checked={formData.decoration?.hasCeremonyChair} onChange={(e) => setFormData(prev => ({ ...prev, decoration: { ...prev.decoration, hasCeremonyChair: e.target.checked } }))} />{formData.decoration?.hasCeremonyChair && (<div className="flex items-center bg-white px-2 py-0.5 rounded border border-slate-200"><input type="number" className="w-8 text-xs bg-transparent text-slate-700 font-bold outline-none text-center" value={formData.ceremonyChairQty || ''} onChange={(e) => setFormData(prev => ({ ...prev, ceremonyChairQty: e.target.value }))} /><span className="text-[9px] text-slate-400 font-bold ml-1">{L('張 (pcs)')}</span></div>)}</div>
+              {itemOptions.decor.map(o => renderOption(o, 'decoration'))}
             </div>
           </div>
         </div>

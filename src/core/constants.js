@@ -57,6 +57,58 @@ export const decorationMap = {
 };
 
 // ==========================================
+// CONFIGURABLE SETUP / AV / DECORATION OPTIONS
+// ==========================================
+// These are the DEFAULT checkbox options shown in the event form's Venue tab and
+// listed on documents. A tenant can override them in Settings (appSettings.itemOptions).
+// group -> bucket in the event data: setup & av write to `equipment`, decor to `decoration`.
+// Optional per-option meta: noteField (free-text input), qtyField + qtyUnit (number input).
+export const DEFAULT_ITEM_OPTIONS = {
+  setup: [
+    { key: 'stage', label: '禮堂舞台 W7.2 x L2.5m (Stage)' },
+    { key: 'podium', label: '講台 (Podium)' },
+    { key: 'receptionTable', label: '接待桌 180x60cm (Reception Table)' },
+    { key: 'signage', label: '標示牌 x2 (Signage x2)' },
+    { key: 'nameSign', label: '禮堂字牌 (Name Sign)', noteField: 'nameSignText', notePlaceholder: '輸入字牌內容 (Enter sign text)' },
+    { key: 'hasCake', label: '婚宴蛋糕 (Cake)', qtyField: 'cakePounds', qtyUnit: 'Lbs' },
+  ],
+  av: [
+    { key: 'grandHallProjector', label: '大禮堂投影機 (Grand Hall Projector)' },
+    { key: 'smallHallLED', label: '小禮堂 LED 顯示屏 (Small Hall LED Screen)' },
+    { key: 'ledScreen', label: 'LED 顯示屏 W6.4 x H4m (LED Screen)' },
+    { key: 'tvVertical', label: '60寸電視-直 (60" TV - Vertical)' },
+    { key: 'tvHorizontal', label: '60寸電視-橫 (60" TV - Horizontal)' },
+    { key: 'spotlight', label: '聚光燈 (Spotlight)' },
+    { key: 'movingHead', label: '電腦燈 (Moving Head Light)' },
+    { key: 'entranceLight', label: '進場燈 (Entrance Light)' },
+    { key: 'wirelessMic', label: '無線手持麥克風 x4 (Wireless Mic x4)' },
+  ],
+  decor: [
+    { key: 'backdrop', label: '舞台背景佈置 (Stage Backdrop)' },
+    { key: 'receptionDecor', label: '接待處佈置 (Reception Decoration)' },
+    { key: 'silkFlower', label: '絲花擺設 (Silk Flower Arrangement)' },
+    { key: 'ceremonyTable', label: '證婚桌 (Ceremony Table)' },
+    { key: 'signingBook', label: '簽名冊 (Guest Signature Book)' },
+    { key: 'flowerAisle', label: '花圈 (Floral Aisle)' },
+    { key: 'easel', label: '畫架 (Easel)' },
+    { key: 'hasFlowerPillar', label: '花柱佈置 (Flower Pillars)', qtyField: 'flowerPillarQty', qtyUnit: '支 (pcs)' },
+    { key: 'hasMahjong', label: '麻雀枱 (Mahjong Tables)', qtyField: 'mahjongTableQty', qtyUnit: '張 (pcs)' },
+    { key: 'hasInvitation', label: '喜帖 (Invitations)', qtyField: 'invitationQty', qtyUnit: '套 (sets)' },
+    { key: 'hasCeremonyChair', label: '證婚椅子 (Chairs)', qtyField: 'ceremonyChairQty', qtyUnit: '張 (pcs)' },
+  ],
+};
+
+// Merge a tenant's saved itemOptions over the defaults, per group.
+export const getItemOptions = (scopedSettings) => {
+  const cfg = scopedSettings?.itemOptions || {};
+  return {
+    setup: Array.isArray(cfg.setup) ? cfg.setup : DEFAULT_ITEM_OPTIONS.setup,
+    av: Array.isArray(cfg.av) ? cfg.av : DEFAULT_ITEM_OPTIONS.av,
+    decor: Array.isArray(cfg.decor) ? cfg.decor : DEFAULT_ITEM_OPTIONS.decor,
+  };
+};
+
+// ==========================================
 // RBAC CONFIGURATION
 // ==========================================
 // RBAC CONFIGURATION

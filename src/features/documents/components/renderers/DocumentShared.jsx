@@ -1,12 +1,10 @@
 import React from 'react';
 import {
   formatMoney,
-  equipmentMap,
-  avMap,
-  decorationMap,
   generateBillingSummary,
   DEPARTMENTS
 } from '../../../../services/billingService';
+import { getItemOptions } from '../../../../core/constants';
 import { getDocStyle, getDocTokens, brandBg } from '../../docStyles';
 import { docT, formatDocDate } from '../../docStrings';
 
@@ -112,26 +110,17 @@ export const getIssueDate = (data) => {
   return new Date();
 };
 
-export const getPackageStrings = (data, isEn = false) => {
-  const setupStrArr = Object.entries(data.equipment || {}).filter(([k, v]) => v === true && equipmentMap?.[k]).map(([k]) => {
-    const fullStr = equipmentMap[k];
-    const match = fullStr.match(/\((.*?)\)/);
-    return isEn && match ? match[1] : fullStr.split(' (')[0];
-  });
+export const getPackageStrings = (data, isEn = false, appSettings = null) => {
+  const opts = getItemOptions(appSettings);
+  const pick = (o) => { const m = o.label.match(/\((.*?)\)/); return isEn && m ? m[1] : o.label.split(' (')[0]; };
+
+  const setupStrArr = (opts.setup || []).filter(o => data.equipment?.[o.key] === true).map(pick);
   if (data.equipment?.nameSign && data.nameSignText) setupStrArr.push(isEn ? `Name Sign: ${data.nameSignText}` : `字牌: ${data.nameSignText}`);
   if (data.equipment?.hasCake && data.cakePounds) setupStrArr.push(isEn ? `Wedding Cake: ${data.cakePounds} Lbs` : `蛋糕: ${data.cakePounds}磅`);
 
-  const avStr = Object.entries(data.equipment || {}).filter(([k, v]) => v === true && avMap?.[k]).map(([k]) => {
-    const fullStr = avMap[k];
-    const match = fullStr.match(/\((.*?)\)/);
-    return isEn && match ? match[1] : fullStr.split(' (')[0];
-  }).join(', ');
+  const avStr = (opts.av || []).filter(o => data.equipment?.[o.key] === true).map(pick).join(', ');
 
-  const decorStrArr = Object.entries(data.decoration || {}).filter(([k, v]) => v === true && decorationMap?.[k]).map(([k]) => {
-    const fullStr = decorationMap[k];
-    const match = fullStr.match(/\((.*?)\)/);
-    return isEn && match ? match[1] : fullStr.split(' (')[0];
-  });
+  const decorStrArr = (opts.decor || []).filter(o => data.decoration?.[o.key] === true).map(pick);
   if (data.decoration?.hasFlowerPillar && data.flowerPillarQty) decorStrArr.push(isEn ? `Floral Pillars: ${data.flowerPillarQty}` : `花柱: ${data.flowerPillarQty}支`);
   if (data.decoration?.hasMahjong && data.mahjongTableQty) decorStrArr.push(isEn ? `Mahjong: ${data.mahjongTableQty} sets` : `麻雀: ${data.mahjongTableQty}張`);
   if (data.decoration?.hasInvitation && data.invitationQty) decorStrArr.push(isEn ? `Invitations: ${data.invitationQty}套` : `喜帖: ${data.invitationQty}套`);

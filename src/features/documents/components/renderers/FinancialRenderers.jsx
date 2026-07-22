@@ -128,21 +128,21 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
 
 export const QuotationRenderer = ({ data, appSettings, onSign, lang = 'en' }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh') : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh', appSettings) : { setupStr: '', avStr: '', decorStr: '' };
   if (!data) return null;
   return <InvoiceReceiptLayout data={data} typeEn="Quotation" typeZh="報價單" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="QUOTATION" appSettings={appSettings} lang={lang} />;
 };
 
 export const InvoiceRenderer = ({ data, appSettings, onSign, lang = 'en' }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh') : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh', appSettings) : { setupStr: '', avStr: '', decorStr: '' };
   if (!data) return null;
   return <InvoiceReceiptLayout data={data} typeEn="Invoice" typeZh="發票" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="INVOICE" appSettings={appSettings} lang={lang} />;
 };
 
 export const ReceiptRenderer = ({ data, appSettings, onSign, lang = 'en' }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh') : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, lang !== 'zh', appSettings) : { setupStr: '', avStr: '', decorStr: '' };
   if (!data) return null;
   return <InvoiceReceiptLayout data={data} typeEn="Receipt" typeZh="收據" billing={billing} setupStr={setupStr} avStr={avStr} decorStr={decorStr} onSign={onSign} printMode="RECEIPT" appSettings={appSettings} lang={lang} />;
 };

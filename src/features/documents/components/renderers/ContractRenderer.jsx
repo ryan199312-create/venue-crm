@@ -19,7 +19,7 @@ import { docT } from '../../docStrings';
 
 export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn = false }) => {
   const billing = useMemo(() => data ? generateBillingSummary(data, appSettings) : {}, [data, appSettings]);
-  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, !isCn) : { setupStr: '', avStr: '', decorStr: '' };
+  const { setupStr, avStr, decorStr } = data ? getPackageStrings(data, !isCn, appSettings) : { setupStr: '', avStr: '', decorStr: '' };
   const printMode = isCn ? 'CONTRACT_CN' : 'CONTRACT';
   const lang = isCn ? 'zh' : 'en';
   const t = docT(lang);

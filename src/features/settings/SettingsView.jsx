@@ -7,6 +7,8 @@ import { Card, FormInput, MoneyInput, FormTextArea, FormSelect, ConfirmationModa
 import RolePermissionsTab from './RolePermissionsTab';
 import UsersTab from './UsersTab';
 import BrandingTab from './BrandingTab';
+import ItemOptionsTab from './ItemOptionsTab';
+import { getItemOptions } from '../../core/constants';
 import FloorplanEditor from '../../components/FloorplanEditor';
 import { ContractRenderer } from '../documents/components/renderers/ContractRenderer';
 import DocumentRouter from '../documents/components/DocumentRouter';
@@ -56,7 +58,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   useEffect(() => {
     setLocalSettings(getInitialSettings());
     // Auto-switch tab if incompatible with new view
-    if (selectedVenueId === 'all' && ['minSpend', 'menus', 'payment', 'floorplan', 'venueProfile', 'documents'].includes(activeSubTab)) {
+    if (selectedVenueId === 'all' && ['minSpend', 'menus', 'itemOptions', 'payment', 'floorplan', 'venueProfile', 'documents'].includes(activeSubTab)) {
         setActiveSubTab('outlets');
     } else if (selectedVenueId !== 'all' && ['outlets', 'companyInfo', 'users', 'roles'].includes(activeSubTab)) {
         setActiveSubTab('venueProfile');
@@ -281,6 +283,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
             <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('文件風格 (Doc Style)')}</button>
             <button onClick={() => setActiveSubTab('minSpend')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'minSpend' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('低消規則 (Min. Spend)')}</button>
             <button onClick={() => setActiveSubTab('menus')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'menus' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('菜單預設 (Menu Presets)')}</button>
+            <button onClick={() => setActiveSubTab('itemOptions')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'itemOptions' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('設備選項 (Setup Options)')}</button>
             <button onClick={() => setActiveSubTab('floorplan')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'floorplan' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('平面圖預設 (Floorplan Presets)')}</button>
           </>
         )}
@@ -834,6 +837,14 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
       
       {activeSubTab === 'users' && (
         <UsersTab users={users} pendingUsers={pendingUsers} appSettings={localSettings} updateUserRole={updateUserRole} updateUserProfile={updateUserProfile} deleteUser={deleteUser} createUser={createUser} provisionUser={provisionUser} revokePending={revokePending} addToast={addToast} />
+      )}
+
+      {activeSubTab === 'itemOptions' && (
+        <ItemOptionsTab
+          options={getItemOptions(localSettings)}
+          onSave={(o) => handleSaveScoped({ itemOptions: o })}
+          addToast={addToast}
+        />
       )}
 
       {activeSubTab === 'floorplan' && (

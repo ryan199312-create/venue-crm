@@ -20,7 +20,7 @@ const InvoiceReceiptLayout = ({ data, typeEn, typeZh, billing, setupStr, avStr, 
   const t = docT(lang);
 
   return (
-    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative flex flex-col">
+    <div className="font-sans text-slate-900 w-full max-w-[210mm] print:max-w-none mx-auto bg-white p-[10mm] print:p-0 min-h-0 print:min-h-0 shadow-sm print:shadow-none relative">
       <style>{`
         @media print { 
           body { 

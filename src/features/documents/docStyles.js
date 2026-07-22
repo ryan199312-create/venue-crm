@@ -33,7 +33,7 @@ export const DOC_STYLES = {
     header: 'classic',
     t: {
       table: {
-        wrap: 'mb-8 rounded-xl border border-slate-200 shadow-sm overflow-hidden',
+        wrap: 'mb-8 rounded-xl border border-slate-200 shadow-sm box-decoration-clone',
         thead: 'bg-slate-50 border-b border-slate-200', brandHead: false,
         th: 'py-2 px-4 uppercase tracking-wider text-slate-500 font-bold',
         cell: 'py-3 px-4',
@@ -75,7 +75,7 @@ export const DOC_STYLES = {
     header: 'bold',
     t: {
       table: {
-        wrap: 'mb-8 rounded-2xl overflow-hidden shadow-md border border-slate-100',
+        wrap: 'mb-8 rounded-2xl shadow-md border border-slate-100 box-decoration-clone',
         thead: 'text-white', brandHead: true,
         th: 'py-3 px-4 uppercase tracking-wider font-bold text-[10px] text-white',
         cell: 'py-3 px-4',

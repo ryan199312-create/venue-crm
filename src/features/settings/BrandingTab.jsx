@@ -2,6 +2,7 @@ import React from 'react';
 import { Palette, Image as ImageIcon, Globe, LayoutTemplate } from 'lucide-react';
 import { Card, FormInput } from '../../components/ui';
 import { DOC_STYLES, DOC_STYLE_ORDER } from '../documents/docStyles';
+import { useLang } from '../../i18n/language';
 
 // Preset document design themes — each sets the --brand-primary/secondary/accent colours
 // used across every generated document (contracts, quotations, receipts, EO…).
@@ -17,6 +18,7 @@ const DOC_THEMES = [
 ];
 
 const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, addToast }) => {
+  const { L } = useLang();
   const branding = localSettings?.branding || {
     primaryColor: '#4F46E5',
     secondaryColor: '#1e293b',
@@ -64,7 +66,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
     <div className="space-y-6 animate-in fade-in" style={brandStyles}>
       {/* Design theme presets */}
       <Card className="p-6 border-l-4 border-l-violet-600">
-        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><Palette className="text-violet-600" /> 設計主題 (Design Themes)</h3>
+        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><Palette className="text-violet-600" /> {L('設計主題 (Design Themes)')}</h3>
         <p className="text-[11px] text-slate-400 mb-5">選擇一個主題，即套用到所有單據的配色；之後仍可在下方自訂微調。</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {DOC_THEMES.map(theme => {
@@ -87,7 +89,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
 
       {/* Document design style — typography + header treatment */}
       <Card className="p-6 border-l-4 border-l-slate-700">
-        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><LayoutTemplate className="text-slate-700" /> 文件設計 (Document Design)</h3>
+        <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><LayoutTemplate className="text-slate-700" /> {L('文件設計 (Document Design)')}</h3>
         <p className="text-[11px] text-slate-400 mb-5">整體風格：字體與頁首排版，套用到所有生成的單據。</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {DOC_STYLE_ORDER.map(id => {
@@ -142,12 +144,12 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
         {/* Colors Selection */}
         <Card className="p-6 border-l-4 border-l-indigo-600">
           <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <Palette className="text-indigo-600" /> 自訂顏色 (Custom Colors)
+            <Palette className="text-indigo-600" /> {L('自訂顏色 (Custom Colors)')}
           </h3>
           
           <div className="space-y-6">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Primary Color (主要顏色)</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{L('Primary Color (主要顏色)')}</label>
               <div className="flex gap-3 items-center">
                 <input 
                   type="color" 
@@ -165,7 +167,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Secondary Color (次要顏色)</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{L('Secondary Color (次要顏色)')}</label>
               <div className="flex gap-3 items-center">
                 <input 
                   type="color" 
@@ -183,7 +185,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Accent Color (點綴色)</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{L('Accent Color (點綴色)')}</label>
               <div className="flex gap-3 items-center">
                 <input 
                   type="color" 
@@ -206,19 +208,19 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
         <div className="space-y-6">
           <Card className="p-6 border-l-4 border-l-indigo-500">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <ImageIcon className="text-indigo-500" /> 門戶資源 (Portal Assets)
+              <ImageIcon className="text-indigo-500" /> {L('門戶資源 (Portal Assets)')}
             </h3>
-            
+
             <div className="space-y-4">
-              <FormInput 
-                label="瀏覽器標題 (Portal Browser Title)" 
+              <FormInput
+                label={L('瀏覽器標題 (Portal Browser Title)')}
                 placeholder="例如: 璟瓏軒客戶專區" 
                 value={branding.portalTitle || ''} 
                 onChange={(e) => handleColorChange('portalTitle', e.target.value)}
               />
               
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Favicon (網站圖標)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{L('Favicon (網站圖標)')}</label>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center bg-slate-50">
                     {branding.faviconUrl ? (
@@ -252,7 +254,7 @@ const BrandingTab = ({ localSettings, setLocalSettings, onSave, onUploadProof, a
           onClick={handleSaveBranding}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl font-bold shadow-xl transition-all active:scale-95"
         >
-          儲存文件風格 (Save Doc Style)
+          {L('儲存文件風格 (Save Doc Style)')}
         </button>
       </div>
     </div>

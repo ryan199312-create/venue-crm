@@ -44,6 +44,25 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
     venueId: selectedVenueId,
     venueLocation: previewLang === 'zh' ? '全場' : 'Whole Venue',
     eventType: '婚宴 (Wedding Banquet)',
+    eventName: previewLang === 'zh' ? '陳氏婚宴 (Chan Wedding)' : 'Chan Wedding (陳氏婚宴)',
+    tableCount: 20,
+    guestCount: 200,
+    menus: [{
+      id: 'preview-menu',
+      title: previewLang === 'zh' ? '主菜單 (Main Menu)' : 'Wedding Menu (主菜單)',
+      content: [
+        '乳豬全體 (Whole Roasted Suckling Pig)',
+        '鴻運燒味拼盤 (Assorted BBQ Platter)',
+        '蟹皇燴魚翅 (Braised Fish Maw with Crab Roe)',
+        '清蒸海上鮮 (Steamed Fresh Fish)',
+        '當紅炸子雞 (Crispy Fried Chicken)',
+        '翡翠帶子甫 (Sautéed Scallops with Greens)',
+        '發財好市 (Braised Oysters with Sea Moss)',
+        '蓮子紅豆沙 (Red Bean Sweet Soup)',
+        '美點雙輝 (Chinese Petit Fours)',
+      ].join('\n'),
+      price: '', priceType: 'perTable', qty: 1
+    }],
     items: [],
     signatures: {}
   };
@@ -459,6 +478,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
                     { id: 'CONTRACT', label: '合約' },
                     { id: 'INVOICE', label: '發票' },
                     { id: 'RECEIPT', label: '收據' },
+                    { id: 'MENU_CONFIRM', label: '菜譜確認' },
                     { id: 'EO', label: '宴會通知單 (EO)' },
                     { id: 'ADDENDUM', label: '附加協議' },
                     { id: 'INTERNAL_NOTES', label: '內部備註' },

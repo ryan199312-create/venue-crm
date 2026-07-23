@@ -83,9 +83,19 @@ service cloud.firestore {
         allow read: if true;
       }
 
-      // Tenant-private data — now bound to the caller's tenant.
-      // Writes carrying an `outlets` array are additionally capped by the tenant's
-      // license (super_admin is exempt so the master admin can never be blocked).
+      // Event orders — any authenticated tenant member may create/edit them, so every
+      // RBAC role (staff, sales, finance, coordinator, kitchen…) can save its work.
+      // The rules enforce tenant isolation + suspension; the fine-grained "who can do
+      // what" is enforced in the app. Events never carry an `outlets` array, so the
+      // branch cap doesn't apply here.
+      match /private/data/events/{document=**} {
+        allow read: if belongsTo(appId);
+        allow write: if belongsTo(appId) && (isSuperAdmin() || !tenantSuspended(appId));
+      }
+
+      // Tenant-private data — now bound to the caller's tenant. Everything OTHER than
+      // events (settings/config, users, …) is admin-only. Writes carrying an `outlets`
+      // array are additionally capped by the tenant's license (super_admin exempt).
       // pending_users is excluded here — it is provisioned/activated only via Cloud
       // Functions so the maxUsers license can't be bypassed by direct client writes.
       match /private/data/{collection}/{document=**} {

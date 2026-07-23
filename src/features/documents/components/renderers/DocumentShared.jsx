@@ -384,9 +384,13 @@ export const ItemTable = ({ billing, setupStr, avStr, decorStr, lang = 'en', sho
           <tr key={`m-${i}`} className="bg-white">
             <td className="py-3 px-4 align-top">
               <p className="font-bold text-slate-900 mb-0.5">{m.title}</p>
-              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-snug">
-                {m.content}
-              </p>
+              {/* Each menu line is its own block that won't split across a page, so a dish
+                  moves whole to the next page instead of a line being clipped at the break. */}
+              <div className="text-xs text-slate-700 leading-snug">
+                {(m.content || '').split('\n').map((line, li) => (
+                  <div key={li} className="whitespace-pre-wrap break-inside-avoid">{line || ' '}</div>
+                ))}
+              </div>
             </td>
             <td className="py-3 px-4 text-right align-top font-mono text-slate-600">${formatMoney(m.cleanPrice)}</td>
             <td className="py-3 px-4 text-center align-top text-slate-600">{m.cleanQty}</td>

@@ -77,6 +77,7 @@ export default function AdminLayout() {
   const [isPreparingPrint, setIsPreparingPrint] = useState(false);
   const [printData, setPrintData] = useState(null);
   const [printMode, setPrintMode] = useState('EO');
+  const [printLang, setPrintLang] = useState('en');
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isDataAiOpen, setIsDataAiOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
@@ -213,11 +214,12 @@ export default function AdminLayout() {
     } catch (error) { addToast(`${L('產生失敗 (Generation failed)')}: ${error.message}`, "error"); }
   };
 
-  const triggerPrint = async (m) => {
+  const triggerPrint = async (m, lang = 'en') => {
     addToast(L("正在優化列印性能 (Optimizing Performance)") + "...", "info");
     setIsPreparingPrint(true);
     setPrintData(formData);
     setPrintMode(m);
+    setPrintLang(lang);
     
     try {
       // 1. Wait for React to render (Reduced from 800ms to 400ms for speed)
@@ -559,7 +561,7 @@ export default function AdminLayout() {
         {isDataAiOpen && <AnalysisAssistant events={events} onClose={() => setIsDataAiOpen(false)} />}
         {printData && (
           <div className="print-container absolute -left-[10000px] -top-[10000px] -z-50 print:static print:left-auto print:top-auto print:z-auto">
-            <DocumentRouter data={printData} printMode={printMode} appSettings={getScopedSettings(appSettings, printData.venueId)} />
+            <DocumentRouter data={printData} printMode={printMode} lang={printLang} appSettings={getScopedSettings(appSettings, printData.venueId)} />
           </div>
         )}
       </React.Suspense>

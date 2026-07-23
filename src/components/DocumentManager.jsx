@@ -314,7 +314,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
 
                         <button 
                           type="button" 
-                          onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc); closePreview(); }} 
+                          onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc, effectiveLang); closePreview(); }}
                           className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                         >
                           <Printer size={14} className="mr-1.5" />

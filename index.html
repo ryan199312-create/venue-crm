@@ -5,6 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>venue-crm</title>
+    <!-- Warm the caches the native-print pipeline uses (Paged.js polyfill + Noto Sans TC),
+         so the print iframe loads them instantly instead of fetching on every print. -->
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="script" crossorigin href="https://unpkg.com/pagedjs/dist/paged.polyfill.js" />
   </head>
   <body>
     <div id="root"></div>

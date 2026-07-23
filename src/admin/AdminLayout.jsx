@@ -222,8 +222,9 @@ export default function AdminLayout() {
     setPrintLang(lang);
     
     try {
-      // 1. Wait for React to render (Reduced from 800ms to 400ms for speed)
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // 1. Wait for React to render the hidden .print-container (a document renders in
+      //    well under this; kept small for speed).
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       // 2. Setup Iframe
       let iframe = document.getElementById('print-iframe');
@@ -369,22 +370,21 @@ export default function AdminLayout() {
                   });
 
                   Promise.all(imagePromises).then(() => {
-                    // Optimized print trigger
-                    requestAnimationFrame(() => {
-                      setTimeout(() => {
-                        window.print();
-                        window.parent.postMessage('print_done', '*');
-                      }, 250);
+                    // Wait for fonts (so Chinese renders) then print — no fixed buffer.
+                    const go = () => requestAnimationFrame(() => {
+                      window.print();
+                      window.parent.postMessage('print_done', '*');
                     });
+                    (document.fonts && document.fonts.ready ? document.fonts.ready.then(go) : go());
                   });
                 }
               };
               
-              // Emergency Timeout for slow networks
+              // Fallback: if Paged.js never fires its after() hook, print anyway.
               setTimeout(() => {
                 window.print();
                 window.parent.postMessage('print_done', '*');
-              }, 6000);
+              }, 3500);
             </script>
           </body>
         </html>

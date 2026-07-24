@@ -27,6 +27,30 @@ const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
 const adminPhone = defineSecret("ADMIN_PHONE");
 const deepseekKey = defineSecret("DEEPSEEK_KEY");
 
+// --- Rate limiting for public (phone-auth) client-portal endpoints ---
+// Tracks FAILED attempts per key in /rate_limits (Admin SDK only; clients can't touch it).
+// Legitimate clients with the correct phone are never counted, so this throttles only
+// brute-force. Set a Firestore TTL policy on rate_limits.expiresAt to auto-clean.
+const RL_MAX = 12, RL_WINDOW_MS = 15 * 60 * 1000;
+const rlKey = (...parts) => parts.join(':').replace(/[^a-zA-Z0-9_:-]/g, '_').slice(0, 250);
+async function assertNotRateLimited(db, key) {
+  const snap = await db.collection('rate_limits').doc(key).get();
+  const d = snap.exists ? snap.data() : null;
+  if (d && Date.now() - (d.windowStart || 0) < RL_WINDOW_MS && (d.count || 0) >= RL_MAX) {
+    throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again in a few minutes.');
+  }
+}
+async function recordFailedAttempt(db, key) {
+  const ref = db.collection('rate_limits').doc(key);
+  const now = Date.now();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const d = snap.exists ? snap.data() : null;
+    if (d && now - (d.windowStart || 0) < RL_WINDOW_MS) tx.update(ref, { count: (d.count || 0) + 1 });
+    else tx.set(ref, { count: 1, windowStart: now, expiresAt: new Date(now + RL_WINDOW_MS) });
+  });
+}
+
 const APP_ID = "my-venue-crm"; 
 
 // Global cache for Puppeteer
@@ -100,7 +124,11 @@ exports.sendSleekFlow = onCall({ secrets: [sleekflowKey] }, async (request) => {
     const API_KEY = sleekflowKey.value();
     try {
       if (pdfUrl) {
-        const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+        // SSRF guard: only fetch from Firebase Storage (never arbitrary/internal URLs).
+        if (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(String(pdfUrl))) {
+          throw new HttpsError('invalid-argument', 'pdfUrl must be a Firebase Storage URL.');
+        }
+        const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024, maxRedirects: 0 });
         const form = new FormData();
         form.append("channel", "whatsappcloudapi");
         form.append("to", to);
@@ -113,7 +141,7 @@ exports.sendSleekFlow = onCall({ secrets: [sleekflowKey] }, async (request) => {
         await axios.post("https://api.sleekflow.io/api/message/send/json", payload, { headers: { "Content-Type": "application/json", "X-Sleekflow-Api-Key": API_KEY } });
       }
       return { success: true };
-    } catch (error) { throw new HttpsError("internal", error.message); }
+    } catch (error) { if (error instanceof HttpsError) throw error; throw new HttpsError("internal", error.message); }
 });
 
 exports.ping = onCall(() => ({ message: "Pong!" }));
@@ -344,6 +372,8 @@ exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
   const db = admin.firestore();
   try {
     const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
+    const rk = rlKey('client', appId, eventId || cleanInputPhone);
+    await assertNotRateLimited(db, rk);
     let matchedEvents = [];
     const eventsRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events');
     if (eventId) {
@@ -353,12 +383,12 @@ exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
       const cleanSnap = await eventsRef.where('clientPhoneClean', '==', cleanInputPhone).get();
       cleanSnap.forEach(doc => matchedEvents.push({ id: doc.id, ...doc.data() }));
     }
-    if (matchedEvents.length === 0) throw new HttpsError('not-found', 'No events found.');
+    if (matchedEvents.length === 0) { await recordFailedAttempt(db, rk); throw new HttpsError('not-found', 'No events found.'); }
     const sanitizedEvents = matchedEvents.map(e => ({ ...e, totalAmount: parseFloat(e.totalAmount) || 0 }));
     sanitizedEvents.sort((a, b) => new Date(b.date) - new Date(a.date));
     const settingsDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('settings').doc('config').get();
     return { events: JSON.parse(JSON.stringify(sanitizedEvents)), appSettings: settingsDoc.exists ? JSON.parse(JSON.stringify(settingsDoc.data())) : null };
-  } catch (error) { throw new HttpsError('internal', error.message); }
+  } catch (error) { if (error instanceof HttpsError) throw error; throw new HttpsError('internal', error.message); }
 });
 
 // Detect a file's real MIME from its magic bytes (never trust the filename extension).
@@ -378,10 +408,12 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
   try {
     if (!eventId || !fileName || !fileBase64) throw new HttpsError('invalid-argument', 'Missing required fields.');
     const safeEventId = String(eventId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const rk = rlKey('client', appId, safeEventId);
+    await assertNotRateLimited(db, rk);
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(safeEventId);
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-    if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+    if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
 
     const buffer = Buffer.from(fileBase64, 'base64');
     if (buffer.length === 0) throw new HttpsError('invalid-argument', 'Empty file.');
@@ -413,10 +445,12 @@ exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
     const { eventId, phone, signatureBase64, docType, appId: requestAppId } = request.data;
     const appId = requestAppId || APP_ID;
     const db = admin.firestore();
+    const rk = rlKey('client', appId, eventId);
+    await assertNotRateLimited(db, rk);
     const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-    if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+    if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
     const updateData = {};
     if (docType) { updateData[`signatures.${docType}.client`] = signatureBase64; updateData[`signatures.${docType}.clientDate`] = new Date().toISOString(); }
     else { updateData.clientSignature = signatureBase64; updateData.clientSignatureDate = new Date().toISOString(); }
@@ -428,10 +462,12 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   const { eventId, phone, rundown, appId: requestAppId } = request.data;
   const db = admin.firestore();
   const appId = requestAppId || APP_ID;
+  const rk = rlKey('client', appId, eventId);
+  await assertNotRateLimited(db, rk);
   const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
   const docSnap = await eventRef.get();
   if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
   await eventRef.update({ rundown });
   return { success: true };
 });
@@ -440,10 +476,12 @@ exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], i
   const { eventId, phone, specialMenuReq, allergies, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();
+  const rk = rlKey('client', appId, eventId);
+  await assertNotRateLimited(db, rk);
   const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
   const docSnap = await eventRef.get();
   if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) throw new HttpsError('permission-denied', 'Invalid phone.');
+  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
   await eventRef.update({ specialMenuReq: specialMenuReq || '', allergies: allergies || '' });
   return { success: true };
 });

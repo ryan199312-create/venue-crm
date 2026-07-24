@@ -42,7 +42,7 @@ const handleDataChat = async () => {
     const dbSummary = events || [];
 
     // 3. AI Prompts
-    const systemPrompt = `You are a Senior Business Intelligence Data Analyst for {venueProfile.nameEn || 'Venue Management'} ({venueProfile.nameZh || 'VowsOS'}).
+    const systemPrompt = `You are a Senior Business Intelligence Data Analyst for ${venueProfile.nameEn || venueProfile.nameZh || 'Venue Management'} (${venueProfile.nameZh || 'VowsOS'}).
     I am providing you with a JSON array containing our COMPLETE, raw event database. It includes every single detail, timestamp, URL, and configuration.
     Analyze this deep data and answer the user's question accurately in Traditional Chinese (Cantonese context).
     You can cross-reference everything.

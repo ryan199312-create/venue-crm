@@ -9,7 +9,7 @@ import { useLang } from '../i18n/language';
 export default function AiAssistant({ formData, setFormData, onClose }) {
   const { appSettings } = useAuth();
   const { L } = useLang();
-  const venueProfile = appSettings?.venueProfile || {};
+  const venueProfile = appSettings?.venueProfiles?.[formData?.venueId] || appSettings?.venueProfile || {};
   const { generate, loading: aiLoading } = useAI();
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -57,7 +57,7 @@ export default function AiAssistant({ formData, setFormData, onClose }) {
       - Contact: ${formData.clientPhone || "No Phone"} | Email: ${formData.clientEmail || "No Email"}
       - Date: ${formData.date}
       - Time: ${formData.startTime} to ${formData.endTime} (Serving Time: ${formData.servingTime || "TBC"})
-      - Venue: ${formData.venueLocation || "{venueProfile.nameEn || 'Venue Management'}"}
+      - Venue: ${formData.venueLocation || venueProfile.nameEn || venueProfile.nameZh || 'the venue'}
       - Attendance: ${formData.tableCount || 0} Tables / ${formData.guestCount || 0} Pax
 
       === FINANCIALS (HKD) ===
@@ -118,10 +118,13 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
     else if (tone === 'apologetic') toneInstruction = "Maintain a deeply apologetic, empathetic, and humble tone.";
     else if (tone === 'urgent') toneInstruction = "Maintain an urgent, clear, and firm tone while remaining polite.";
 
-    const venueIdentity = `You represent {venueProfile.nameEn || 'Venue Management'} ({venueProfile.nameZh || 'VowsOS'}). 
-    Your official contact phone number is 2788 3939. 
-    Your official address is 尖沙咀西九文化區博物館道8號香港故宮文化博物館4樓 (4/F, Hong Kong Palace Museum, 8 Museum Drive, West Kowloon). 
-    ALWAYS use 2788 3939 if you ask the client to call or contact you. NEVER use the client's phone number as the venue's contact number.`;
+    const vNameEn = venueProfile.nameEn || appSettings?.venueName || 'the venue';
+    const vNameZh = venueProfile.nameZh || vNameEn;
+    const vPhone = venueProfile.phone || '';
+    const vAddr = venueProfile.address || '';
+    const venueIdentity = `You represent ${vNameEn} (${vNameZh}).`
+      + (vPhone ? ` Your official contact phone number is ${vPhone}. ALWAYS use ${vPhone} if you ask the client to call or contact you. NEVER use the client's own phone number as the venue's contact number.` : ` NEVER use the client's own phone number as the venue's contact number.`)
+      + (vAddr ? ` Your official address is ${vAddr}.` : '');
 
     if (channel === 'EMAIL') {
       // 🚨 Added: "Write in natural paragraphs. DO NOT just copy and paste the bullet points."
@@ -159,7 +162,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
           
           setFormData(prev => ({ 
             ...prev, 
-            emailSubject: json.subject || "{venueProfile.nameZh || 'VowsOS'} 活動通知", 
+            emailSubject: json.subject || `${venueProfile.nameZh || venueProfile.nameEn || 'VowsOS'} 活動通知`,
             emailBody: json.body || cleanText 
           }));
         } catch (e) {

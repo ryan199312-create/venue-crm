@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 export const useFileUpload = () => {
-  const { user } = useAuth();
+  const { user, appId } = useAuth();
   const { addToast } = useToast();
 
   const uploadFile = async (file, path = 'receipts') => {
     if (!user) throw new Error("Not logged in");
-    const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
+    // Tenant-scope the object path so Storage rules can isolate one tenant's
+    // uploads from another's (defence-in-depth; download URLs are token-gated too).
+    const storageRef = ref(storage, `${path}/${appId}/${Date.now()}_${file.name}`);
     await uploadBytes(storageRef, file);
     return await getDownloadURL(storageRef);
   };
@@ -22,7 +24,7 @@ export const useFileUpload = () => {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+      const storageRef = ref(storage, `images/${appId}/${Date.now()}_${file.name}`);
       try {
         await uploadBytes(storageRef, file);
         const url = await getDownloadURL(storageRef);

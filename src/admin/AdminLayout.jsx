@@ -542,11 +542,11 @@ export default function AdminLayout() {
           editingEvent={editingEvent} formData={formData} setFormData={setFormData} 
           appSettings={appSettings} users={users} events={events}
           onSubmit={handleSaveEvent} onSaveSignature={handleSaveSignature}
-          onUploadProof={async (f) => { const sRef = ref(storage, `receipts/${Date.now()}_${f.name}`); await uploadBytes(sRef, f); return await getDownloadURL(sRef); }}
+          onUploadProof={async (f) => { const sRef = ref(storage, `receipts/${appId}/${Date.now()}_${f.name}`); await uploadBytes(sRef, f); return await getDownloadURL(sRef); }}
           onMultiImageUpload={async (files, fieldName) => {
             const newUrls = [];
             for (let i = 0; i < files.length; i++) {
-              const storageRef = ref(storage, `images/${Date.now()}_${files[i].name}`);
+              const storageRef = ref(storage, `images/${appId}/${Date.now()}_${files[i].name}`);
               await uploadBytes(storageRef, files[i]);
               const url = await getDownloadURL(storageRef);
               newUrls.push(url);

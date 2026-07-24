@@ -2,43 +2,64 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isStaff() {
       return isAuthenticated() && (request.auth.token.role == 'staff' || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin');
     }
 
-    // Generated PDFs
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'super_admin';
+    }
+
+    // Same-tenant staff (or the super admin) for the tenant segment in the object path.
+    // Every client-side upload now writes to `{prefix}/{tenantId}/...`, so this binds a
+    // caller to their own tenant's objects. (Backfill 2026-07 stamped every user's
+    // tenantId claim; the app force-refreshes the token on load, so sessions self-heal.)
+    function boundTo(tenantId) {
+      return isSuperAdmin() || (isStaff() && request.auth.token.tenantId == tenantId);
+    }
+
+    // Generated PDFs — public read via unguessable download token (served by Cloud
+    // Functions); staff write. Paths are server-generated and non-enumerable.
     match /generated_pdfs/{allPaths=**} {
-      allow read: if true; // Public access via signed tokens (handled by Cloud Functions)
+      allow read: if true;
       allow write: if isStaff();
     }
-    
-    // Client Uploads (Receipts)
-    match /receipts/{allPaths=**} {
-      allow read: if isStaff();
-      // No longer an open door. The Cloud Function (uploadClientPaymentProof) uses the
-      // Admin SDK and bypasses these rules; any direct client write is capped to <10MB
-      // and restricted to image/PDF content types.
+
+    // Client payment receipts — tenant-scoped. Reads limited to the owning tenant's
+    // staff. Writes are capped by size + content type: the client portal actually
+    // uploads via the uploadClientPaymentProof Cloud Function (Admin SDK, bypasses
+    // these rules), so this rule only guards any direct client write.
+    match /receipts/{tenantId}/{allPaths=**} {
+      allow read: if boundTo(tenantId);
       allow write: if request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('^(image/(jpeg|png|webp)|application/pdf)$');
     }
 
-    // PDF HTML payloads — scoped to the uploading tenant's own namespace.
-    // enqueuePdfJob reads these via the Admin SDK and enforces the same path allowlist
-    // server-side; this rule stops a tenant from writing into another tenant's dir.
+    // PDF HTML payloads — tenant-scoped. (Migration-grace clause removed now that every
+    // user's tenantId claim is backfilled; enqueuePdfJob re-checks the same allowlist
+    // server-side, so a tenant can't read/write into another tenant's payload dir.)
     match /pdf_payloads/{tenantId}/{allPaths=**} {
-      allow read, write: if isStaff()
-                         && (request.auth.token.tenantId == tenantId
-                             || !('tenantId' in request.auth.token));
+      allow read, write: if isStaff() && request.auth.token.tenantId == tenantId;
     }
 
-    // Default: Staff only
+    // Every other client upload (images, and useFileUpload's generic `uploadFile(path)`)
+    // writes to `{prefix}/{tenantId}/...` — bind those to the owning tenant's staff.
+    match /{prefix}/{tenantId}/{allPaths=**} {
+      allow read: if boundTo(tenantId);
+      allow write: if boundTo(tenantId) && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Catch-all: legacy pre-scoping flat files and anything else. Locked to the super
+    // admin so no tenant can reach another tenant's objects via the SDK. The app never
+    // reads these via the SDK — it renders stored token URLs, which bypass rules — so
+    // tightening this does not affect normal operation.
     match /{allPaths=**} {
-      allow read, write: if isStaff();
+      allow read, write: if isSuperAdmin();
     }
   }
 }

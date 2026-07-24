@@ -427,7 +427,8 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
     }
 
     const safeName = String(fileName).replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-80);
-    const uniqueFileName = `receipts/client_${safeEventId}_${Date.now()}_${safeName}`;
+    const safeAppId = String(appId).replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
+    const uniqueFileName = `receipts/${safeAppId}/client_${safeEventId}_${Date.now()}_${safeName}`;
     const file = bucket.file(uniqueFileName);
     const token = crypto.randomUUID();
     await file.save(buffer, { metadata: { contentType, metadata: { firebaseStorageDownloadTokens: token } } });

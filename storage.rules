@@ -30,13 +30,15 @@ service firebase.storage {
       allow write: if isStaff();
     }
 
-    // Client payment receipts — tenant-scoped. Reads limited to the owning tenant's
-    // staff. Writes are capped by size + content type: the client portal actually
-    // uploads via the uploadClientPaymentProof Cloud Function (Admin SDK, bypasses
-    // these rules), so this rule only guards any direct client write.
+    // Client payment receipts — tenant-scoped. The client portal uploads via the
+    // uploadClientPaymentProof Cloud Function (Admin SDK, bypasses these rules), so no
+    // direct UNauthenticated write path exists in the app. Direct SDK writes are
+    // therefore limited to the owning tenant's staff (still capped by size + type);
+    // reads are limited to the owning tenant's staff too.
     match /receipts/{tenantId}/{allPaths=**} {
       allow read: if boundTo(tenantId);
-      allow write: if request.resource.size < 10 * 1024 * 1024
+      allow write: if boundTo(tenantId)
+                   && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('^(image/(jpeg|png|webp)|application/pdf)$');
     }
 

@@ -6,7 +6,6 @@ const { onTaskDispatched } = require("firebase-functions/v2/tasks");
 const { getFunctions } = require("firebase-admin/functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const FormData = require("form-data");
 const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
 const crypto = require("crypto");
@@ -23,7 +22,6 @@ setGlobalOptions({
 });
 
 // Define Secrets
-const sleekflowKey = defineSecret("SLEEKFLOW_KEY");
 const adminPhone = defineSecret("ADMIN_PHONE");
 const deepseekKey = defineSecret("DEEPSEEK_KEY");
 
@@ -116,34 +114,8 @@ exports.deleteTenant = onCall({
 });
 
 // ==========================================
-// 2. SLEEKFLOW & PING
+// 2. PING
 // ==========================================
-exports.sendSleekFlow = onCall({ secrets: [sleekflowKey] }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "User must be logged in.");
-    const { to, messageContent, pdfUrl, fileName, isTemplate, appId: requestAppId } = request.data;
-    const API_KEY = sleekflowKey.value();
-    try {
-      if (pdfUrl) {
-        // SSRF guard: only fetch from Firebase Storage (never arbitrary/internal URLs).
-        if (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(String(pdfUrl))) {
-          throw new HttpsError('invalid-argument', 'pdfUrl must be a Firebase Storage URL.');
-        }
-        const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024, maxRedirects: 0 });
-        const form = new FormData();
-        form.append("channel", "whatsappcloudapi");
-        form.append("to", to);
-        form.append("type", "document"); 
-        form.append("caption", messageContent || ""); 
-        form.append("file", Buffer.from(pdfResponse.data), { filename: fileName || "Document.pdf", contentType: "application/pdf" });
-        await axios.post("https://api.sleekflow.io/api/message/send/file", form, { headers: { ...form.getHeaders(), "X-Sleekflow-Api-Key": API_KEY } });
-      } else {
-        const payload = isTemplate ? { type: "template", template: { name: "document_sending_template", language: "zh_HK" }, receiver: to, channel: "whatsappcloudapi", from: "85252226066" } : { type: "text", messageType: "text", messageContent, to, channel: "whatsappcloudapi", from: "85252226066" };
-        await axios.post("https://api.sleekflow.io/api/message/send/json", payload, { headers: { "Content-Type": "application/json", "X-Sleekflow-Api-Key": API_KEY } });
-      }
-      return { success: true };
-    } catch (error) { if (error instanceof HttpsError) throw error; throw new HttpsError("internal", error.message); }
-});
-
 exports.ping = onCall(() => ({ message: "Pong!" }));
 
 // ==========================================
@@ -473,7 +445,7 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   return { success: true };
 });
 
-exports.updateClientDietaryReq = onCall({ secrets: [sleekflowKey, adminPhone], invoker: "public" }, async (request) => {
+exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();

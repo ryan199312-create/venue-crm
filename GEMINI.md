@@ -100,7 +100,7 @@ All backend logic in `functions/index.js` has been refactored to be tenant-aware
 
 ## Security & Scoping Rules
 - **Firestore:** Rules and Functions MUST validate `appId` in the path. NEVER use global collections without a tenant prefix.
-- **Cloud Functions:** All functions (invite, PDF, SleekFlow) now support an optional `appId` parameter to ensure correct data targeting.
+- **Cloud Functions:** All functions (invite, PDF, client-portal) now support an optional `appId` parameter to ensure correct data targeting.
 
 - **Security:** Firestore rules and Cloud Functions strictly validate `appId` and user roles (`admin` vs `super_admin`).
 - **Bootstrap Note:** Use the root domain (`localhost:5174/super-admin`) to gain initial platform access via the "Bootstrap" button.

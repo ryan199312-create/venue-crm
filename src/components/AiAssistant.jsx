@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { X, Mail, MessageCircle, Sparkles, Copy, Check, Loader2, Send, Settings2 } from 'lucide-react';
-import { useAI } from '../hooks/useAI'; 
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../core/firebase';
+import { useAI } from '../hooks/useAI';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../i18n/language';
 
@@ -11,7 +9,6 @@ export default function AiAssistant({ formData, setFormData, onClose }) {
   const { L } = useLang();
   const venueProfile = appSettings?.venueProfiles?.[formData?.venueId] || appSettings?.venueProfile || {};
   const { generate, loading: aiLoading } = useAI();
-  const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   
@@ -177,27 +174,18 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
     }
   };
 
-  const handleSendSleekFlow = async () => {
-    let phone = formData.clientPhone?.replace(/[^0-9]/g, ''); 
+  // Open the client's WhatsApp chat with the draft pre-filled (free wa.me deep link —
+  // no paid messaging integration). The staff member sends it from their own WhatsApp.
+  const handleOpenWhatsApp = () => {
+    let phone = formData.clientPhone?.replace(/[^0-9]/g, '');
     if (phone && phone.length === 8) phone = '852' + phone;
 
     const message = formData.whatsappDraft;
 
-    if (!phone) return alert("Error: Client phone number is missing.");
-    if (!message) return alert("Error: WhatsApp draft is empty.");
+    if (!phone) return alert(L("錯誤：缺少客戶電話號碼 (Client phone number is missing)"));
+    if (!message) return alert(L("錯誤：WhatsApp 訊息內容是空的 (WhatsApp draft is empty)"));
 
-    setSending(true);
-    try {
-      const sendSleekFlow = httpsCallable(functions, 'sendSleekFlow');
-      const result = await sendSleekFlow({ to: phone, messageContent: message });
-      console.log("SleekFlow Result:", result.data);
-      alert(`✅ Message Sent Successfully to ${phone}!`);
-    } catch (error) {
-      console.error("SleekFlow Error:", error);
-      alert("❌ Failed to send: " + error.message);
-    } finally {
-      setSending(false);
-    }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
   };
 
   const copyToClipboard = (text) => {
@@ -217,7 +205,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
               <Sparkles size={20} className="text-white"/>
             </div>
             <div>
-              <h3 className="font-bold text-lg">{L('AI 智能助手 (AI Assistant)')} & SleekFlow Hub</h3>
+              <h3 className="font-bold text-lg">{L('AI 智能助手 (AI Assistant)')}</h3>
               <p className="text-[10px] text-slate-400 font-mono">
                 {formData.clientName} | {formData.date} | {formData.venueLocation}
               </p>
@@ -302,13 +290,13 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-slate-100 flex gap-2">
-                  <button 
-                    onClick={handleSendSleekFlow} 
-                    disabled={sending || aiLoading}
-                    className={`flex-1 py-2 text-white rounded-lg font-bold flex justify-center items-center gap-2 shadow-sm transition-all ${sending ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#25D366] hover:bg-[#1ebc57] active:scale-[0.98]'}`}
+                  <button
+                    onClick={handleOpenWhatsApp}
+                    disabled={aiLoading}
+                    className="flex-1 py-2 text-white rounded-lg font-bold flex justify-center items-center gap-2 shadow-sm transition-all bg-[#25D366] hover:bg-[#1ebc57] active:scale-[0.98] disabled:opacity-50"
                   >
-                     {sending ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
-                     {sending ? `${L("發送中 (Sending)")}...` : L("SleekFlow 發送 (Send)")}
+                     <Send size={16}/>
+                     {L("用 WhatsApp 開啟 (Open in WhatsApp)")}
                   </button>
                 </div>
               </div>
@@ -347,7 +335,7 @@ const handleGenerate = async (channel, intent, customInstruction = null) => {
         <div className="bg-slate-50 border-t border-slate-200 p-2 text-center text-xs text-slate-400 flex justify-between px-6">
            <span>Core: DeepSeek V3</span>
            {aiLoading && <span className="flex items-center gap-2 text-violet-600 font-bold"><Loader2 size={12} className="animate-spin"/> {`${L('AI 正在分析訂單資料 (AI is analyzing order data)')}...`}</span>}
-           <span>Integration: SleekFlow API</span>
+           <span>WhatsApp: wa.me</span>
         </div>
       </div>
     </div>

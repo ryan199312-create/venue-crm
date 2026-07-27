@@ -4,11 +4,29 @@ import { FormInput, FormSelect, LocationSelector, TimeInput } from '../../../com
 import { EVENT_TYPES } from '../../../services/billingService';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
+import { functions } from '../../../core/firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInfo, users = [], scopedAppSettings }) => {
-  const { getVisibleVenues, hasPermission, outlets } = useAuth();
+  const { getVisibleVenues, hasPermission, outlets, appId } = useAuth();
   const { L } = useLang();
   const visibleVenues = getVisibleVenues(outlets);
+  const [resettingPw, setResettingPw] = React.useState(false);
+
+  // Staff-triggered reset of the client's portal password (the portal has no email/OTP
+  // self-service reset). The client sets a fresh password on their next login.
+  const handleResetPortalPassword = async () => {
+    const phone = formData.clientPhone;
+    if (!phone || phone.replace(/[^0-9]/g, '').length < 8) { alert(L('請先填寫有效的客戶電話。 (Please enter a valid client phone first.)')); return; }
+    if (!window.confirm(L('確定要重設此客戶的門戶密碼嗎？他們下次登入時需要重新建立密碼。 (Reset this client\'s portal password? They will create a new one on next login.)'))) return;
+    setResettingPw(true);
+    try {
+      await httpsCallable(functions, 'resetClientPassword')({ appId, phone });
+      alert(L('已重設。客戶下次登入時可設定新密碼。 (Done — the client can set a new password on next login.)'));
+    } catch (e) {
+      alert(`${L('重設失敗 (Reset failed)')}: ${e.message}`);
+    } finally { setResettingPw(false); }
+  };
 
   const handleCheckboxChange = (userName) => {
     const currentReps = formData.salesRep ? formData.salesRep.split(', ') : [];
@@ -138,7 +156,17 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormInput label={L('客戶姓名 (Client Name)')} name="clientName" required value={formData.clientName} onChange={handleInputChange} />
-          <FormInput label={L('電話 (Phone)')} name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
+          <div>
+            <FormInput label={L('電話 (Phone)')} name="clientPhone" value={formData.clientPhone} onChange={handleInputChange} />
+            <button
+              type="button"
+              onClick={handleResetPortalPassword}
+              disabled={resettingPw}
+              className="mt-1 text-[11px] text-slate-400 hover:text-red-500 underline disabled:opacity-50"
+            >
+              {resettingPw ? L('重設中... (Resetting...)') : L('重設客戶門戶密碼 (Reset client portal password)')}
+            </button>
+          </div>
           <FormInput label={L('公司 (Company)')} name="companyName" value={formData.companyName} onChange={handleInputChange} />
 
           <div className="space-y-2">

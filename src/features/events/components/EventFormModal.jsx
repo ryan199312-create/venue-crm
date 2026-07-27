@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  FileText, CreditCard, Monitor, Truck, PenTool, Printer, Sparkles, ChevronUp, Send, MessageCircle, Mail, Utensils, Info
+  FileText, CreditCard, Monitor, Truck, PenTool, Printer, Sparkles, ChevronUp, Send, MessageCircle, Mail, Utensils, Info, Users
 } from 'lucide-react';
 
 import { Modal, VersionPreviewModal } from '../../../components/ui';
 import { DEFAULT_DRINK_PACKAGES } from '../../../services/billingService';
 import DocumentManager from '../../../components/DocumentManager';
 import BasicDetailsTab from './BasicDetailsTab';
+import GuestsTab from './GuestsTab';
 import LogisticsTab from './LogisticsTab';
 import FoodAndBeverageTab from './FoodAndBeverageTab';
 import BillingTab from '../../billing/BillingTab';
@@ -69,6 +70,7 @@ export default function EventFormModal({
     if (isOpen) {
       const tabs = [
         { id: 'basic', permission: 'tab_basic' },
+        { id: 'guests', permission: 'tab_logistics' },
         { id: 'fnb', permission: 'tab_fnb' },
         { id: 'billing', permission: 'tab_billing' },
         { id: 'venue', permission: 'tab_venue' },
@@ -345,6 +347,7 @@ export default function EventFormModal({
         <div className="flex border-b border-slate-200 bg-white sticky top-0 z-[60] overflow-x-auto no-scrollbar shadow-sm">
           {[
             { id: 'basic', label: L('基本資料 (Basics)'), icon: FileText, permission: 'tab_basic' },
+            { id: 'guests', label: L('賓客名單 (Guests)'), icon: Users, permission: 'tab_logistics' },
             { id: 'fnb', label: L('餐飲與酒水 (F&B)'), icon: Utensils, permission: 'tab_fnb' },
             { id: 'billing', label: L('帳務與支付 (Billing)'), icon: CreditCard, permission: 'tab_billing' },
             { id: 'venue', label: L('場地佈置 (Venue)'), icon: Monitor, permission: 'tab_venue' },
@@ -376,8 +379,12 @@ export default function EventFormModal({
             />
           )}
 
+          {formTab === 'guests' && (
+            <GuestsTab formData={formData} setFormData={setFormData} />
+          )}
+
           {formTab === 'fnb' && (
-            <FoodAndBeverageTab 
+            <FoodAndBeverageTab
               formData={formData} 
               setFormData={setFormData} 
               appSettings={scopedAppSettings}

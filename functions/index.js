@@ -570,6 +570,25 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   return { success: true };
 });
 
+// Client (couple) manages their wedding guest list from the portal. Stored as an array
+// on the event doc (like rundown), so the admin sees the same list + headcount.
+exports.updateClientGuests = onCall({ invoker: "public" }, async (request) => {
+  const { eventId, phone, guests, sessionToken, appId: requestAppId } = request.data;
+  const db = admin.firestore();
+  const appId = requestAppId || APP_ID;
+  const rk = rlKey('client', appId, eventId);
+  await assertNotRateLimited(db, rk);
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(eventId);
+  const docSnap = await eventRef.get();
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
+  if (!Array.isArray(guests)) throw new HttpsError('invalid-argument', 'guests must be an array.');
+  if (guests.length > 1000) throw new HttpsError('invalid-argument', 'Too many guests (max 1000).');
+  await eventRef.update({ guests });
+  return { success: true };
+});
+
 exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies, sessionToken, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;

@@ -43,6 +43,10 @@ export default function ClientPortal() {
   const [isSavingRundown, setIsSavingRundown] = useState(false);
   const [showDishSelector, setShowDishSelector] = useState(false);
 
+  const [isEditingGuests, setIsEditingGuests] = useState(false);
+  const [editedGuests, setEditedGuests] = useState([]);
+  const [isSavingGuests, setIsSavingGuests] = useState(false);
+
   const cleanDigits = (s) => String(s || '').replace(/[^0-9]/g, '');
 
   // Handle a successful auth response (from verifyClientAccess or setupClientPassword).
@@ -151,6 +155,7 @@ export default function ClientPortal() {
     setDietaryReq(ev.specialMenuReq || '');
     setAllergies(ev.allergies || '');
     setEditedRundown(ev.rundown || []);
+    setEditedGuests(ev.guests || []);
     localStorage.setItem('vms_client_event_id', ev.id);
     setViewState('PORTAL');
   };
@@ -276,6 +281,25 @@ export default function ClientPortal() {
     }
   };
 
+  // --- GUEST LIST SUBMIT HANDLER ---
+  const handleSaveGuests = async () => {
+    setIsSavingGuests(true);
+    try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
+      const api = httpsCallable(functions, 'updateClientGuests');
+      const cleanGuests = JSON.parse(JSON.stringify(editedGuests));
+      await api({ appId, eventId, phone: currentPhone, guests: cleanGuests, sessionToken: localStorage.getItem('vms_client_token') || sessionToken || '' });
+      setEventData(prev => ({ ...prev, guests: editedGuests }));
+      setIsEditingGuests(false);
+      alert(L("賓客名單已更新 (Guest list updated)!"));
+    } catch (error) {
+      console.error("Guest Save Error:", error);
+      alert(`${L("更新失敗 (Update failed)")}: ${error.message}`);
+    } finally {
+      setIsSavingGuests(false);
+    }
+  };
+
   // --- SIGNATURE SUBMIT HANDLER ---
   const handleSignatureSubmit = async (docType, base64String) => {
     try {
@@ -321,6 +345,18 @@ export default function ClientPortal() {
     const diff = target - now;
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }, [eventData]);
+
+  const guestStats = useMemo(() => {
+    const list = isEditingGuests ? editedGuests : (eventData?.guests || []);
+    const pax = (pred) => list.filter(pred).reduce((n, g) => n + (Number(g.partySize) || 1), 0);
+    return {
+      parties: list.length,
+      invited: pax(() => true),
+      confirmed: pax(g => g.rsvp === 'yes'),
+      declined: pax(g => g.rsvp === 'no'),
+      pending: pax(g => !g.rsvp || g.rsvp === 'pending' || g.rsvp === 'maybe'),
+    };
+  }, [isEditingGuests, editedGuests, eventData]);
 
   const billingMetrics = useMemo(() => {
     if (!eventData) return null;
@@ -514,6 +550,7 @@ export default function ClientPortal() {
       {/* Desktop Navigation Tabs */}
       <div className="hidden md:flex justify-center gap-4 mt-8 px-4 flex-wrap max-w-5xl mx-auto">
         <DesktopTab icon={Calendar} label={L("Overview (概覽)")} active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+        <DesktopTab icon={Users} label={L("Guests (賓客)")} active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
         <DesktopTab icon={CreditCard} label={L("Billing (帳單)")} active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
         <DesktopTab icon={Utensils} label={L("Menu (菜單)")} active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
         <DesktopTab icon={Clock} label={L("Rundown (流程)")} active={activeTab === 'logistics'} onClick={() => setActiveTab('logistics')} />
@@ -902,6 +939,102 @@ export default function ClientPortal() {
           </div>
         )}
 
+        {activeTab === 'guests' && (
+          <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+            {/* Headcount summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div className={`${STYLES.gridBox} text-center py-4`}>
+                <p className="text-3xl font-black text-brand-primary font-mono">{guestStats.confirmed}</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{L('已確認 (Confirmed)')}</p>
+              </div>
+              <div className={`${STYLES.gridBox} text-center py-4`}>
+                <p className="text-3xl font-black text-slate-700 font-mono">{guestStats.invited}</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{L('已邀請 (Invited)')}</p>
+              </div>
+              <div className={`${STYLES.gridBox} text-center py-4`}>
+                <p className="text-3xl font-black text-amber-500 font-mono">{guestStats.pending}</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{L('待回覆 (Pending)')}</p>
+              </div>
+              <div className={`${STYLES.gridBox} text-center py-4`}>
+                <p className="text-3xl font-black text-rose-400 font-mono">{guestStats.declined}</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{L('婉拒 (Declined)')}</p>
+              </div>
+            </div>
+
+            <div className={STYLES.gridBox}>
+              <div className="flex justify-between items-center mb-5">
+                <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Users size={16}/> {L('賓客名單 (Guest List)')} <span className="text-xs font-normal text-slate-400">({guestStats.parties} {L('組 (parties)')})</span></h3>
+                {!isEditingGuests && (
+                  <button onClick={() => { setEditedGuests(eventData.guests || []); setIsEditingGuests(true); }} className="text-xs bg-brand-primary/10 text-brand-primary px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-brand-primary/20 transition-colors">
+                    <PenTool size={12} className="mr-1"/> {L('編輯 (Edit)')}
+                  </button>
+                )}
+              </div>
+
+              {isEditingGuests ? (
+                <div className="space-y-2">
+                  {editedGuests.length === 0 && <p className="text-center text-slate-400 italic text-sm py-4">{L('尚未新增賓客 (No guests yet)')}</p>}
+                  {editedGuests.map((g, idx) => (
+                    <div key={g.id || idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex gap-2 items-center">
+                        <input value={g.name || ''} onChange={e => setEditedGuests(prev => prev.map((it,i)=> i===idx?{...it, name:e.target.value}:it))} placeholder={L('賓客姓名 (Guest name)')} className="flex-1 p-2 border border-slate-200 rounded bg-white text-sm focus:border-brand-primary outline-none" />
+                        <button onClick={() => setEditedGuests(prev => prev.filter((_,i)=>i!==idx))} className="text-slate-300 hover:text-red-500 p-1"><X size={16}/></button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <select value={g.side || ''} onChange={e => setEditedGuests(prev => prev.map((it,i)=> i===idx?{...it, side:e.target.value}:it))} className="p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none">
+                          <option value="">{L('男/女家 (Side)')}</option>
+                          <option value="groom">{L('男家 (Groom)')}</option>
+                          <option value="bride">{L('女家 (Bride)')}</option>
+                          <option value="shared">{L('共同 (Shared)')}</option>
+                        </select>
+                        <input value={g.relation || ''} onChange={e => setEditedGuests(prev => prev.map((it,i)=> i===idx?{...it, relation:e.target.value}:it))} placeholder={L('關係/組別 (Group)')} className="p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none" />
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400 shrink-0">{L('人數 (Pax)')}</span>
+                          <input type="number" min="1" value={g.partySize ?? 1} onChange={e => setEditedGuests(prev => prev.map((it,i)=> i===idx?{...it, partySize: Math.max(1, Number(e.target.value)||1)}:it))} className="w-full p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none" />
+                        </div>
+                        <select value={g.rsvp || 'pending'} onChange={e => setEditedGuests(prev => prev.map((it,i)=> i===idx?{...it, rsvp:e.target.value}:it))} className="p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none">
+                          <option value="pending">{L('待回覆 (Pending)')}</option>
+                          <option value="yes">{L('出席 (Attending)')}</option>
+                          <option value="no">{L('缺席 (Declined)')}</option>
+                          <option value="maybe">{L('未定 (Maybe)')}</option>
+                        </select>
+                      </div>
+                      <input value={g.dietary || ''} onChange={e => setEditedGuests(prev => prev.map((it,i)=> i===idx?{...it, dietary:e.target.value}:it))} placeholder={L('特殊餐飲/過敏 (Dietary / allergies)')} className="w-full p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none" />
+                    </div>
+                  ))}
+                  <button onClick={() => setEditedGuests(prev => [...prev, { id: Date.now().toString()+Math.random().toString(36).slice(2,7), name:'', side:'', relation:'', partySize:1, rsvp:'pending', dietary:'' }])} className="w-full py-2.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-200 transition-colors flex items-center justify-center mt-2">
+                    <Plus size={14} className="mr-1"/> {L('新增賓客 (Add Guest)')}
+                  </button>
+                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
+                    <button onClick={() => { setIsEditingGuests(false); setEditedGuests(eventData.guests || []); }} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors">{L('取消 (Cancel)')}</button>
+                    <button onClick={handleSaveGuests} disabled={isSavingGuests} className="flex-1 py-3 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-[brand-primary/90] transition-colors shadow-md flex justify-center items-center">
+                      {isSavingGuests ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2"/>} {L('儲存名單 (Save List)')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(!eventData.guests || eventData.guests.length === 0) && <p className="text-center text-slate-400 italic text-sm py-6">{L('尚未新增賓客，按「編輯」開始建立名單。 (No guests yet — tap Edit to start.)')}</p>}
+                  {(eventData.guests || []).map((g, idx) => {
+                    const badge = g.rsvp === 'yes' ? 'bg-emerald-100 text-emerald-700' : g.rsvp === 'no' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700';
+                    const rsvpLabel = g.rsvp === 'yes' ? L('出席 (Attending)') : g.rsvp === 'no' ? L('缺席 (Declined)') : g.rsvp === 'maybe' ? L('未定 (Maybe)') : L('待回覆 (Pending)');
+                    const sideLabel = g.side === 'groom' ? L('男家 (Groom)') : g.side === 'bride' ? L('女家 (Bride)') : g.side === 'shared' ? L('共同 (Shared)') : '';
+                    return (
+                      <div key={g.id || idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50">
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800 text-sm truncate">{g.name || L('（未命名）(Unnamed)')} {(Number(g.partySize)||1) > 1 && <span className="text-slate-400 font-mono text-xs">×{g.partySize}</span>}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{[sideLabel, g.relation, g.dietary].filter(Boolean).join(' · ')}</p>
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold shrink-0 ml-2 ${badge}`}>{rsvpLabel}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* TAB 6: DOCUMENTS */}
         {activeTab === 'documents' && (
           <div className="max-w-4xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-4">
@@ -922,6 +1055,7 @@ export default function ClientPortal() {
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-between px-1 p-2 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <NavButton icon={Calendar} label={L("Overview (概覽)")} active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+        <NavButton icon={Users} label={L("Guests (賓客)")} active={activeTab === 'guests'} onClick={() => setActiveTab('guests')} />
         <NavButton icon={CreditCard} label={L("Billing (帳單)")} active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
         <NavButton icon={Utensils} label={L("Menu (菜單)")} active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
         <NavButton icon={Clock} label={L("Rundown (流程)")} active={activeTab === 'logistics'} onClick={() => setActiveTab('logistics')} />

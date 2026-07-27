@@ -10,6 +10,7 @@ import ScrollToTop from './components/ScrollToTop';
 // Pages
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const ClientPortal = lazy(() => import('./admin/ClientPortal'));
+const RsvpPortal = lazy(() => import('./admin/RsvpPortal'));
 const SuperAdminPortal = lazy(() => import('./super-admin/SuperAdminPortal'));
 const LandingPage = lazy(() => import('./landing/LandingPage'));
 const ActivatePage = lazy(() => import('./admin/ActivatePage'));
@@ -88,6 +89,9 @@ export default function App() {
             <Route path="/activate" element={rootDomain ? <Navigate to="/" replace /> : <ActivatePage />} />
             <Route path="/portal" element={rootDomain ? <Navigate to="/" replace /> : <ClientPortal />} />
             <Route path="/portal/:eventId" element={rootDomain ? <Navigate to="/" replace /> : <ClientPortal />} />
+
+            {/* Public guest RSVP page — no login. Reached via the shareable token link. */}
+            <Route path="/rsvp/:token" element={rootDomain ? <Navigate to="/" replace /> : <RsvpPortal />} />
 
             {/* Fallback: unknown paths → landing (root domain) or the tenant app (subdomain) */}
             <Route path="*" element={<Navigate to={rootDomain ? '/' : '/admin'} replace />} />

@@ -6,6 +6,7 @@ import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { getScopedSettings } from '../services/helpers';
 import { getTenantId } from '../core/tenantResolver';
+import { QRCodeCanvas } from 'qrcode.react';
 import { Card, Badge, TimeInput } from '../components/ui';
 import { useLang } from '../i18n/language';
 const DocumentManager = React.lazy(() => import('../components/DocumentManager'));
@@ -46,6 +47,7 @@ export default function ClientPortal() {
   const [isEditingGuests, setIsEditingGuests] = useState(false);
   const [editedGuests, setEditedGuests] = useState([]);
   const [isSavingGuests, setIsSavingGuests] = useState(false);
+  const [rsvpBusy, setRsvpBusy] = useState(false);
 
   const cleanDigits = (s) => String(s || '').replace(/[^0-9]/g, '');
 
@@ -299,6 +301,24 @@ export default function ClientPortal() {
       setIsSavingGuests(false);
     }
   };
+
+  // --- RSVP COLLECTION CONFIG (enable/disable + deadline; mints a shareable token) ---
+  const handleSetRsvp = async (enabled, deadline) => {
+    setRsvpBusy(true);
+    try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
+      const api = httpsCallable(functions, 'setRsvpConfig');
+      const res = await api({ appId, eventId, phone: currentPhone, sessionToken: localStorage.getItem('vms_client_token') || sessionToken || '', enabled, deadline });
+      setEventData(prev => ({ ...prev, rsvpEnabled: res.data.rsvpEnabled, rsvpToken: res.data.rsvpToken, rsvpDeadline: res.data.rsvpDeadline }));
+    } catch (error) {
+      console.error("RSVP config error:", error);
+      alert(`${L("操作失敗 (Action failed)")}: ${error.message}`);
+    } finally {
+      setRsvpBusy(false);
+    }
+  };
+
+  const rsvpLink = eventData?.rsvpToken ? `${window.location.origin}/rsvp/${eventData.rsvpToken}` : '';
 
   // --- SIGNATURE SUBMIT HANDLER ---
   const handleSignatureSubmit = async (docType, base64String) => {
@@ -941,6 +961,38 @@ export default function ClientPortal() {
 
         {activeTab === 'guests' && (
           <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+            {/* RSVP collection */}
+            <div className={`${STYLES.gridBox} mb-4`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><MessageCircle size={16}/> {L('線上回覆邀請 (Online RSVP)')}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">{L('開啟後分享連結給賓客，讓他們自行回覆。 (Share a link so guests RSVP themselves.)')}</p>
+                </div>
+                <button onClick={() => handleSetRsvp(!eventData.rsvpEnabled, eventData.rsvpDeadline || '')} disabled={rsvpBusy} className={`px-4 py-2 rounded-lg text-xs font-bold shrink-0 transition-colors ${eventData.rsvpEnabled ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                  {rsvpBusy ? <Loader2 size={14} className="animate-spin"/> : eventData.rsvpEnabled ? L('已開啟 (On)') : L('開啟收集 (Enable)')}
+                </button>
+              </div>
+              {eventData.rsvpEnabled && rsvpLink && (
+                <div className="mt-4 flex flex-col sm:flex-row gap-4 items-center border-t border-slate-100 pt-4">
+                  <div className="bg-white p-2 rounded-lg border border-slate-200 shrink-0">
+                    <QRCodeCanvas value={rsvpLink} size={110} />
+                  </div>
+                  <div className="flex-1 w-full min-w-0">
+                    <div className="flex gap-2">
+                      <input readOnly value={rsvpLink} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 p-2 border border-slate-200 rounded bg-slate-50 text-xs font-mono truncate" />
+                      <button onClick={() => { navigator.clipboard?.writeText(rsvpLink); alert(L('已複製連結 (Link copied)')); }} className="px-3 py-2 bg-brand-primary text-white rounded text-xs font-bold shrink-0">{L('複製 (Copy)')}</button>
+                    </div>
+                    <div className="flex flex-wrap gap-3 items-center mt-3">
+                      <a href={`https://wa.me/?text=${encodeURIComponent(rsvpLink)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 font-bold underline">{L('用 WhatsApp 分享 (Share via WhatsApp)')}</a>
+                      <label className="text-xs text-slate-400 ml-auto flex items-center gap-1">{L('截止 (Deadline)')}:
+                        <input type="date" value={eventData.rsvpDeadline || ''} onChange={e => handleSetRsvp(true, e.target.value)} className="border border-slate-200 rounded p-1 text-xs" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Headcount summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
               <div className={`${STYLES.gridBox} text-center py-4`}>

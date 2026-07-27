@@ -589,6 +589,112 @@ exports.updateClientGuests = onCall({ invoker: "public" }, async (request) => {
   return { success: true };
 });
 
+// ==========================================
+// 4b. GUEST RSVP PORTAL (public, no login)
+// ==========================================
+const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '');
+const rsvpOpen = (ev) => !!ev.rsvpEnabled && (!ev.rsvpDeadline || new Date(ev.rsvpDeadline) >= new Date(new Date().toDateString()));
+
+// Enable/disable RSVP collection for an event and lazily mint a shareable token.
+// Authorized by EITHER a tenant admin (Firebase auth) OR the client (phone + session).
+exports.setRsvpConfig = onCall({ invoker: "public" }, async (request) => {
+  const { eventId, phone, sessionToken, enabled, deadline, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const db = admin.firestore();
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
+  const docSnap = await eventRef.get();
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  const ev = docSnap.data();
+
+  const t = request.auth && request.auth.token;
+  const isAdmin = t && (t.role === 'super_admin' || (['admin', 'staff'].includes(t.role) && t.tenantId === appId));
+  if (!isAdmin) {
+    const rk = rlKey('client', appId, eventId);
+    await assertNotRateLimited(db, rk);
+    if (cleanPhone8(phone) !== cleanPhone8(ev.clientPhone)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+    await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
+  }
+
+  const patch = { rsvpEnabled: !!enabled };
+  if (enabled && !ev.rsvpToken) patch.rsvpToken = crypto.randomBytes(9).toString('base64url'); // ~12-char, unguessable
+  if (deadline !== undefined) patch.rsvpDeadline = deadline || '';
+  await eventRef.update(patch);
+  return { success: true, rsvpEnabled: !!enabled, rsvpToken: ev.rsvpToken || patch.rsvpToken || '', rsvpDeadline: patch.rsvpDeadline !== undefined ? patch.rsvpDeadline : (ev.rsvpDeadline || '') };
+});
+
+// Public: minimal info to render the RSVP form. NEVER returns the guest list.
+exports.getRsvpInfo = onCall({ invoker: "public" }, async (request) => {
+  const { token, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const db = admin.firestore();
+  const tok = String(token || '').trim();
+  if (!tok) throw new HttpsError('invalid-argument', 'Missing link.');
+  const rk = rlKey('rsvp', appId, tok);
+  await assertNotRateLimited(db, rk);
+  const snap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').where('rsvpToken', '==', tok).limit(1).get();
+  if (snap.empty) { await recordFailedAttempt(db, rk); throw new HttpsError('not-found', 'Invalid link.'); }
+  const ev = snap.docs[0].data();
+  const settings = await getPortalSettings(db, appId);
+  return {
+    open: rsvpOpen(ev),
+    eventName: ev.eventName || '',
+    clientName: ev.clientName || '',
+    date: ev.date || '',
+    venueLocation: ev.venueLocation || '',
+    venueName: settings?.venueProfile?.nameZh || settings?.branding?.portalTitle || '',
+    venueNameEn: settings?.venueProfile?.nameEn || '',
+    deadline: ev.rsvpDeadline || '',
+  };
+});
+
+// Public: a guest submits their RSVP. Matches an existing guest by name or appends a new
+// one. Transactional so simultaneous replies don't clobber each other.
+exports.submitRsvp = onCall({ invoker: "public" }, async (request) => {
+  const { token, name, phone, attending, partySize, mealChoice, dietary, message, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const db = admin.firestore();
+  const tok = String(token || '').trim();
+  const cleanName = String(name || '').trim().slice(0, 80);
+  if (!tok) throw new HttpsError('invalid-argument', 'Missing link.');
+  if (!cleanName) throw new HttpsError('invalid-argument', 'Please enter your name.');
+  const rk = rlKey('rsvp', appId, tok);
+  await assertNotRateLimited(db, rk);
+
+  const snap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').where('rsvpToken', '==', tok).limit(1).get();
+  if (snap.empty) { await recordFailedAttempt(db, rk); throw new HttpsError('not-found', 'Invalid link.'); }
+  const eventRef = snap.docs[0].ref;
+
+  const entry = {
+    name: cleanName,
+    phone: cleanPhone8(phone) || '',
+    partySize: Math.max(1, Math.min(50, Number(partySize) || 1)),
+    rsvp: (attending === false || attending === 'no') ? 'no' : 'yes',
+    mealChoice: String(mealChoice || '').slice(0, 60),
+    dietary: String(dietary || '').slice(0, 200),
+    message: String(message || '').slice(0, 300),
+    side: '',
+    relation: '',
+    source: 'self',
+    submittedAt: new Date().toISOString(),
+  };
+
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(eventRef);
+    const ev = fresh.data();
+    if (!rsvpOpen(ev)) throw new HttpsError('failed-precondition', 'RSVP is closed.');
+    const guests = Array.isArray(ev.guests) ? [...ev.guests] : [];
+    const idx = guests.findIndex(g => normName(g.name) && normName(g.name) === normName(cleanName));
+    if (idx >= 0) {
+      guests[idx] = { ...guests[idx], ...entry, id: guests[idx].id };
+    } else {
+      if (guests.length >= 1000) throw new HttpsError('resource-exhausted', 'Guest list is full.');
+      guests.push({ ...entry, id: Date.now().toString() + Math.random().toString(36).slice(2, 7) });
+    }
+    tx.update(eventRef, { guests });
+  });
+  return { success: true, rsvp: entry.rsvp };
+});
+
 exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies, sessionToken, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;

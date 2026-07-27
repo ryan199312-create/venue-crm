@@ -49,7 +49,73 @@ async function recordFailedAttempt(db, key) {
   });
 }
 
-const APP_ID = "my-venue-crm"; 
+// --- Client-portal password auth (phone + password) ---
+// Credentials live in artifacts/{appId}/private/data/client_credentials/{last8phone}
+// (locked to Cloud Functions only in firestore.rules). Passwords are scrypt-hashed with a
+// per-record salt; a successful login mints an opaque session token (only its sha256 is
+// stored) so the portal stays logged in without ever holding the password. Keyed by the
+// last-8 digits of the phone — the same identity events are already matched on.
+const SCRYPT_KEYLEN = 64;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const cleanPhone8 = (p) => String(p || '').replace(/[^0-9]/g, '').slice(-8);
+const clientCredRef = (db, appId, phone8) =>
+  db.collection('artifacts').doc(appId).collection('private').doc('data').collection('client_credentials').doc(phone8);
+function scryptHash(password, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(password), String(salt), SCRYPT_KEYLEN, (err, dk) => err ? reject(err) : resolve(dk.toString('hex')));
+  });
+}
+function safeEqualHex(aHex, bHex) {
+  try {
+    const a = Buffer.from(String(aHex), 'hex'), b = Buffer.from(String(bHex), 'hex');
+    return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (_e) { return false; }
+}
+function newSessionToken() {
+  const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  return { token, session: { tokenHash, expiresAt: Date.now() + SESSION_TTL_MS } };
+}
+function validClientSession(cred, sessionToken) {
+  if (!cred || !cred.session || !cred.session.tokenHash || !sessionToken) return false;
+  if ((cred.session.expiresAt || 0) < Date.now()) return false;
+  const h = crypto.createHash('sha256').update(String(sessionToken)).digest('hex');
+  return safeEqualHex(h, cred.session.tokenHash);
+}
+// Mutations still verify the phone matches the event; ADDITIONALLY, once a client has set
+// a password, a valid session token is required (so knowing the phone alone is not enough).
+async function assertClientSessionIfSet(db, appId, phone, sessionToken, rk) {
+  const snap = await clientCredRef(db, appId, cleanPhone8(phone)).get();
+  if (snap.exists && snap.data().hash) {
+    if (!validClientSession(snap.data(), sessionToken)) {
+      if (rk) await recordFailedAttempt(db, rk);
+      throw new HttpsError('permission-denied', 'Your session has expired. Please log in again.');
+    }
+  }
+}
+async function findClientEvents(db, appId, eventId, phone8) {
+  const eventsRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events');
+  const matched = [];
+  if (eventId) {
+    const doc = await eventsRef.doc(eventId).get();
+    if (doc.exists) { const d = doc.data(); if (cleanPhone8(d.clientPhone) === phone8) matched.push({ id: doc.id, ...d }); }
+  } else {
+    const snap = await eventsRef.where('clientPhoneClean', '==', phone8).get();
+    snap.forEach(doc => matched.push({ id: doc.id, ...doc.data() }));
+  }
+  return matched;
+}
+function packClientEvents(matched) {
+  const sanitized = matched.map(e => ({ ...e, totalAmount: parseFloat(e.totalAmount) || 0 }));
+  sanitized.sort((a, b) => new Date(b.date) - new Date(a.date));
+  return JSON.parse(JSON.stringify(sanitized));
+}
+async function getPortalSettings(db, appId) {
+  const doc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('settings').doc('config').get();
+  return doc.exists ? JSON.parse(JSON.stringify(doc.data())) : null;
+}
+
+const APP_ID = "my-venue-crm";
 
 // Global cache for Puppeteer
 let cachedBrowser = null;
@@ -339,28 +405,84 @@ exports.generatePdfTask = onTaskDispatched({
 // 4. CLIENT PORTAL OPERATIONS (CRITICAL)
 // ==========================================
 exports.verifyClientAccess = onCall({ invoker: "public" }, async (request) => {
-  const { eventId, phone, appId: requestAppId } = request.data;
-  const appId = requestAppId || APP_ID; 
+  const { eventId, phone, password, sessionToken, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
   const db = admin.firestore();
   try {
-    const cleanInputPhone = String(phone).replace(/[^0-9]/g, '').slice(-8);
-    const rk = rlKey('client', appId, eventId || cleanInputPhone);
+    const phone8 = cleanPhone8(phone);
+    if (phone8.length < 8) throw new HttpsError('invalid-argument', 'A valid phone number is required.');
+    const rk = rlKey('client', appId, eventId || phone8);
     await assertNotRateLimited(db, rk);
-    let matchedEvents = [];
-    const eventsRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events');
-    if (eventId) {
-      const eventDoc = await eventsRef.doc(eventId).get();
-      if (eventDoc.exists) { const data = eventDoc.data(); if (String(data.clientPhone || '').replace(/[^0-9]/g, '').slice(-8) === cleanInputPhone) matchedEvents.push({ id: eventDoc.id, ...data }); }
-    } else {
-      const cleanSnap = await eventsRef.where('clientPhoneClean', '==', cleanInputPhone).get();
-      cleanSnap.forEach(doc => matchedEvents.push({ id: doc.id, ...doc.data() }));
-    }
+
+    // The phone must match a real event (this is what gates who may register/log in).
+    const matchedEvents = await findClientEvents(db, appId, eventId, phone8);
     if (matchedEvents.length === 0) { await recordFailedAttempt(db, rk); throw new HttpsError('not-found', 'No events found.'); }
-    const sanitizedEvents = matchedEvents.map(e => ({ ...e, totalAmount: parseFloat(e.totalAmount) || 0 }));
-    sanitizedEvents.sort((a, b) => new Date(b.date) - new Date(a.date));
-    const settingsDoc = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('settings').doc('config').get();
-    return { events: JSON.parse(JSON.stringify(sanitizedEvents)), appSettings: settingsDoc.exists ? JSON.parse(JSON.stringify(settingsDoc.data())) : null };
+
+    const credSnap = await clientCredRef(db, appId, phone8).get();
+    // First-time client: no password on file yet -> the portal must run one-time setup.
+    if (!credSnap.exists || !credSnap.data().hash) return { needsSetup: true };
+    const cred = credSnap.data();
+
+    // Returning client with a valid session token -> log straight in (no password prompt).
+    if (validClientSession(cred, sessionToken)) {
+      return { events: packClientEvents(matchedEvents), appSettings: await getPortalSettings(db, appId) };
+    }
+    // No/invalid password supplied -> ask the portal to prompt for it.
+    if (!password) return { needsPassword: true };
+
+    // Verify the password.
+    const attempt = await scryptHash(password, cred.salt);
+    if (!safeEqualHex(attempt, cred.hash)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Incorrect password.'); }
+
+    // Success: mint a fresh session token so the portal can stay logged in.
+    const { token, session } = newSessionToken();
+    await clientCredRef(db, appId, phone8).set({ session }, { merge: true });
+    return { events: packClientEvents(matchedEvents), appSettings: await getPortalSettings(db, appId), sessionToken: token };
   } catch (error) { if (error instanceof HttpsError) throw error; throw new HttpsError('internal', error.message); }
+});
+
+// One-time setup: a client whose phone matches a real event creates their password.
+// Fails if a password already exists (they must log in, or ask staff to reset it).
+exports.setupClientPassword = onCall({ invoker: "public" }, async (request) => {
+  const { eventId, phone, password, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const db = admin.firestore();
+  try {
+    const phone8 = cleanPhone8(phone);
+    if (phone8.length < 8) throw new HttpsError('invalid-argument', 'A valid phone number is required.');
+    if (!password || String(password).length < 6) throw new HttpsError('invalid-argument', 'Password must be at least 6 characters.');
+    const rk = rlKey('client', appId, eventId || phone8);
+    await assertNotRateLimited(db, rk);
+
+    const matchedEvents = await findClientEvents(db, appId, eventId, phone8);
+    if (matchedEvents.length === 0) { await recordFailedAttempt(db, rk); throw new HttpsError('not-found', 'No events found for this phone number.'); }
+
+    const ref = clientCredRef(db, appId, phone8);
+    const existing = await ref.get();
+    if (existing.exists && existing.data().hash) throw new HttpsError('already-exists', 'A password is already set. Please log in, or ask staff to reset it.');
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = await scryptHash(password, salt);
+    const { token, session } = newSessionToken();
+    await ref.set({ phoneClean: phone8, salt, hash, session, createdAt: new Date().toISOString() }, { merge: true });
+    return { events: packClientEvents(matchedEvents), appSettings: await getPortalSettings(db, appId), sessionToken: token };
+  } catch (error) { if (error instanceof HttpsError) throw error; throw new HttpsError('internal', error.message); }
+});
+
+// Staff-only: clear a client's portal password so they can set a new one on next login
+// (the portal has no email/OTP self-service reset).
+exports.resetClientPassword = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const { phone, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const role = request.auth.token.role;
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const boundToTenant = role === 'super_admin' || request.auth.token.tenantId === appId;
+  if (!isAdmin || !boundToTenant) throw new HttpsError('permission-denied', 'Admins only.');
+  const phone8 = cleanPhone8(phone);
+  if (phone8.length < 8) throw new HttpsError('invalid-argument', 'A valid phone number is required.');
+  await clientCredRef(admin.firestore(), appId, phone8).delete().catch(() => {});
+  return { success: true };
 });
 
 // Detect a file's real MIME from its magic bytes (never trust the filename extension).
@@ -373,7 +495,7 @@ function detectFileType(buf) {
 }
 
 exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) => {
-  const { eventId, phone, fileName, fileBase64, appId: requestAppId } = request.data;
+  const { eventId, phone, fileName, fileBase64, sessionToken, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();
   const bucket = admin.storage().bucket();
@@ -386,6 +508,7 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
     if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+    await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
 
     const buffer = Buffer.from(fileBase64, 'base64');
     if (buffer.length === 0) throw new HttpsError('invalid-argument', 'Empty file.');
@@ -415,7 +538,7 @@ exports.uploadClientPaymentProof = onCall({ memory: "512MiB" }, async (request) 
 });
 
 exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
-    const { eventId, phone, signatureBase64, docType, appId: requestAppId } = request.data;
+    const { eventId, phone, signatureBase64, docType, sessionToken, appId: requestAppId } = request.data;
     const appId = requestAppId || APP_ID;
     const db = admin.firestore();
     const rk = rlKey('client', appId, eventId);
@@ -424,6 +547,7 @@ exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
     const docSnap = await eventRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
     if (String(phone).replace(/[^0-9]/g, '').slice(-8) !== String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+    await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
     const updateData = {};
     if (docType) { updateData[`signatures.${docType}.client`] = signatureBase64; updateData[`signatures.${docType}.clientDate`] = new Date().toISOString(); }
     else { updateData.clientSignature = signatureBase64; updateData.clientSignatureDate = new Date().toISOString(); }
@@ -432,7 +556,7 @@ exports.signClientContract = onCall({ invoker: "public" }, async (request) => {
 });
 
 exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
-  const { eventId, phone, rundown, appId: requestAppId } = request.data;
+  const { eventId, phone, rundown, sessionToken, appId: requestAppId } = request.data;
   const db = admin.firestore();
   const appId = requestAppId || APP_ID;
   const rk = rlKey('client', appId, eventId);
@@ -441,12 +565,13 @@ exports.updateClientRundown = onCall({ invoker: "public" }, async (request) => {
   const docSnap = await eventRef.get();
   if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
   if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
   await eventRef.update({ rundown });
   return { success: true };
 });
 
 exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {
-  const { eventId, phone, specialMenuReq, allergies, appId: requestAppId } = request.data;
+  const { eventId, phone, specialMenuReq, allergies, sessionToken, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const db = admin.firestore();
   const rk = rlKey('client', appId, eventId);
@@ -455,6 +580,7 @@ exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "publi
   const docSnap = await eventRef.get();
   if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
   if (String(docSnap.data().clientPhone || '').replace(/[^0-9]/g, '').slice(-8) !== String(phone).replace(/[^0-9]/g, '').slice(-8)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
   await eventRef.update({ specialMenuReq: specialMenuReq || '', allergies: allergies || '' });
   return { success: true };
 });

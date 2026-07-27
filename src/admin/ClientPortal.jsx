@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, MessageCircle, Users } from 'lucide-react';
+import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, MessageCircle, Users, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -24,6 +24,11 @@ export default function ClientPortal() {
   const [viewState, setViewState] = useState('LOGIN'); // 'LOGIN', 'SELECT', 'PORTAL'
   const [isLoading, setIsLoading] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
+  const [authPhase, setAuthPhase] = useState('PHONE'); // 'PHONE' | 'PASSWORD' | 'SETUP'
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [sessionToken, setSessionToken] = useState(localStorage.getItem('vms_client_token') || '');
+  const [authError, setAuthError] = useState('');
   const [allEvents, setAllEvents] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [eventData, setEventData] = useState(null);
@@ -38,63 +43,106 @@ export default function ClientPortal() {
   const [isSavingRundown, setIsSavingRundown] = useState(false);
   const [showDishSelector, setShowDishSelector] = useState(false);
 
-  // --- AUTO LOGIN CHECK ---
+  const cleanDigits = (s) => String(s || '').replace(/[^0-9]/g, '');
+
+  // Handle a successful auth response (from verifyClientAccess or setupClientPassword).
+  const finishLogin = (data, phoneToUse) => {
+    const fetchedEvents = data.events || [];
+    if (data.appSettings) setAppSettings(data.appSettings);
+    setAllEvents(fetchedEvents);
+    localStorage.setItem('vms_client_phone', phoneToUse);
+    if (data.sessionToken) {
+      localStorage.setItem('vms_client_token', data.sessionToken);
+      setSessionToken(data.sessionToken);
+    }
+    const eventToUse = urlEventId;
+    if (fetchedEvents.length === 1 || eventToUse) {
+      const ev = fetchedEvents.find(e => e.id === eventToUse) || fetchedEvents[0];
+      if (ev) { handleSelectEvent(ev); return; }
+    }
+    setViewState('SELECT');
+  };
+
+  // --- AUTO LOGIN (silent): try a saved phone + session token ---
   useEffect(() => {
     const savedPhone = localStorage.getItem('vms_client_phone');
-    const savedEventId = localStorage.getItem('vms_client_event_id');
-    if (savedPhone && viewState === 'LOGIN') {
-      setPhoneInput(savedPhone);
-      handleLogin(null, savedPhone, urlEventId || savedEventId);
-    }
+    const savedToken = localStorage.getItem('vms_client_token');
+    if (!savedPhone) return;
+    setPhoneInput(savedPhone);
+    (async () => {
+      setIsLoading(true);
+      try {
+        const verifyAccess = httpsCallable(functions, 'verifyClientAccess');
+        const res = await verifyAccess({ appId, eventId: urlEventId || undefined, phone: savedPhone, sessionToken: savedToken || undefined });
+        const data = res.data;
+        if (data.events) { finishLogin(data, savedPhone); return; }
+        if (data.needsSetup) setAuthPhase('SETUP');
+        else if (data.needsPassword) setAuthPhase('PASSWORD');
+      } catch (e) {
+        // Stale/invalid saved creds — clear the token silently and show the login form.
+        localStorage.removeItem('vms_client_token');
+        setSessionToken('');
+      } finally {
+        setIsLoading(false);
+      }
+    })();
   }, []);
 
-  const handleLogin = async (e, overridePhone = null, targetEventId = null) => {
+  // Phase 1: submit phone -> discover whether this client needs setup or a password.
+  const handlePhoneSubmit = async (e) => {
     if (e) e.preventDefault();
+    setAuthError('');
+    if (cleanDigits(phoneInput).length < 8) { setAuthError(L('請輸入有效的電話號碼 (Please enter a valid phone number)')); return; }
     setIsLoading(true);
-
-    const phoneToUse = overridePhone || phoneInput;
-    const eventToUse = targetEventId || urlEventId;
-    
     try {
-      if (phoneToUse.replace(/[^0-9]/g, '').length < 8) {
-        alert(L("請輸入有效的電話號碼 (Please enter a valid phone number)"));
-        setIsLoading(false);
-        return;
-      }
-      
       const verifyAccess = httpsCallable(functions, 'verifyClientAccess');
-      const payload = eventToUse ? { appId, eventId: eventToUse, phone: phoneToUse } : { appId, phone: phoneToUse };
-      const response = await verifyAccess(payload);
-      
-      const fetchedEvents = response.data.events;
-      const fetchedSettings = response.data.appSettings;
-
-      setAllEvents(fetchedEvents);
-      if (fetchedSettings) {
-        setAppSettings(fetchedSettings);
-      }
-
-      // Save to localStorage
-      localStorage.setItem('vms_client_phone', phoneToUse);
-      
-      if (fetchedEvents.length === 1 || eventToUse) {
-        const ev = fetchedEvents.find(e => e.id === eventToUse) || fetchedEvents[0];
-        handleSelectEvent(ev);
-      } else {
-        setViewState('SELECT');
-      }
+      const res = await verifyAccess({ appId, eventId: urlEventId || undefined, phone: phoneInput });
+      const data = res.data;
+      if (data.events) { finishLogin(data, phoneInput); return; }
+      if (data.needsSetup) setAuthPhase('SETUP');
+      else if (data.needsPassword) setAuthPhase('PASSWORD');
     } catch (error) {
-      console.error("Login failed:", error);
-      if (overridePhone) {
-        // Clear invalid storage silently on auto-login failure
-        localStorage.removeItem('vms_client_phone');
-        localStorage.removeItem('vms_client_event_id');
+      setAuthError(error.message || L('找不到符合的活動或電話號碼不正確 (No matching event found or phone number is incorrect)'));
+    } finally { setIsLoading(false); }
+  };
+
+  // Phase 2a: returning client submits their password.
+  const handlePasswordSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+    if (!password) { setAuthError(L('請輸入密碼 (Please enter your password)')); return; }
+    setIsLoading(true);
+    try {
+      const verifyAccess = httpsCallable(functions, 'verifyClientAccess');
+      const res = await verifyAccess({ appId, eventId: urlEventId || undefined, phone: phoneInput, password });
+      const data = res.data;
+      if (data.events) { finishLogin(data, phoneInput); return; }
+      if (data.needsSetup) setAuthPhase('SETUP'); // edge: reset happened between steps
+    } catch (error) {
+      setAuthError(L('密碼不正確 (Incorrect password)'));
+    } finally { setIsLoading(false); }
+  };
+
+  // Phase 2b: first-time client creates their password.
+  const handleSetupSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+    if (password.length < 6) { setAuthError(L('密碼至少需要 6 個字元 (Password must be at least 6 characters)')); return; }
+    if (password !== confirmPassword) { setAuthError(L('兩次輸入的密碼不一致 (Passwords do not match)')); return; }
+    setIsLoading(true);
+    try {
+      const setupApi = httpsCallable(functions, 'setupClientPassword');
+      const res = await setupApi({ appId, eventId: urlEventId || undefined, phone: phoneInput, password });
+      const data = res.data;
+      if (data.events) { finishLogin(data, phoneInput); return; }
+    } catch (error) {
+      if (error.code === 'functions/already-exists' || /already/i.test(error.message || '')) {
+        setAuthError(L('此電話已設定密碼，請登入。 (A password is already set — please log in.)'));
+        setAuthPhase('PASSWORD');
       } else {
-        alert(`${L("驗證失敗 (Verification failed)")}: ${error.message || L('找不到符合的活動或電話號碼不正確 (No matching event found or phone number is incorrect)')}`);
+        setAuthError(error.message || L('設定失敗 (Setup failed)'));
       }
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
   const handleSelectEvent = (ev) => {
@@ -110,7 +158,13 @@ export default function ClientPortal() {
   const handleLogout = async () => {
     localStorage.removeItem('vms_client_phone');
     localStorage.removeItem('vms_client_event_id');
+    localStorage.removeItem('vms_client_token');
     setPhoneInput('');
+    setPassword('');
+    setConfirmPassword('');
+    setSessionToken('');
+    setAuthPhase('PHONE');
+    setAuthError('');
     setEventData(null);
     setAllEvents([]);
     setViewState('LOGIN');
@@ -141,12 +195,13 @@ export default function ClientPortal() {
         
         const uploadApi = httpsCallable(functions, 'uploadClientPaymentProof');
         const safePrefix = milestoneLabel.split(' ')[0]; // e.g. "1st", "2nd"
-        const response = await uploadApi({ 
+        const response = await uploadApi({
           appId,
-          eventId, 
-          phone: currentPhone, 
+          eventId,
+          phone: currentPhone,
           fileName: `${safePrefix}_${file.name}`,
-          fileBase64: base64Str 
+          fileBase64: base64Str,
+          sessionToken: localStorage.getItem('vms_client_token') || sessionToken || ''
         });
         
 
@@ -188,7 +243,8 @@ export default function ClientPortal() {
         eventId,
         phone: currentPhone,
         specialMenuReq: dietaryReq,
-        allergies: allergies
+        allergies: allergies,
+        sessionToken: localStorage.getItem('vms_client_token') || sessionToken || ''
       });
       alert(L("已成功更新您的餐飲要求 (Dietary requirements updated successfully)!"));
       setEventData(prev => ({ ...prev, specialMenuReq: dietaryReq, allergies: allergies }));
@@ -208,7 +264,7 @@ export default function ClientPortal() {
       const api = httpsCallable(functions, 'updateClientRundown');
       // JSON.parse/stringify cleans the array of any React-specific proxy metadata so Firebase doesn't crash (INTERNAL ERROR)
       const cleanRundown = JSON.parse(JSON.stringify(editedRundown));
-      await api({ appId, eventId, phone: currentPhone, rundown: cleanRundown });
+      await api({ appId, eventId, phone: currentPhone, rundown: cleanRundown, sessionToken: localStorage.getItem('vms_client_token') || sessionToken || '' });
       setEventData(prev => ({ ...prev, rundown: editedRundown }));
       setIsEditingRundown(false);
       alert(L("流程更新成功 (Rundown updated successfully)!"));
@@ -225,7 +281,7 @@ export default function ClientPortal() {
     try {
       const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
       const signApi = httpsCallable(functions, 'signClientContract');
-      await signApi({ appId, eventId, phone: currentPhone, signatureBase64: base64String, docType });
+      await signApi({ appId, eventId, phone: currentPhone, signatureBase64: base64String, docType, sessionToken: localStorage.getItem('vms_client_token') || sessionToken || '' });
       
       setEventData(prev => ({ 
         ...prev, 
@@ -298,41 +354,94 @@ export default function ClientPortal() {
 
   // --- LOGIN VIEW ---
   if (viewState === 'LOGIN') {
+    const onSubmit = authPhase === 'SETUP' ? handleSetupSubmit : authPhase === 'PASSWORD' ? handlePasswordSubmit : handlePhoneSubmit;
+    const resetToPhone = () => { setAuthPhase('PHONE'); setPassword(''); setConfirmPassword(''); setAuthError(''); };
+    const inputCls = "w-full bg-slate-50 border border-slate-200 py-3 pl-12 pr-4 rounded-xl text-base font-bold focus:border-brand-primary focus:ring-2 focus:ring-[var(--brand-primary)]/20 outline-none transition-all";
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
-        <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-100 relative overflow-hidden">
+        <form onSubmit={onSubmit} className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-100 relative overflow-hidden">
           {/* Decorative Gold Header */}
           <div className="absolute top-0 left-0 w-full h-2 bg-brand-primary"></div>
-          
+
           <div className="text-center mb-8 mt-4">
             <h1 className="text-3xl font-black text-brand-primary tracking-tight mb-1">{appSettings?.venueProfile?.nameZh || appSettings?.branding?.portalTitle || 'VowsOS'}</h1>
             <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase">{appSettings?.venueProfile?.nameEn || 'Venue Management'}</h2>
           </div>
-          
-          <div className="mb-8">
-            <p className="text-center text-slate-500 text-sm font-medium mb-6">
-              {L('請輸入您的登記電話號碼以查看活動詳情。 (Please enter your registered phone number to view your event details.)')}<br/>
-              <span className="text-xs text-slate-400 mt-1 block">{L('Please enter your registered phone number. (請輸入您的登記電話號碼。)')}</span>
-            </p>
 
-            <div className="relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-              <input
-                type="tel"
-                placeholder={L("電話號碼 (Phone No.)")}
-                className="w-full bg-slate-50 border border-slate-200 py-3 pl-12 pr-4 rounded-xl text-lg font-bold tracking-wider focus:border-brand-primary focus:ring-2 focus:ring-[var(--brand-primary)]/20 outline-none transition-all"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-              />
+          {/* PHONE PHASE */}
+          {authPhase === 'PHONE' && (
+            <div className="mb-6">
+              <p className="text-center text-slate-500 text-sm font-medium mb-6">
+                {L('請輸入您的登記電話號碼。 (Please enter your registered phone number.)')}
+              </p>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input
+                  type="tel" autoFocus
+                  placeholder={L("電話號碼 (Phone No.)")}
+                  className={`${inputCls} text-lg tracking-wider`}
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          <button 
-            type="submit" 
+          {/* PASSWORD PHASE (returning client) */}
+          {authPhase === 'PASSWORD' && (
+            <div className="mb-6">
+              <p className="text-center text-slate-500 text-sm font-medium mb-1">{L('歡迎回來 (Welcome back)')}</p>
+              <p className="text-center text-slate-400 text-xs font-mono mb-5">{phoneInput}</p>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input
+                  type="password" autoFocus
+                  placeholder={L("密碼 (Password)")}
+                  className={inputCls}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <button type="button" onClick={resetToPhone} className="mt-3 text-xs text-slate-400 hover:text-brand-primary underline w-full text-center">
+                {L('使用其他電話號碼 (Use a different number)')}
+              </button>
+            </div>
+          )}
+
+          {/* SETUP PHASE (first-time) */}
+          {authPhase === 'SETUP' && (
+            <div className="mb-6">
+              <p className="text-center text-slate-600 text-sm font-bold mb-1">{L('首次登入設定 (First-time setup)')}</p>
+              <p className="text-center text-slate-400 text-xs mb-4">
+                {L('請為您的帳戶建立密碼。 (Please create a password for your account.)')}<br/>
+                <span className="font-mono text-slate-500">{phoneInput}</span>
+              </p>
+              <div className="relative mb-3">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input type="password" autoFocus placeholder={L("建立密碼（最少6位）(Create password, min 6)")} className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input type="password" placeholder={L("再次輸入密碼 (Confirm password)")} className={inputCls} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              </div>
+              <button type="button" onClick={resetToPhone} className="mt-3 text-xs text-slate-400 hover:text-brand-primary underline w-full text-center">
+                {L('使用其他電話號碼 (Use a different number)')}
+              </button>
+            </div>
+          )}
+
+          {authError && (
+            <p className="text-center text-red-500 text-xs font-bold mb-4 -mt-1">{authError}</p>
+          )}
+
+          <button
+            type="submit"
             disabled={isLoading}
-            className="w-full bg-brand-primary hover:bg-[brand-primary/90] text-white py-3.5 rounded-xl font-bold tracking-wide transition-colors flex justify-center items-center shadow-lg shadow-[var(--brand-primary)]/20"
+            className="w-full bg-brand-primary hover:bg-[brand-primary/90] text-white py-3.5 rounded-xl font-bold tracking-wide transition-colors flex justify-center items-center shadow-lg shadow-[var(--brand-primary)]/20 disabled:opacity-60"
           >
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : L('登入查看 (Access Portal)')}
+            {isLoading
+              ? <Loader2 className="animate-spin" size={20} />
+              : (authPhase === 'SETUP' ? L('建立並進入 (Create & Enter)') : authPhase === 'PASSWORD' ? L('登入 (Log In)') : L('繼續 (Continue)'))}
           </button>
         </form>
       </div>

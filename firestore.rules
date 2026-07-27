@@ -95,11 +95,18 @@ service cloud.firestore {
       // pending_users is excluded here — it is provisioned/activated only via Cloud
       // Functions so the maxUsers license can't be bypassed by direct client writes.
       match /private/data/{collection}/{document=**} {
-        allow read: if belongsTo(appId) && collection != 'pending_users';
+        allow read: if belongsTo(appId) && collection != 'pending_users' && collection != 'client_credentials';
         allow write: if belongsTo(appId) && isAdminRole()
                      && (isSuperAdmin() || withinBranchLimit(appId))
                      && (isSuperAdmin() || !tenantSuspended(appId))
-                     && collection != 'pending_users';
+                     && collection != 'pending_users' && collection != 'client_credentials';
+      }
+
+      // Client-portal password hashes + session tokens. Read/written ONLY by Cloud
+      // Functions (Admin SDK bypasses rules); no client — not even a tenant admin — may
+      // read the hashes directly. Managed via setup/verify/resetClientPassword.
+      match /private/data/client_credentials/{document=**} {
+        allow read, write: if false;
       }
 
       // Whitelisted (pending) users — readable by tenant admins to manage the list;

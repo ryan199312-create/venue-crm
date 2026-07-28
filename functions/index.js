@@ -740,13 +740,20 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     if (!key || key === 'unset') throw new HttpsError('failed-precondition', 'Email is not configured yet. Set the RESEND_KEY secret.');
     const settings = await getPortalSettings(db, appId);
     const venueName = settings?.venueProfile?.nameEn || settings?.venueProfile?.nameZh || 'VowsOS';
+    const mcfg = settings?.messaging || {};
 
-    // Reply routing: if an inbound receiving domain is configured, replies go to a unique
-    // per-event address (<token>@<inboundDomain>) that the inbound webhook maps back to
-    // this exact thread. Otherwise fall back to the venue's own email.
-    const inboundDomain = resendInboundDomain.value();
+    // Per-tenant sending identity — the tenant's own from-address if configured (must be a
+    // domain they've verified in Resend), otherwise the shared VowsOS sender.
+    const fromLine = `${venueName} <${mcfg.emailFrom || 'noreply@vowsos.com'}>`;
+
+    // Reply routing: prefer the tenant's own receiving domain, then the platform default.
+    // Replies go to a unique per-event address (<token>@<inboundDomain>) that the inbound
+    // webhook maps back to this exact thread. With none configured, fall back to the
+    // venue's own email (replies just go to their normal inbox, not into the thread).
+    const platformInbound = resendInboundDomain.value();
+    const inboundDomain = mcfg.emailInboundDomain || (platformInbound && platformInbound !== 'unset' ? platformInbound : '');
     let replyTo = settings?.venueProfile?.email || undefined;
-    if (inboundDomain && inboundDomain !== 'unset') {
+    if (inboundDomain) {
       let token = ev.mailToken;
       if (!token) {
         token = crypto.randomBytes(12).toString('hex'); // 24 lowercase hex chars — case-safe localpart
@@ -757,7 +764,7 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     }
     try {
       const resp = await axios.post('https://api.resend.com/emails', {
-        from: `${venueName} <noreply@vowsos.com>`,
+        from: fromLine,
         to: [to],
         subject: String(subject || venueName).slice(0, 200),
         text,

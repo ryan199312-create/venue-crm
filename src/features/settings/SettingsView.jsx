@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText, Eye } from 'lucide-react';
+import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText, Eye, Mail } from 'lucide-react';
 import {
   formatMoney, isZoneSelected, getPreferredZoneLabel, DAYS_OF_WEEK, DEPARTMENTS
 } from '../../services/billingService';
@@ -86,6 +86,10 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   }, [selectedVenueId, settings]);
 
   const [activeSubTab, setActiveSubTab] = useState(selectedVenueId === 'all' ? 'outlets' : 'venueProfile');
+  const [msgForm, setMsgForm] = useState({
+    emailFrom: settings?.messaging?.emailFrom || '',
+    emailInboundDomain: settings?.messaging?.emailInboundDomain || '',
+  });
 
   // Handle saving based on scope
   const handleSaveScoped = (updatedData) => {
@@ -292,6 +296,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
           <>
             <button onClick={() => setActiveSubTab('outlets')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'outlets' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('分店管理 (Outlets)')}</button>
             <button onClick={() => setActiveSubTab('companyInfo')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('品牌與標誌 (Brand & Logo)')}</button>
+            <button onClick={() => setActiveSubTab('messaging')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'messaging' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('電郵通訊 (Email)')}</button>
             <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('文件風格 (Doc Style)')}</button>
             <button onClick={() => setActiveSubTab('users')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('用戶管理 (Users)')}</button>
             <button onClick={() => setActiveSubTab('roles')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'roles' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('角色權限 (Roles)')}</button>
@@ -418,6 +423,29 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
                 }} />
               </label>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {activeSubTab === 'messaging' && (
+        <Card className="p-6 border-l-4 border-l-indigo-500 animate-in fade-in max-w-2xl">
+          <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><Mail size={20} /> {L('電郵通訊設定 (Email Messaging)')}</h3>
+          <p className="text-xs text-slate-400 mb-6">{L('設定此租戶用於發送及接收客戶電郵的網域。留空則使用預設 vowsos.com。 (Set the domain this tenant uses to send/receive client email. Leave blank to use the shared vowsos.com default.)')}</p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('寄件地址 (Sender email)')}</label>
+              <input value={msgForm.emailFrom} onChange={e => setMsgForm(f => ({ ...f, emailFrom: e.target.value.trim() }))} placeholder="events@kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('此網域必須已在 Resend 完成「寄件」驗證 (DKIM/SPF)。 (This domain must be verified for SENDING in Resend.)')}</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('回覆接收網域 (Reply / inbound domain)')}</label>
+              <input value={msgForm.emailInboundDomain} onChange={e => setMsgForm(f => ({ ...f, emailInboundDomain: e.target.value.trim() }))} placeholder="reply.kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('客戶回覆會寄到此網域並自動歸入對話。需在 Resend 設定「接收」(MX)。 (Client replies come here and route into the thread; needs RECEIVING/MX set up in Resend.)')}</p>
+            </div>
+            <button onClick={() => { handleSaveScoped({ messaging: { ...(settings.messaging || {}), emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain } }); addToast(L('已儲存 (Saved)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
+          </div>
+          <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
+            {L('步驟 (Steps)')}: 1) {L('在 Resend 新增並驗證你的網域（寄件 + 接收）。 (Add & verify your domain in Resend — sending + receiving.)')} 2) {L('在此填入地址並儲存。其他租戶各自使用自己的網域。 (Enter the addresses here and save. Each tenant uses their own domain.)')}
           </div>
         </Card>
       )}

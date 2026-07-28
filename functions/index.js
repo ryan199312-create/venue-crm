@@ -28,6 +28,7 @@ const deepseekKey = defineSecret("DEEPSEEK_KEY");
 const resendKey = defineSecret("RESEND_KEY"); // transactional email (Resend); "unset" until configured
 const resendWebhookSecret = defineSecret("RESEND_WEBHOOK_SECRET"); // Svix signing secret for inbound email; "unset" until configured
 const resendInboundDomain = defineSecret("RESEND_INBOUND_DOMAIN"); // receiving domain for reply routing, e.g. reply.vowsos.com; "unset" until configured
+const whatsappVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN"); // platform token all tenants enter in their Meta webhook config; "unset" until configured
 
 // --- Rate limiting for public (phone-auth) client-portal endpoints ---
 // Tracks FAILED attempts per key in /rate_limits (Admin SDK only; clients can't touch it).
@@ -726,7 +727,7 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
   const ev = evSnap.data();
 
   const msg = {
-    channel: channel === 'email' ? 'email' : 'portal',
+    channel: (channel === 'email' || channel === 'whatsapp') ? channel : 'portal',
     direction: 'out', body: text,
     author: request.auth.uid, authorName: tok.name || tok.email || 'Staff',
     status: 'sent', internal: false,
@@ -776,6 +777,27 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
       msg.meta = { to, error: String((e.response && e.response.data && e.response.data.message) || e.message || 'send failed').slice(0, 200) };
       await eventRef.collection('messages').add(msg);
       throw new HttpsError('internal', `Email failed: ${msg.meta.error}`);
+    }
+  }
+
+  if (channel === 'whatsapp') {
+    const raw = String(ev.clientPhone || '').replace(/[^0-9]/g, '');
+    if (!raw) throw new HttpsError('failed-precondition', 'This client has no phone number on file.');
+    const cfg = await getWaConfig(db, appId);
+    if (!cfg || !cfg.phoneNumberId || !cfg.accessToken) throw new HttpsError('failed-precondition', 'WhatsApp is not set up for this tenant. Configure it in Settings.');
+    const waTo = raw.length === 8 ? '852' + raw : raw; // HK 8-digit -> +852
+    try {
+      const resp = await axios.post(`https://graph.facebook.com/v21.0/${cfg.phoneNumberId}/messages`, {
+        messaging_product: 'whatsapp', to: waTo, type: 'text', text: { body: text },
+      }, { headers: { Authorization: `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' }, timeout: 15000 });
+      msg.meta = { to: waTo, waId: (resp.data && resp.data.messages && resp.data.messages[0] && resp.data.messages[0].id) || '' };
+    } catch (e) {
+      msg.status = 'failed';
+      const apiErr = e.response && e.response.data && e.response.data.error;
+      msg.meta = { to: waTo, error: String((apiErr && apiErr.message) || e.message || 'send failed').slice(0, 200) };
+      await eventRef.collection('messages').add(msg);
+      // 24h-window/template errors surface here so staff know why it didn't go.
+      throw new HttpsError('internal', `WhatsApp failed: ${msg.meta.error}`);
     }
   }
 
@@ -896,6 +918,143 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
     res.status(200).send('ok');
   } catch (e) {
     console.error('[inboundEmail] error:', e);
+    res.status(200).send('error-logged');
+  }
+});
+
+// ==========================================
+// 4d. WHATSAPP (Meta Cloud API, per-tenant)
+// ==========================================
+// Per-tenant WhatsApp credentials live in messaging_secrets/{appId} (functions-only in
+// rules — never exposed to any client). wa_routes/{phoneNumberId} maps an incoming number
+// to its tenant so ONE webhook serves every tenant.
+const waSecretRef = (db, appId) => db.collection('messaging_secrets').doc(appId);
+async function getWaConfig(db, appId) {
+  const snap = await waSecretRef(db, appId).get();
+  return (snap.exists && snap.data().whatsapp) ? snap.data().whatsapp : null;
+}
+function extractWaText(m) {
+  if (!m || !m.type) return '';
+  if (m.type === 'text') return (m.text && m.text.body) || '';
+  if (m.type === 'button') return (m.button && m.button.text) || '';
+  if (m.type === 'interactive') {
+    const i = m.interactive || {};
+    return (i.button_reply && i.button_reply.title) || (i.list_reply && i.list_reply.title) || '';
+  }
+  if (['image', 'document', 'audio', 'video', 'sticker'].includes(m.type)) {
+    const cap = m[m.type] && m[m.type].caption;
+    return `[${m.type}]${cap ? ' ' + cap : ''}`;
+  }
+  return `[${m.type}]`;
+}
+
+// Staff configure their tenant's WhatsApp Cloud API credentials.
+exports.setWhatsappConfig = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const { phoneNumberId, accessToken, appSecret, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const tok = request.auth.token;
+  const isAdmin = tok.role === 'super_admin' || (tok.role === 'admin' && tok.tenantId === appId);
+  if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
+  const db = admin.firestore();
+  const pid = String(phoneNumberId || '').replace(/[^0-9]/g, '');
+  const at = String(accessToken || '').trim();
+  const asec = String(appSecret || '').trim();
+  if (!pid || !at) throw new HttpsError('invalid-argument', 'Phone Number ID and access token are required.');
+  const existing = await getWaConfig(db, appId);
+  if (existing && existing.phoneNumberId && existing.phoneNumberId !== pid) {
+    await db.collection('wa_routes').doc(existing.phoneNumberId).delete().catch(() => {});
+  }
+  await waSecretRef(db, appId).set({ whatsapp: { phoneNumberId: pid, accessToken: at, appSecret: asec, updatedAt: new Date().toISOString() } }, { merge: true });
+  await db.collection('wa_routes').doc(pid).set({ appId }).catch(() => {});
+  return { success: true };
+});
+
+// Report whether WhatsApp is configured (never returns the token/secret).
+exports.getWhatsappStatus = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const appId = request.data.appId || APP_ID;
+  const tok = request.auth.token;
+  const isAdmin = tok.role === 'super_admin' || (tok.role === 'admin' && tok.tenantId === appId);
+  if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
+  const cfg = await getWaConfig(admin.firestore(), appId);
+  return {
+    configured: !!(cfg && cfg.phoneNumberId && cfg.accessToken),
+    phoneNumberId: (cfg && cfg.phoneNumberId) || '',
+    hasAppSecret: !!(cfg && cfg.appSecret),
+  };
+});
+
+// Inbound WhatsApp webhook (Meta). GET = verification handshake (platform verify token).
+// POST = incoming messages; routes to the tenant by phone_number_id, verifies Meta's
+// signature with that tenant's app secret, and appends inbound bubbles.
+exports.whatsappWebhook = onRequest({ secrets: [whatsappVerifyToken] }, async (req, res) => {
+  if (req.method === 'GET') {
+    const vt = whatsappVerifyToken.value();
+    if (req.query['hub.mode'] === 'subscribe' && vt && vt !== 'unset' && req.query['hub.verify_token'] === vt) {
+      res.status(200).send(req.query['hub.challenge']); return;
+    }
+    res.status(403).send('forbidden');
+    return;
+  }
+  if (req.method !== 'POST') { res.status(405).send('method'); return; }
+  try {
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {});
+    const body = (req.body && typeof req.body === 'object') ? req.body : JSON.parse(raw || '{}');
+    const db = admin.firestore();
+    const entries = Array.isArray(body.entry) ? body.entry : [];
+    for (const entry of entries) {
+      const changes = Array.isArray(entry.changes) ? entry.changes : [];
+      for (const change of changes) {
+        const value = change.value || {};
+        const phoneNumberId = value.metadata && value.metadata.phone_number_id;
+        const messagesArr = Array.isArray(value.messages) ? value.messages : [];
+        if (!phoneNumberId || messagesArr.length === 0) continue; // ignore delivery-status callbacks
+
+        const routeSnap = await db.collection('wa_routes').doc(String(phoneNumberId)).get();
+        if (!routeSnap.exists) { console.warn('[wa] no route for', phoneNumberId); continue; }
+        const appId = routeSnap.data().appId;
+        const cfg = await getWaConfig(db, appId);
+
+        // Verify Meta's signature with the tenant's app secret before trusting the payload.
+        if (cfg && cfg.appSecret) {
+          const sig = String(req.get('x-hub-signature-256') || '').replace('sha256=', '');
+          const expected = crypto.createHmac('sha256', cfg.appSecret).update(raw).digest('hex');
+          if (!safeEqualHex(sig, expected)) { console.warn('[wa] bad signature for', appId); continue; }
+        }
+
+        const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+        const nameByWa = {};
+        for (const c of contacts) nameByWa[c.wa_id] = (c.profile && c.profile.name) || '';
+
+        for (const m of messagesArr) {
+          const from = String(m.from || '').replace(/[^0-9]/g, '');
+          const bodyText = extractWaText(m);
+          if (!from || !bodyText) continue;
+          const phone8 = from.slice(-8);
+          const evSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').where('clientPhoneClean', '==', phone8).get();
+          if (evSnap.empty) { console.warn('[wa] no event for', phone8, appId); continue; }
+          const docs = evSnap.docs.map(d => ({ ref: d.ref, data: d.data() }));
+          docs.sort((a, b) => new Date(b.data.date || 0) - new Date(a.data.date || 0));
+          const eventRef = docs[0].ref;
+          await eventRef.collection('messages').add({
+            channel: 'whatsapp', direction: 'in', body: bodyText.slice(0, 8000),
+            author: 'client', authorName: nameByWa[m.from] || from, fromPhone: from,
+            status: 'received', internal: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          await eventRef.update({
+            lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastMessageBody: bodyText.slice(0, 140),
+            lastMessageDirection: 'in',
+            unreadForStaff: admin.firestore.FieldValue.increment(1),
+          }).catch(() => {});
+        }
+      }
+    }
+    res.status(200).send('ok');
+  } catch (e) {
+    console.error('[wa] error:', e);
     res.status(200).send('error-logged');
   }
 });

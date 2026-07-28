@@ -68,7 +68,7 @@ const InboxView = ({ events = [], openEditModal }) => {
               {openEditModal && <button onClick={() => openEditModal(selected)} className="text-xs text-indigo-600 font-bold flex items-center gap-1 hover:underline shrink-0"><ExternalLink size={12} /> {L('開啟訂單 (Open EO)')}</button>}
             </div>
             <div className="flex-1 min-h-0 p-3">
-              <MessagesTab key={selected.id} eventId={selected.id} clientEmail={selected.clientEmail} heightClass="h-full" />
+              <MessagesTab key={selected.id} eventId={selected.id} clientEmail={selected.clientEmail} clientPhone={selected.clientPhone} heightClass="h-full" />
             </div>
           </>
         ) : (

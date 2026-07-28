@@ -4,21 +4,38 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../../core/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
-import { Send, Loader2, StickyNote, Mail } from 'lucide-react';
+import { Send, Loader2, StickyNote, Mail, MessageCircle } from 'lucide-react';
+
+// Whether the tenant has WhatsApp configured — fetched once per appId per session.
+const _waStatusCache = {};
+const fetchWaStatus = (appId) => {
+  if (!_waStatusCache[appId]) {
+    _waStatusCache[appId] = httpsCallable(functions, 'getWhatsappStatus')({ appId })
+      .then(r => r.data).catch(() => ({ configured: false }));
+  }
+  return _waStatusCache[appId];
+};
 
 // Chat thread for an event (events/{id}/messages). Real-time via onSnapshot (staff are
-// Firebase-authed). Channels: email (sent + logged via sendEventMessage) and internal
-// note (staff-only). Used both in the event form and the global inbox (InboxView), so
-// height is a prop.
-const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
+// Firebase-authed). Channels: email + WhatsApp (sent + logged via sendEventMessage) and
+// internal note (staff-only). Used both in the event form and the global inbox
+// (InboxView), so height is a prop.
+const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh]' }) => {
   const { appId, userProfile, user } = useAuth();
   const { L } = useLang();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
-  const [mode, setMode] = useState(clientEmail ? 'email' : 'note'); // 'email' | 'note'
+  const [mode, setMode] = useState(clientEmail ? 'email' : 'note'); // 'email' | 'whatsapp' | 'note'
   const [sending, setSending] = useState(false);
+  const [waConfigured, setWaConfigured] = useState(false);
   const endRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchWaStatus(appId).then(s => { if (alive) setWaConfigured(!!s.configured); });
+    return () => { alive = false; };
+  }, [appId]);
 
   const eventRef = () => doc(db, 'artifacts', appId, 'private', 'data', 'events', eventId);
 
@@ -47,6 +64,8 @@ const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
     try {
       if (mode === 'email') {
         await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'email' });
+      } else if (mode === 'whatsapp') {
+        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'whatsapp' });
       } else {
         // internal note — staff-only, never shown to the client
         const col = collection(db, 'artifacts', appId, 'private', 'data', 'events', eventId, 'messages');
@@ -70,6 +89,7 @@ const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
 
   const channelTag = (m) => {
     if (m.channel === 'email') return { icon: Mail, label: L('電郵 (Email)'), cls: 'text-sky-500' };
+    if (m.channel === 'whatsapp') return { icon: MessageCircle, label: 'WhatsApp', cls: 'text-emerald-500' };
     if (m.channel === 'note') return { icon: StickyNote, label: L('內部備註 (Internal note)'), cls: 'text-amber-600' };
     return null;
   };
@@ -98,13 +118,13 @@ const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
       </div>
       <div className="border-t border-slate-200 p-3 bg-white">
         <div className="flex items-center gap-2 mb-2">
-          {clientEmail
-            ? <button type="button" onClick={() => setMode('email')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'email' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}><Mail size={11} className="inline mr-1" />{L('電郵 (Email)')}</button>
-            : <span className="text-[11px] text-slate-400 italic">{L('此客戶未設定電郵 (No client email on file)')}</span>}
+          {clientEmail && <button type="button" onClick={() => setMode('email')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'email' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}><Mail size={11} className="inline mr-1" />{L('電郵 (Email)')}</button>}
+          {waConfigured && clientPhone && <button type="button" onClick={() => setMode('whatsapp')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}><MessageCircle size={11} className="inline mr-1" />WhatsApp</button>}
           <button type="button" onClick={() => setMode('note')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'note' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}><StickyNote size={11} className="inline mr-1" />{L('內部備註 (Internal note)')}</button>
+          {!clientEmail && !(waConfigured && clientPhone) && <span className="text-[11px] text-slate-400 italic">{L('此客戶未設定電郵/電話 (No client email or phone on file)')}</span>}
         </div>
         <div className="flex gap-2">
-          <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
+          <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
           <button type="button" onClick={send} disabled={sending || !text.trim()} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText, Eye, Mail } from 'lucide-react';
+import { Edit2, Plus, Trash2, Utensils, Coffee, PieChart, Map, Maximize, Minimize, Image as ImageIcon, Shield, Building2, Phone, MapPin, Globe, Grid, CreditCard, Palette, FileText, Eye, Mail, MessageCircle } from 'lucide-react';
 import {
   formatMoney, isZoneSelected, getPreferredZoneLabel, DAYS_OF_WEEK, DEPARTMENTS
 } from '../../services/billingService';
@@ -17,9 +17,13 @@ import { useAuth } from '../../context/AuthContext';
 import { getScopedSettings } from '../../services/helpers';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useLang } from '../../i18n/language';
+import { functions } from '../../core/firebase';
+import { httpsCallable } from 'firebase/functions';
+
+const WHATSAPP_WEBHOOK_URL = 'https://asia-east2-event-management-system-9f764.cloudfunctions.net/whatsappWebhook';
 
 const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendingUsers, updateUserRole, updateUserProfile, deleteUser, createUser, provisionUser, revokePending, events }) => {
-  const { selectedVenueId, outlets, maxBranches } = useAuth();
+  const { selectedVenueId, outlets, maxBranches, appId } = useAuth();
   const { L } = useLang();
 
   // Licensing: how many branches (outlets) this tenant is allowed. null = unlimited.
@@ -90,6 +94,31 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
     emailFrom: settings?.messaging?.emailFrom || '',
     emailInboundDomain: settings?.messaging?.emailInboundDomain || '',
   });
+  const [waForm, setWaForm] = useState({ phoneNumberId: '', accessToken: '', appSecret: '' });
+  const [waStatus, setWaStatus] = useState(null); // { configured, phoneNumberId, hasAppSecret }
+  const [waSaving, setWaSaving] = useState(false);
+
+  useEffect(() => {
+    if (activeSubTab !== 'messaging') return;
+    httpsCallable(functions, 'getWhatsappStatus')({ appId })
+      .then(r => { setWaStatus(r.data); setWaForm(f => ({ ...f, phoneNumberId: r.data?.phoneNumberId || f.phoneNumberId })); })
+      .catch(() => setWaStatus({ configured: false }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubTab, appId]);
+
+  const saveWhatsapp = async () => {
+    if (!waForm.phoneNumberId.trim() || !waForm.accessToken.trim()) { addToast(L('請填寫 Phone Number ID 及 Access Token (Phone Number ID and access token required)'), 'error'); return; }
+    setWaSaving(true);
+    try {
+      await httpsCallable(functions, 'setWhatsappConfig')({ appId, phoneNumberId: waForm.phoneNumberId.trim(), accessToken: waForm.accessToken.trim(), appSecret: waForm.appSecret.trim() });
+      addToast(L('WhatsApp 已連接 (WhatsApp connected)'), 'success');
+      setWaForm(f => ({ ...f, accessToken: '', appSecret: '' }));
+      const r = await httpsCallable(functions, 'getWhatsappStatus')({ appId });
+      setWaStatus(r.data);
+    } catch (e) {
+      addToast(`${L('儲存失敗 (Save failed)')}: ${e.message}`, 'error');
+    } finally { setWaSaving(false); }
+  };
 
   // Handle saving based on scope
   const handleSaveScoped = (updatedData) => {
@@ -296,7 +325,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
           <>
             <button onClick={() => setActiveSubTab('outlets')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'outlets' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('分店管理 (Outlets)')}</button>
             <button onClick={() => setActiveSubTab('companyInfo')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'companyInfo' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('品牌與標誌 (Brand & Logo)')}</button>
-            <button onClick={() => setActiveSubTab('messaging')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'messaging' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('電郵通訊 (Email)')}</button>
+            <button onClick={() => setActiveSubTab('messaging')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'messaging' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('通訊 (Messaging)')}</button>
             <button onClick={() => setActiveSubTab('branding')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'branding' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('文件風格 (Doc Style)')}</button>
             <button onClick={() => setActiveSubTab('users')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('用戶管理 (Users)')}</button>
             <button onClick={() => setActiveSubTab('roles')} className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-all whitespace-nowrap ${activeSubTab === 'roles' ? 'bg-white border-x border-t border-slate-200 text-indigo-600 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{L('角色權限 (Roles)')}</button>
@@ -446,6 +475,40 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
           </div>
           <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
             {L('步驟 (Steps)')}: 1) {L('在 Resend 新增並驗證你的網域（寄件 + 接收）。 (Add & verify your domain in Resend — sending + receiving.)')} 2) {L('在此填入地址並儲存。其他租戶各自使用自己的網域。 (Enter the addresses here and save. Each tenant uses their own domain.)')}
+          </div>
+        </Card>
+      )}
+
+      {activeSubTab === 'messaging' && (
+        <Card className="p-6 border-l-4 border-l-emerald-500 animate-in fade-in max-w-2xl mt-6">
+          <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><MessageCircle size={20} className="text-emerald-600" /> WhatsApp Business (Meta Cloud API)</h3>
+          <p className="text-xs text-slate-400 mb-4">{L('連接此租戶自己的 WhatsApp Business 帳戶，用你自己的號碼收發客戶訊息。 (Connect this tenant\'s own WhatsApp Business account to message clients on your own number.)')}</p>
+          {waStatus?.configured && (
+            <div className="mb-4 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              ● {L('已連接 (Connected)')} · Phone Number ID: <span className="font-mono">{waStatus.phoneNumberId}</span>
+            </div>
+          )}
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Phone Number ID</label>
+              <input value={waForm.phoneNumberId} onChange={e => setWaForm(f => ({ ...f, phoneNumberId: e.target.value.trim() }))} placeholder="123456789012345" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none font-mono" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('永久存取權杖 (Permanent access token)')}</label>
+              <input type="password" value={waForm.accessToken} onChange={e => setWaForm(f => ({ ...f, accessToken: e.target.value }))} placeholder={waStatus?.configured ? '•••••••• (留空以保留 / leave blank to keep)' : 'EAAG...'} className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('應用程式密鑰 (App secret)')}</label>
+              <input type="password" value={waForm.appSecret} onChange={e => setWaForm(f => ({ ...f, appSecret: e.target.value }))} placeholder={waStatus?.hasAppSecret ? '•••••••• (留空以保留 / leave blank to keep)' : 'App secret'} className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('用於驗證收到訊息的簽名。 (Verifies the signature on inbound messages.)')}</p>
+            </div>
+            <button onClick={saveWhatsapp} disabled={waSaving} className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50">{waSaving ? L('儲存中... (Saving...)') : L('連接 WhatsApp (Connect)')}</button>
+          </div>
+          <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed space-y-1">
+            <p className="font-bold text-slate-500">{L('在 Meta 設定 Webhook (Set the webhook in Meta)')}:</p>
+            <p>{L('回呼網址 (Callback URL)')}: <span className="font-mono break-all text-slate-600">{WHATSAPP_WEBHOOK_URL}</span></p>
+            <p>{L('驗證權杖 (Verify token)')}: {L('由平台提供，所有租戶相同。 (Provided by the platform — same for every tenant.)')}</p>
+            <p>{L('訂閱欄位 (Subscribe to field)')}: <span className="font-mono">messages</span></p>
           </div>
         </Card>
       )}

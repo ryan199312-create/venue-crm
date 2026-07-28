@@ -74,6 +74,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Per-tenant WhatsApp Cloud API credentials (access token + app secret). Cloud
+    // Functions only — never exposed to any client, not even a tenant admin.
+    match /messaging_secrets/{doc} {
+      allow read, write: if false;
+    }
+
+    // WhatsApp inbound routing (phone_number_id -> {appId}). Cloud Functions only.
+    match /wa_routes/{doc} {
+      allow read, write: if false;
+    }
+
     // --- ARTIFACTS NAMESPACE ---
     match /artifacts/{appId} {
 

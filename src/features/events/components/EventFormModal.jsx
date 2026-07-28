@@ -380,7 +380,7 @@ export default function EventFormModal({
           )}
 
           {formTab === 'messages' && (
-            <MessagesTab eventId={editingEvent?.id} clientEmail={formData.clientEmail} />
+            <MessagesTab eventId={editingEvent?.id} clientEmail={formData.clientEmail} clientPhone={formData.clientPhone} />
           )}
 
           {formTab === 'fnb' && (

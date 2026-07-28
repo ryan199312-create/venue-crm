@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../../../core/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, functions, storage } from '../../../core/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
-import { Send, Loader2, StickyNote, Mail, MessageCircle } from 'lucide-react';
+import { Send, Loader2, StickyNote, Mail, MessageCircle, Paperclip, X, FileText, Download } from 'lucide-react';
 
 // Whether the tenant has WhatsApp configured — fetched once per appId per session.
 const _waStatusCache = {};
@@ -29,7 +30,26 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [mode, setMode] = useState(clientEmail ? 'email' : 'note'); // 'email' | 'whatsapp' | 'note'
   const [sending, setSending] = useState(false);
   const [waConfigured, setWaConfigured] = useState(false);
+  const [pendingAtt, setPendingAtt] = useState(null); // { url, name, type } | null
+  const [uploading, setUploading] = useState(false);
   const endRef = useRef(null);
+  const fileRef = useRef(null);
+
+  const onPickFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { alert(L('檔案過大（上限 20MB）。 (File too large — max 20MB.)')); return; }
+    setUploading(true);
+    try {
+      const r = storageRef(storage, `attachments/${appId}/${Date.now()}_${file.name}`);
+      await uploadBytes(r, file);
+      const url = await getDownloadURL(r);
+      setPendingAtt({ url, name: file.name, type: file.type || '' });
+    } catch (err) {
+      alert(`${L('上傳失敗 (Upload failed)')}: ${err.message}`);
+    } finally { setUploading(false); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -59,13 +79,12 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
 
   const send = async () => {
     const body = text.trim();
-    if (!body || !eventId || sending) return;
+    if ((!body && !pendingAtt) || !eventId || sending) return;
     setSending(true);
     try {
-      if (mode === 'email') {
-        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'email' });
-      } else if (mode === 'whatsapp') {
-        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'whatsapp' });
+      const attachments = pendingAtt ? [pendingAtt] : [];
+      if (mode === 'email' || mode === 'whatsapp') {
+        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: mode, attachments });
       } else {
         // internal note — staff-only, never shown to the client
         const col = collection(db, 'artifacts', appId, 'private', 'data', 'events', eventId, 'messages');
@@ -75,9 +94,11 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
           authorName: userProfile?.displayName || userProfile?.email || 'Staff',
           status: 'sent', internal: true,
           createdAt: serverTimestamp(),
+          ...(attachments.length ? { attachments } : {}),
         });
       }
       setText('');
+      setPendingAtt(null);
     } catch (e) {
       alert(`${L('傳送失敗 (Send failed)')}: ${e.message}`);
     } finally { setSending(false); }
@@ -108,7 +129,14 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm shadow-sm ${note ? 'bg-amber-50 border border-amber-200 text-amber-900' : mine ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-800'}`}>
                 {tag && <p className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 flex items-center gap-1 ${mine && !note ? 'text-indigo-200' : tag.cls}`}><tag.icon size={10} /> {tag.label}{m.status === 'failed' ? ` · ${L('傳送失敗 (failed)')}` : ''}</p>}
-                <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                {Array.isArray(m.attachments) && m.attachments.map((a, i) => (
+                  <div key={i} className="mt-1.5">
+                    {String(a.type || '').startsWith('image/')
+                      ? <a href={a.url} target="_blank" rel="noopener noreferrer"><img src={a.url} alt={a.name} className="max-h-44 rounded-lg border border-black/10" /></a>
+                      : <a href={a.url} target="_blank" rel="noopener noreferrer" download className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium ${mine && !note ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}><FileText size={13} /> <span className="truncate max-w-[180px]">{a.name}</span> <Download size={12} /></a>}
+                  </div>
+                ))}
                 <p className={`text-[10px] mt-1 ${mine && !note ? 'text-indigo-200' : 'text-slate-400'}`}>{m.authorName}{ts ? ` · ${ts}` : ''}</p>
               </div>
             </div>
@@ -123,9 +151,20 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
           <button type="button" onClick={() => setMode('note')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'note' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}><StickyNote size={11} className="inline mr-1" />{L('內部備註 (Internal note)')}</button>
           {!clientEmail && !(waConfigured && clientPhone) && <span className="text-[11px] text-slate-400 italic">{L('此客戶未設定電郵/電話 (No client email or phone on file)')}</span>}
         </div>
-        <div className="flex gap-2">
+        {pendingAtt && (
+          <div className="mb-2 flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1.5 text-xs w-fit max-w-full">
+            {String(pendingAtt.type || '').startsWith('image/') ? <img src={pendingAtt.url} alt="" className="h-8 w-8 object-cover rounded" /> : <FileText size={14} className="text-slate-500" />}
+            <span className="truncate max-w-[200px] font-medium text-slate-700">{pendingAtt.name}</span>
+            <button type="button" onClick={() => setPendingAtt(null)} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <input ref={fileRef} type="file" className="hidden" onChange={onPickFile} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2.5 text-slate-400 hover:text-indigo-600 disabled:opacity-50" title={L('附件 (Attach file)')}>
+            {uploading ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
+          </button>
           <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
-          <button type="button" onClick={send} disabled={sending || !text.trim()} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
+          <button type="button" onClick={send} disabled={sending || (!text.trim() && !pendingAtt)} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>

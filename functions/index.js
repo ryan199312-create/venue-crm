@@ -710,9 +710,30 @@ exports.submitRsvp = onCall({ invoker: "public" }, async (request) => {
 
 // Staff-side outbound message that goes through an external channel (email now, WhatsApp
 // later) AND is logged into the same thread.
+// Save a buffer to tenant-scoped Storage and return a token URL. Used to re-host inbound
+// attachments (email/WhatsApp) into our bucket; referenced by message bubbles.
+async function saveAttachmentToStorage(appId, buffer, filename, contentType) {
+  const bucket = admin.storage().bucket();
+  const safeAppId = String(appId).replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
+  const safeName = (String(filename || 'file').replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-80)) || 'file';
+  const path = `attachments/${safeAppId}/${Date.now()}_${crypto.randomBytes(4).toString('hex')}_${safeName}`;
+  const file = bucket.file(path);
+  const token = crypto.randomUUID();
+  await file.save(buffer, { metadata: { contentType: contentType || 'application/octet-stream', metadata: { firebaseStorageDownloadTokens: token } } });
+  return { url: `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${token}`, name: safeName, type: contentType || '' };
+}
+// Download a WhatsApp media object (two-step: resolve URL, then fetch bytes with the token).
+async function fetchWaMedia(mediaId, accessToken) {
+  const meta = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 15000 });
+  const url = meta.data && meta.data.url;
+  if (!url) return null;
+  const bin = await axios.get(url, { headers: { Authorization: `Bearer ${accessToken}` }, responseType: 'arraybuffer', timeout: 20000, maxContentLength: 30 * 1024 * 1024 });
+  return { buffer: Buffer.from(bin.data), mime: (meta.data && meta.data.mime_type) || '' };
+}
+
 exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-  const { eventId, body, subject, channel, appId: requestAppId } = request.data;
+  const { eventId, body, subject, channel, attachments, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const tok = request.auth.token;
   const isStaff = tok.role === 'super_admin' || (['admin', 'staff'].includes(tok.role) && tok.tenantId === appId);
@@ -720,7 +741,9 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
 
   const db = admin.firestore();
   const text = String(body || '').trim().slice(0, 5000);
-  if (!text) throw new HttpsError('invalid-argument', 'Message is empty.');
+  // Attachments are already uploaded to our Storage by the client; we just forward URLs.
+  const atts = Array.isArray(attachments) ? attachments.filter(a => a && a.url).slice(0, 10).map(a => ({ url: String(a.url), name: String(a.name || 'file').slice(0, 120), type: String(a.type || '') })) : [];
+  if (!text && atts.length === 0) throw new HttpsError('invalid-argument', 'Message is empty.');
   const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
   const evSnap = await eventRef.get();
   if (!evSnap.exists) throw new HttpsError('not-found', 'Event not found.');
@@ -732,6 +755,7 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     author: request.auth.uid, authorName: tok.name || tok.email || 'Staff',
     status: 'sent', internal: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    ...(atts.length ? { attachments: atts } : {}),
   };
 
   if (channel === 'email') {
@@ -764,13 +788,15 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
       replyTo = `${venueName} <${token}@${inboundDomain}>`;
     }
     try {
-      const resp = await axios.post('https://api.resend.com/emails', {
+      const payload = {
         from: fromLine,
         to: [to],
         subject: String(subject || venueName).slice(0, 200),
-        text,
+        text: text || `📎 ${atts.map(a => a.name).join(', ')}`,
         reply_to: replyTo,
-      }, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 15000 });
+      };
+      if (atts.length) payload.attachments = atts.map(a => ({ path: a.url, filename: a.name }));
+      const resp = await axios.post('https://api.resend.com/emails', payload, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 20000 });
       msg.meta = { to, emailId: (resp.data && resp.data.id) || '' };
     } catch (e) {
       msg.status = 'failed';
@@ -786,11 +812,25 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     const cfg = await getWaConfig(db, appId);
     if (!cfg || !cfg.phoneNumberId || !cfg.accessToken) throw new HttpsError('failed-precondition', 'WhatsApp is not set up for this tenant. Configure it in Settings.');
     const waTo = raw.length === 8 ? '852' + raw : raw; // HK 8-digit -> +852
+    const waUrl = `https://graph.facebook.com/v21.0/${cfg.phoneNumberId}/messages`;
+    const waHeaders = { headers: { Authorization: `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' }, timeout: 20000 };
     try {
-      const resp = await axios.post(`https://graph.facebook.com/v21.0/${cfg.phoneNumberId}/messages`, {
-        messaging_product: 'whatsapp', to: waTo, type: 'text', text: { body: text },
-      }, { headers: { Authorization: `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' }, timeout: 15000 });
-      msg.meta = { to: waTo, waId: (resp.data && resp.data.messages && resp.data.messages[0] && resp.data.messages[0].id) || '' };
+      if (atts.length) {
+        // One media message per attachment; text (if any) becomes the caption on the first.
+        for (let i = 0; i < atts.length; i++) {
+          const a = atts[i];
+          const cap = (i === 0 && text) ? text : undefined;
+          const isImg = String(a.type || '').startsWith('image/');
+          const payload = isImg
+            ? { messaging_product: 'whatsapp', to: waTo, type: 'image', image: { link: a.url, ...(cap ? { caption: cap } : {}) } }
+            : { messaging_product: 'whatsapp', to: waTo, type: 'document', document: { link: a.url, filename: a.name, ...(cap ? { caption: cap } : {}) } };
+          const resp = await axios.post(waUrl, payload, waHeaders);
+          if (i === 0) msg.meta = { to: waTo, waId: (resp.data && resp.data.messages && resp.data.messages[0] && resp.data.messages[0].id) || '' };
+        }
+      } else {
+        const resp = await axios.post(waUrl, { messaging_product: 'whatsapp', to: waTo, type: 'text', text: { body: text } }, waHeaders);
+        msg.meta = { to: waTo, waId: (resp.data && resp.data.messages && resp.data.messages[0] && resp.data.messages[0].id) || '' };
+      }
     } catch (e) {
       msg.status = 'failed';
       const apiErr = e.response && e.response.data && e.response.data.error;
@@ -899,6 +939,21 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
     }
     bodyText = trimQuotedReply(bodyText || '(empty message)').slice(0, 8000);
 
+    // Re-host any attachments into our Storage so they live in our bucket.
+    const attachments = [];
+    if (data.email_id && key && key !== 'unset') {
+      try {
+        const ar = await axios.get(`https://api.resend.com/emails/receiving/${data.email_id}/attachments`, { headers: { Authorization: `Bearer ${key}` }, timeout: 15000 });
+        const list = (ar.data && ar.data.data) || [];
+        for (const at of list.slice(0, 10)) {
+          try {
+            const dl = await axios.get(at.download_url, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024 });
+            attachments.push(await saveAttachmentToStorage(route.appId, Buffer.from(dl.data), at.filename, at.content_type));
+          } catch (e) { console.warn('[inboundEmail] attachment download failed:', e.message); }
+        }
+      } catch (e) { console.warn('[inboundEmail] attachments list failed:', e.message); }
+    }
+
     const eventRef = db.collection('artifacts').doc(route.appId).collection('private').doc('data').collection('events').doc(route.eventId);
     if (!(await eventRef.get()).exists) { res.status(200).send('event gone'); return; }
 
@@ -907,6 +962,7 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
       author: 'client', authorName: parseFromName(fromAddr), fromEmail: fromAddr,
       status: 'received', internal: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(attachments.length ? { attachments } : {}),
     });
     await eventRef.update({
       lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1029,23 +1085,35 @@ exports.whatsappWebhook = onRequest({ secrets: [whatsappVerifyToken] }, async (r
 
         for (const m of messagesArr) {
           const from = String(m.from || '').replace(/[^0-9]/g, '');
-          const bodyText = extractWaText(m);
-          if (!from || !bodyText) continue;
+          let bodyText = extractWaText(m);
+          // Re-host media (image/document/video/audio/sticker) into our Storage.
+          const attachments = [];
+          const mediaObj = m[m.type];
+          if (mediaObj && mediaObj.id && cfg && cfg.accessToken && ['image', 'document', 'video', 'audio', 'sticker'].includes(m.type)) {
+            try {
+              const md = await fetchWaMedia(mediaObj.id, cfg.accessToken);
+              if (md) attachments.push(await saveAttachmentToStorage(appId, md.buffer, mediaObj.filename || `${m.type}_${mediaObj.id}`, md.mime || mediaObj.mime_type));
+            } catch (e) { console.warn('[wa] media fetch failed:', e.message); }
+            bodyText = String(mediaObj.caption || '').trim();
+          }
+          if (!from || (!bodyText && attachments.length === 0)) continue;
           const phone8 = from.slice(-8);
           const evSnap = await db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').where('clientPhoneClean', '==', phone8).get();
           if (evSnap.empty) { console.warn('[wa] no event for', phone8, appId); continue; }
           const docs = evSnap.docs.map(d => ({ ref: d.ref, data: d.data() }));
           docs.sort((a, b) => new Date(b.data.date || 0) - new Date(a.data.date || 0));
           const eventRef = docs[0].ref;
+          const summary = bodyText || (attachments[0] ? `📎 ${attachments[0].name}` : '');
           await eventRef.collection('messages').add({
             channel: 'whatsapp', direction: 'in', body: bodyText.slice(0, 8000),
             author: 'client', authorName: nameByWa[m.from] || from, fromPhone: from,
             status: 'received', internal: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...(attachments.length ? { attachments } : {}),
           });
           await eventRef.update({
             lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
-            lastMessageBody: bodyText.slice(0, 140),
+            lastMessageBody: summary.slice(0, 140),
             lastMessageDirection: 'in',
             unreadForStaff: admin.firestore.FieldValue.increment(1),
           }).catch(() => {});

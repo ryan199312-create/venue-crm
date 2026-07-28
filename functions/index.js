@@ -695,6 +695,55 @@ exports.submitRsvp = onCall({ invoker: "public" }, async (request) => {
   return { success: true, rsvp: entry.rsvp };
 });
 
+// ==========================================
+// 4c. CLIENT MESSAGING (in-app chat thread)
+// ==========================================
+// The chat thread lives at events/{eventId}/messages. Staff (Firebase-authed) read/write
+// it directly via the SDK (real-time onSnapshot); the portal (phone+password, NOT
+// Firebase-authed) goes through these callables. Internal staff notes are never returned
+// to the client.
+exports.getClientMessages = onCall({ invoker: "public" }, async (request) => {
+  const { eventId, phone, sessionToken, appId: requestAppId } = request.data;
+  const db = admin.firestore();
+  const appId = requestAppId || APP_ID;
+  const rk = rlKey('client', appId, eventId);
+  await assertNotRateLimited(db, rk);
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
+  const docSnap = await eventRef.get();
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  if (cleanPhone8(phone) !== cleanPhone8(docSnap.data().clientPhone)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
+  const snap = await eventRef.collection('messages').orderBy('createdAt', 'asc').limit(300).get();
+  const messages = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(m => !m.internal) // clients never see internal staff notes
+    .map(m => ({ id: m.id, channel: m.channel, direction: m.direction, body: m.body, authorName: m.authorName, status: m.status, createdAt: m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toISOString() : null }));
+  return { messages };
+});
+
+exports.sendClientMessage = onCall({ invoker: "public" }, async (request) => {
+  const { eventId, phone, sessionToken, body, appId: requestAppId } = request.data;
+  const db = admin.firestore();
+  const appId = requestAppId || APP_ID;
+  const text = String(body || '').trim().slice(0, 2000);
+  if (!text) throw new HttpsError('invalid-argument', 'Message is empty.');
+  const rk = rlKey('client', appId, eventId);
+  await assertNotRateLimited(db, rk);
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
+  const docSnap = await eventRef.get();
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  if (cleanPhone8(phone) !== cleanPhone8(docSnap.data().clientPhone)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
+  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
+  const ref = await eventRef.collection('messages').add({
+    channel: 'portal', direction: 'in', body: text,
+    author: 'client', authorName: docSnap.data().clientName || 'Client',
+    status: 'sent', internal: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await eventRef.update({ lastClientMessageAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  return { success: true, id: ref.id };
+});
+
 exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {
   const { eventId, phone, specialMenuReq, allergies, sessionToken, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;

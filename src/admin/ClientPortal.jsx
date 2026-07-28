@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, MessageCircle, Users, Lock } from 'lucide-react';
+import { Calendar, CreditCard, Utensils, Clock, MapPin, Phone, CheckCircle, ChevronLeft, FileText, Loader2, Download, Upload, LogOut, Sparkles, AlertCircle, PenTool, X, ChevronUp, ChevronDown, Save, Plus, MessageCircle, Users, Lock, Send } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { functions } from '../core/firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -48,6 +48,13 @@ export default function ClientPortal() {
   const [editedGuests, setEditedGuests] = useState([]);
   const [isSavingGuests, setIsSavingGuests] = useState(false);
   const [rsvpBusy, setRsvpBusy] = useState(false);
+
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [msgText, setMsgText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const chatEndRef = useRef(null);
 
   const cleanDigits = (s) => String(s || '').replace(/[^0-9]/g, '');
 
@@ -320,6 +327,30 @@ export default function ClientPortal() {
 
   const rsvpLink = eventData?.rsvpToken ? `${window.location.origin}/rsvp/${eventData.rsvpToken}` : '';
 
+  // --- CLIENT CHAT (polled; portal is not Firebase-authed) ---
+  const fetchMessages = async () => {
+    if (!eventId) return;
+    try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
+      const res = await httpsCallable(functions, 'getClientMessages')({ appId, eventId, phone: currentPhone, sessionToken: localStorage.getItem('vms_client_token') || sessionToken || '' });
+      setMessages(res.data.messages || []);
+    } catch (e) { /* silent poll failure */ }
+  };
+
+  const handleSendMessage = async () => {
+    const body = msgText.trim();
+    if (!body) return;
+    setSendingMsg(true);
+    try {
+      const currentPhone = phoneInput || localStorage.getItem('vms_client_phone') || '';
+      await httpsCallable(functions, 'sendClientMessage')({ appId, eventId, phone: currentPhone, sessionToken: localStorage.getItem('vms_client_token') || sessionToken || '', body });
+      setMsgText('');
+      fetchMessages();
+    } catch (e) {
+      alert(`${L('傳送失敗 (Send failed)')}: ${e.message}`);
+    } finally { setSendingMsg(false); }
+  };
+
   // --- SIGNATURE SUBMIT HANDLER ---
   const handleSignatureSubmit = async (docType, base64String) => {
     try {
@@ -377,6 +408,18 @@ export default function ClientPortal() {
       pending: pax(g => !g.rsvp || g.rsvp === 'pending' || g.rsvp === 'maybe'),
     };
   }, [isEditingGuests, editedGuests, eventData]);
+
+  // Poll the chat thread while the chat panel is open.
+  useEffect(() => {
+    if (!chatOpen || !eventId) return;
+    setLoadingMsgs(true);
+    fetchMessages().finally(() => setLoadingMsgs(false));
+    const iv = setInterval(fetchMessages, 6000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatOpen, eventId]);
+
+  useEffect(() => { if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length, chatOpen]);
 
   const billingMetrics = useMemo(() => {
     if (!eventData) return null;
@@ -1103,6 +1146,46 @@ export default function ClientPortal() {
           </div>
         )}
       </div>
+
+      {/* Floating chat with the venue */}
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        className="fixed z-[70] right-4 bottom-20 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-brand-primary text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
+        aria-label="Chat"
+      >
+        {chatOpen ? <X size={22} /> : <MessageCircle size={22} />}
+      </button>
+
+      {chatOpen && (
+        <div className="fixed z-[70] right-4 bottom-36 md:bottom-24 md:right-6 w-[calc(100vw-2rem)] max-w-sm h-[60vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4">
+          <div className="bg-brand-primary text-white p-4 shrink-0">
+            <h3 className="font-bold text-sm">{L('與我們對話 (Chat with us)')}</h3>
+            <p className="text-[11px] opacity-80">{appSettings?.venueProfile?.nameZh || appSettings?.venueProfile?.nameEn || ''}</p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50">
+            {loadingMsgs && messages.length === 0 && <div className="flex justify-center py-6 text-slate-400"><Loader2 className="animate-spin" size={20} /></div>}
+            {!loadingMsgs && messages.length === 0 && <p className="text-center text-slate-400 italic text-xs py-6">{L("傳送訊息給我們，我們會盡快回覆。 (Send us a message — we'll reply shortly.)")}</p>}
+            {messages.map(m => {
+              const mine = m.direction === 'in'; // the client's own messages
+              return (
+                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mine ? 'bg-brand-primary text-white' : 'bg-white border border-slate-200 text-slate-800'}`}>
+                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                    {!mine && <p className="text-[10px] text-slate-400 mt-0.5">{m.authorName}</p>}
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="border-t border-slate-200 p-2 flex gap-2 shrink-0">
+            <textarea rows="1" value={msgText} onChange={e => setMsgText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder={L('輸入訊息...(Type a message...)')} className="flex-1 resize-none p-2 border border-slate-200 rounded-xl text-sm focus:border-brand-primary outline-none" />
+            <button onClick={handleSendMessage} disabled={sendingMsg || !msgText.trim()} className="px-3 bg-brand-primary text-white rounded-xl disabled:opacity-50 flex items-center">
+              {sendingMsg ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-between px-1 p-2 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">

@@ -17,6 +17,13 @@ const STYLES = {
   h3: "text-lg font-bold text-slate-800 mb-4"
 };
 
+// Floor-plan element types that seat guests, with assumed capacities.
+const TABLE_CAPACITY = { round: 12, round_12: 12, round_10: 10, round_4ft: 8, round_6ft: 12, ibm: 12, table_4ft: 8, table_6ft: 10, mahjong: 4 };
+const deriveTables = (floorplan) => {
+  const els = (floorplan && Array.isArray(floorplan.elements)) ? floorplan.elements : [];
+  return els.filter(e => TABLE_CAPACITY[e.type] != null).map((e, i) => ({ id: e.id, label: e.label || `枱 ${i + 1}`, capacity: TABLE_CAPACITY[e.type] || 10 }));
+};
+
 export default function ClientPortal() {
   const { L } = useLang();
   const { eventId: urlEventId } = useParams();
@@ -47,6 +54,7 @@ export default function ClientPortal() {
   const [isEditingGuests, setIsEditingGuests] = useState(false);
   const [editedGuests, setEditedGuests] = useState([]);
   const [isSavingGuests, setIsSavingGuests] = useState(false);
+  const [guestView, setGuestView] = useState('list'); // 'list' | 'seating'
   const [rsvpBusy, setRsvpBusy] = useState(false);
 
   const cleanDigits = (s) => String(s || '').replace(/[^0-9]/g, '');
@@ -1015,16 +1023,63 @@ export default function ClientPortal() {
             </div>
 
             <div className={STYLES.gridBox}>
-              <div className="flex justify-between items-center mb-5">
-                <h3 className={`${STYLES.h3} mb-0 flex items-center gap-2`}><Users size={16}/> {L('賓客名單 (Guest List)')} <span className="text-xs font-normal text-slate-400">({guestStats.parties} {L('組 (parties)')})</span></h3>
-                {!isEditingGuests && (
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
+                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                  <button onClick={() => setGuestView('list')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${guestView === 'list' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500'}`}>{L('名單 (List)')}</button>
+                  <button onClick={() => { setEditedGuests(eventData.guests || []); setGuestView('seating'); setIsEditingGuests(false); }} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${guestView === 'seating' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500'}`}>{L('座位 (Seating)')}</button>
+                </div>
+                {guestView === 'list' && !isEditingGuests && (
                   <button onClick={() => { setEditedGuests(eventData.guests || []); setIsEditingGuests(true); }} className="text-xs bg-brand-primary/10 text-brand-primary px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-brand-primary/20 transition-colors">
                     <PenTool size={12} className="mr-1"/> {L('編輯 (Edit)')}
                   </button>
                 )}
               </div>
 
-              {isEditingGuests ? (
+              {guestView === 'seating' ? (
+                (() => {
+                  const tables = deriveTables(eventData.floorplan);
+                  if (tables.length === 0) return <p className="text-center text-slate-400 italic text-sm py-8">{L('平面圖尚未設定餐枱，請聯絡我們安排。 (No tables on the floor plan yet — please contact us to set it up.)')}</p>;
+                  const usage = {};
+                  editedGuests.forEach(g => { if (g.tableId) usage[g.tableId] = (usage[g.tableId] || 0) + (Number(g.partySize) || 1); });
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {tables.map(t => {
+                          const used = usage[t.id] || 0;
+                          const over = used > t.capacity;
+                          return (
+                            <div key={t.id} className={`p-3 rounded-xl border ${over ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
+                              <p className="font-bold text-slate-700 text-sm truncate">{t.label}</p>
+                              <p className={`text-xs font-mono ${over ? 'text-rose-500' : 'text-slate-400'}`}>{used}/{t.capacity} {L('座 (seats)')}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="space-y-2">
+                        {editedGuests.length === 0 && <p className="text-center text-slate-400 italic text-sm py-4">{L('尚未新增賓客 (No guests yet)')}</p>}
+                        {editedGuests.map((g, idx) => (
+                          <div key={g.id || idx} className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-700 truncate">{g.name || L('（未命名）(Unnamed)')} {(Number(g.partySize) || 1) > 1 && <span className="text-slate-400 font-mono text-xs">×{g.partySize}</span>}</p>
+                              {g.relation && <p className="text-[11px] text-slate-400 truncate">{g.relation}</p>}
+                            </div>
+                            <select value={g.tableId || ''} onChange={e => setEditedGuests(prev => prev.map((it, i) => i === idx ? { ...it, tableId: e.target.value } : it))} className="p-2 border border-slate-200 rounded bg-white text-xs focus:border-brand-primary outline-none max-w-[45%]">
+                              <option value="">{L('未安排 (Unseated)')}</option>
+                              {tables.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 pt-3 border-t border-slate-100">
+                        <button onClick={() => { setEditedGuests(eventData.guests || []); setGuestView('list'); }} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors">{L('取消 (Cancel)')}</button>
+                        <button onClick={handleSaveGuests} disabled={isSavingGuests} className="flex-1 py-3 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-[brand-primary/90] transition-colors shadow-md flex justify-center items-center">
+                          {isSavingGuests ? <Loader2 size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />} {L('儲存座位 (Save seating)')}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : isEditingGuests ? (
                 <div className="space-y-2">
                   {editedGuests.length === 0 && <p className="text-center text-slate-400 italic text-sm py-4">{L('尚未新增賓客 (No guests yet)')}</p>}
                   {editedGuests.map((g, idx) => (

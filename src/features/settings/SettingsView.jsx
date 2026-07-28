@@ -94,23 +94,23 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
     emailFrom: settings?.messaging?.emailFrom || '',
     emailInboundDomain: settings?.messaging?.emailInboundDomain || '',
   });
-  const [waForm, setWaForm] = useState({ phoneNumberId: '', accessToken: '', appSecret: '' });
-  const [waStatus, setWaStatus] = useState(null); // { configured, phoneNumberId, hasAppSecret }
+  const [waForm, setWaForm] = useState({ phoneNumberId: '', accessToken: '', appSecret: '', wabaId: '' });
+  const [waStatus, setWaStatus] = useState(null); // { configured, phoneNumberId, wabaId, hasAppSecret }
   const [waSaving, setWaSaving] = useState(false);
 
   useEffect(() => {
     if (activeSubTab !== 'messaging') return;
     httpsCallable(functions, 'getWhatsappStatus')({ appId })
-      .then(r => { setWaStatus(r.data); setWaForm(f => ({ ...f, phoneNumberId: r.data?.phoneNumberId || f.phoneNumberId })); })
+      .then(r => { setWaStatus(r.data); setWaForm(f => ({ ...f, phoneNumberId: r.data?.phoneNumberId || f.phoneNumberId, wabaId: r.data?.wabaId || f.wabaId })); })
       .catch(() => setWaStatus({ configured: false }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, appId]);
 
   const saveWhatsapp = async () => {
-    if (!waForm.phoneNumberId.trim() || !waForm.accessToken.trim()) { addToast(L('請填寫 Phone Number ID 及 Access Token (Phone Number ID and access token required)'), 'error'); return; }
+    if (!waStatus?.configured && (!waForm.phoneNumberId.trim() || !waForm.accessToken.trim())) { addToast(L('請填寫 Phone Number ID 及 Access Token (Phone Number ID and access token required)'), 'error'); return; }
     setWaSaving(true);
     try {
-      await httpsCallable(functions, 'setWhatsappConfig')({ appId, phoneNumberId: waForm.phoneNumberId.trim(), accessToken: waForm.accessToken.trim(), appSecret: waForm.appSecret.trim() });
+      await httpsCallable(functions, 'setWhatsappConfig')({ appId, phoneNumberId: waForm.phoneNumberId.trim(), accessToken: waForm.accessToken.trim(), appSecret: waForm.appSecret.trim(), wabaId: waForm.wabaId.trim() });
       addToast(L('WhatsApp 已連接 (WhatsApp connected)'), 'success');
       setWaForm(f => ({ ...f, accessToken: '', appSecret: '' }));
       const r = await httpsCallable(functions, 'getWhatsappStatus')({ appId });
@@ -492,6 +492,11 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Phone Number ID</label>
               <input value={waForm.phoneNumberId} onChange={e => setWaForm(f => ({ ...f, phoneNumberId: e.target.value.trim() }))} placeholder="123456789012345" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none font-mono" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('WhatsApp Business 帳戶 ID (WABA ID)')}</label>
+              <input value={waForm.wabaId} onChange={e => setWaForm(f => ({ ...f, wabaId: e.target.value.trim() }))} placeholder="102290129340398" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none font-mono" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('用於載入你已批核的訊息範本（開啟新對話用）。 (Used to load your approved message templates for starting new conversations.)')}</p>
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">{L('永久存取權杖 (Permanent access token)')}</label>

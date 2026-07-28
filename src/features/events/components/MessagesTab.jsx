@@ -32,8 +32,39 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [waConfigured, setWaConfigured] = useState(false);
   const [pendingAtt, setPendingAtt] = useState(null); // { url, name, type } | null
   const [uploading, setUploading] = useState(false);
+  const [showTpl, setShowTpl] = useState(false);
+  const [templates, setTemplates] = useState(null); // null = not loaded
+  const [loadingTpl, setLoadingTpl] = useState(false);
+  const [selTpl, setSelTpl] = useState(null);
+  const [tplParams, setTplParams] = useState([]);
   const endRef = useRef(null);
   const fileRef = useRef(null);
+
+  const openTemplates = async () => {
+    setShowTpl(true);
+    if (templates !== null) return;
+    setLoadingTpl(true);
+    try {
+      const r = await httpsCallable(functions, 'getWhatsappTemplates')({ appId });
+      setTemplates(r.data.templates || []);
+    } catch (e) {
+      alert(`${L('載入範本失敗 (Failed to load templates)')}: ${e.message}`);
+      setTemplates([]);
+    } finally { setLoadingTpl(false); }
+  };
+  const pickTemplate = (t) => { setSelTpl(t); setTplParams(Array(t.varCount).fill('')); };
+  const sendTemplate = async () => {
+    if (!selTpl || sending) return;
+    let rendered = selTpl.bodyText || selTpl.name;
+    tplParams.forEach((p, i) => { rendered = rendered.replace(new RegExp(`\\{\\{\\s*${i + 1}\\s*\\}\\}`, 'g'), p || `{{${i + 1}}}`); });
+    setSending(true);
+    try {
+      await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body: rendered, channel: 'whatsapp', template: { name: selTpl.name, language: selTpl.language, params: tplParams } });
+      setShowTpl(false); setSelTpl(null); setTplParams([]);
+    } catch (e) {
+      alert(`${L('傳送失敗 (Send failed)')}: ${e.message}`);
+    } finally { setSending(false); }
+  };
 
   const onPickFile = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -149,8 +180,41 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
           {clientEmail && <button type="button" onClick={() => setMode('email')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'email' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}><Mail size={11} className="inline mr-1" />{L('電郵 (Email)')}</button>}
           {waConfigured && clientPhone && <button type="button" onClick={() => setMode('whatsapp')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}><MessageCircle size={11} className="inline mr-1" />WhatsApp</button>}
           <button type="button" onClick={() => setMode('note')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'note' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}><StickyNote size={11} className="inline mr-1" />{L('內部備註 (Internal note)')}</button>
+          {mode === 'whatsapp' && <button type="button" onClick={openTemplates} className="text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 ml-auto">{L('範本 (Templates)')}</button>}
           {!clientEmail && !(waConfigured && clientPhone) && <span className="text-[11px] text-slate-400 italic">{L('此客戶未設定電郵/電話 (No client email or phone on file)')}</span>}
         </div>
+        {showTpl && mode === 'whatsapp' && (
+          <div className="mb-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-emerald-800">{L('訊息範本 — 開啟新對話 (Templates — start a conversation)')}</span>
+              <button type="button" onClick={() => { setShowTpl(false); setSelTpl(null); }} className="text-emerald-600"><X size={14} /></button>
+            </div>
+            {loadingTpl ? <div className="text-center py-2 text-emerald-600"><Loader2 size={16} className="animate-spin inline" /></div>
+              : !selTpl ? (
+                (templates && templates.length)
+                  ? <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {templates.map(t => (
+                      <button key={t.name + t.language} type="button" onClick={() => pickTemplate(t)} className="w-full text-left p-2 rounded-lg bg-white border border-emerald-100 hover:border-emerald-300 text-xs">
+                        <span className="font-bold text-slate-700">{t.name}</span> <span className="text-slate-400">({t.language})</span>
+                        <p className="text-slate-500 truncate">{t.bodyText}</p>
+                      </button>
+                    ))}
+                  </div>
+                  : <p className="text-xs text-slate-400 italic text-center py-2">{L('沒有已批核的範本。 (No approved templates.)')}</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-600 bg-white p-2 rounded border border-emerald-100 whitespace-pre-wrap">{selTpl.bodyText}</p>
+                  {tplParams.map((p, i) => (
+                    <input key={i} value={p} onChange={e => setTplParams(prev => prev.map((x, xi) => xi === i ? e.target.value : x))} placeholder={`{{${i + 1}}}`} className="w-full p-2 border border-emerald-200 rounded text-xs outline-none" />
+                  ))}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setSelTpl(null)} className="flex-1 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-lg text-xs font-bold">{L('返回 (Back)')}</button>
+                    <button type="button" onClick={sendTemplate} disabled={sending} className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{sending ? '…' : L('傳送範本 (Send template)')}</button>
+                  </div>
+                </div>
+              )}
+          </div>
+        )}
         {pendingAtt && (
           <div className="mb-2 flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1.5 text-xs w-fit max-w-full">
             {String(pendingAtt.type || '').startsWith('image/') ? <img src={pendingAtt.url} alt="" className="h-8 w-8 object-cover rounded" /> : <FileText size={14} className="text-slate-500" />}

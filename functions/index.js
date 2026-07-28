@@ -733,7 +733,7 @@ async function fetchWaMedia(mediaId, accessToken) {
 
 exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-  const { eventId, body, subject, channel, attachments, appId: requestAppId } = request.data;
+  const { eventId, body, subject, channel, attachments, template, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const tok = request.auth.token;
   const isStaff = tok.role === 'super_admin' || (['admin', 'staff'].includes(tok.role) && tok.tenantId === appId);
@@ -743,7 +743,8 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
   const text = String(body || '').trim().slice(0, 5000);
   // Attachments are already uploaded to our Storage by the client; we just forward URLs.
   const atts = Array.isArray(attachments) ? attachments.filter(a => a && a.url).slice(0, 10).map(a => ({ url: String(a.url), name: String(a.name || 'file').slice(0, 120), type: String(a.type || '') })) : [];
-  if (!text && atts.length === 0) throw new HttpsError('invalid-argument', 'Message is empty.');
+  const hasTemplate = !!(template && template.name && channel === 'whatsapp');
+  if (!text && atts.length === 0 && !hasTemplate) throw new HttpsError('invalid-argument', 'Message is empty.');
   const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
   const evSnap = await eventRef.get();
   if (!evSnap.exists) throw new HttpsError('not-found', 'Event not found.');
@@ -815,7 +816,15 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     const waUrl = `https://graph.facebook.com/v21.0/${cfg.phoneNumberId}/messages`;
     const waHeaders = { headers: { Authorization: `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' }, timeout: 20000 };
     try {
-      if (atts.length) {
+      if (hasTemplate) {
+        const params = Array.isArray(template.params) ? template.params : [];
+        const components = params.length ? [{ type: 'body', parameters: params.map(p => ({ type: 'text', text: String(p).slice(0, 800) })) }] : [];
+        const resp = await axios.post(waUrl, {
+          messaging_product: 'whatsapp', to: waTo, type: 'template',
+          template: { name: template.name, language: { code: template.language || 'en' }, ...(components.length ? { components } : {}) },
+        }, waHeaders);
+        msg.meta = { to: waTo, waId: (resp.data && resp.data.messages && resp.data.messages[0] && resp.data.messages[0].id) || '', template: template.name };
+      } else if (atts.length) {
         // One media message per attachment; text (if any) becomes the caption on the first.
         for (let i = 0; i < atts.length; i++) {
           const a = atts[i];
@@ -1004,25 +1013,33 @@ function extractWaText(m) {
   return `[${m.type}]`;
 }
 
-// Staff configure their tenant's WhatsApp Cloud API credentials.
+// Staff configure their tenant's WhatsApp Cloud API credentials. Blank fields keep the
+// existing value (so staff needn't re-paste the token to change the WABA id, etc.).
 exports.setWhatsappConfig = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-  const { phoneNumberId, accessToken, appSecret, appId: requestAppId } = request.data;
+  const { phoneNumberId, accessToken, appSecret, wabaId, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const tok = request.auth.token;
   const isAdmin = tok.role === 'super_admin' || (tok.role === 'admin' && tok.tenantId === appId);
   if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
   const db = admin.firestore();
+  const existing = (await getWaConfig(db, appId)) || {};
+  const next = { ...existing };
   const pid = String(phoneNumberId || '').replace(/[^0-9]/g, '');
   const at = String(accessToken || '').trim();
   const asec = String(appSecret || '').trim();
-  if (!pid || !at) throw new HttpsError('invalid-argument', 'Phone Number ID and access token are required.');
-  const existing = await getWaConfig(db, appId);
-  if (existing && existing.phoneNumberId && existing.phoneNumberId !== pid) {
+  const wid = String(wabaId || '').replace(/[^0-9]/g, '');
+  if (pid) next.phoneNumberId = pid;
+  if (at) next.accessToken = at;
+  if (asec) next.appSecret = asec;
+  if (wid) next.wabaId = wid;
+  next.updatedAt = new Date().toISOString();
+  if (!next.phoneNumberId || !next.accessToken) throw new HttpsError('invalid-argument', 'Phone Number ID and access token are required.');
+  if (existing.phoneNumberId && existing.phoneNumberId !== next.phoneNumberId) {
     await db.collection('wa_routes').doc(existing.phoneNumberId).delete().catch(() => {});
   }
-  await waSecretRef(db, appId).set({ whatsapp: { phoneNumberId: pid, accessToken: at, appSecret: asec, updatedAt: new Date().toISOString() } }, { merge: true });
-  await db.collection('wa_routes').doc(pid).set({ appId }).catch(() => {});
+  await waSecretRef(db, appId).set({ whatsapp: next }, { merge: true });
+  await db.collection('wa_routes').doc(next.phoneNumberId).set({ appId }).catch(() => {});
   return { success: true };
 });
 
@@ -1037,8 +1054,37 @@ exports.getWhatsappStatus = onCall(async (request) => {
   return {
     configured: !!(cfg && cfg.phoneNumberId && cfg.accessToken),
     phoneNumberId: (cfg && cfg.phoneNumberId) || '',
+    wabaId: (cfg && cfg.wabaId) || '',
     hasAppSecret: !!(cfg && cfg.appSecret),
   };
+});
+
+// List the tenant's APPROVED WhatsApp templates (name, language, body text + variable
+// count) so staff can pick one to start a conversation outside the 24h window.
+exports.getWhatsappTemplates = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const appId = request.data.appId || APP_ID;
+  const tok = request.auth.token;
+  const isAdmin = tok.role === 'super_admin' || (tok.role === 'admin' && tok.tenantId === appId);
+  if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
+  const cfg = await getWaConfig(admin.firestore(), appId);
+  if (!cfg || !cfg.wabaId || !cfg.accessToken) throw new HttpsError('failed-precondition', 'Set the WhatsApp Business Account ID (WABA ID) first.');
+  try {
+    const r = await axios.get(`https://graph.facebook.com/v21.0/${cfg.wabaId}/message_templates`, {
+      params: { limit: 100, fields: 'name,status,language,category,components' },
+      headers: { Authorization: `Bearer ${cfg.accessToken}` }, timeout: 15000,
+    });
+    const list = (r.data && r.data.data) || [];
+    const templates = list.filter(t => t.status === 'APPROVED').map(t => {
+      const bodyComp = (t.components || []).find(c => c.type === 'BODY');
+      const bodyText = (bodyComp && bodyComp.text) || '';
+      const varCount = (bodyText.match(/\{\{\s*\d+\s*\}\}/g) || []).length;
+      return { name: t.name, language: t.language, category: t.category, bodyText, varCount };
+    });
+    return { templates };
+  } catch (e) {
+    throw new HttpsError('internal', String((e.response && e.response.data && e.response.data.error && e.response.data.error.message) || e.message || 'Failed to load templates').slice(0, 200));
+  }
 });
 
 // Inbound WhatsApp webhook (Meta). GET = verification handshake (platform verify token).

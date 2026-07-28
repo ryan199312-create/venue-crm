@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen, ChevronDown } from 'lucide-react';
+import { MapPin, LayoutDashboard, FileText, Settings, LogOut, BookOpen, ChevronDown, MessageSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../i18n/language';
 
@@ -23,6 +23,7 @@ export default function AdminSidebar({ activeTab, setActiveTab }) {
   const menuItems = [
     { id: 'dashboard', label: '儀表板 (Dashboard)', icon: LayoutDashboard, permission: 'dashboard' },
     { id: 'events', label: '訂單管理 (EOs)', icon: FileText, permission: 'events' },
+    { id: 'messages', label: '對話 (Messages)', icon: MessageSquare, permission: 'events' },
     { id: 'docs', label: '使用指南 (Docs)', icon: BookOpen, permission: 'docs' },
     { id: 'settings', label: '設定 (Settings)', icon: Settings, permission: 'settings' },
   ].filter(item => hasPermission(item.permission));

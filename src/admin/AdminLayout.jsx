@@ -25,6 +25,7 @@ import VerifyEmailScreen from './VerifyEmailScreen';
 // Lazy Components
 const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
 const EventsListView = React.lazy(() => import('../features/events/components/EventsListView'));
+const InboxView = React.lazy(() => import('../features/events/components/InboxView'));
 const SettingsView = React.lazy(() => import('../features/settings/SettingsView'));
 const DocumentationHub = React.lazy(() => import('../features/documents/components/DocumentationHub'));
 const EventFormModal = React.lazy(() => import('../features/events/components/EventFormModal'));
@@ -529,6 +530,7 @@ export default function AdminLayout() {
             <div className="max-w-7xl mx-auto space-y-6 pb-20">
               {activeTab === 'dashboard' && <AdminDashboard events={events} openEditModal={openEditModal} setIsDataAiOpen={setIsDataAiOpen} />}
               {activeTab === 'events' && <EventsListView events={events} openNewEventModal={openNewEventModal} openEditModal={openEditModal} handleDelete={handleDeleteEvent} />}
+              {activeTab === 'messages' && <InboxView events={events} openEditModal={openEditModal} />}
               {activeTab === 'docs' && <DocumentationHub />}
               {activeTab === 'settings' && (<SettingsView settings={appSettings} onSave={(s) => setDoc(doc(db, 'artifacts', appId, 'private', 'data', 'settings', 'config'), s, { merge: true })} addToast={addToast} users={users} pendingUsers={pendingUsers} updateUserProfile={updateUserProfile} updateUserRole={updateUserRole} createUser={createUser} provisionUser={provisionUser} revokePending={revokePending} deleteUser={(id) => updateDoc(doc(db, 'artifacts', appId, 'private', 'data', 'users', id), { role: 'deleted' })} />)}
             </div>

@@ -24,6 +24,7 @@ setGlobalOptions({
 // Define Secrets
 const adminPhone = defineSecret("ADMIN_PHONE");
 const deepseekKey = defineSecret("DEEPSEEK_KEY");
+const resendKey = defineSecret("RESEND_KEY"); // transactional email (Resend); "unset" until configured
 
 // --- Rate limiting for public (phone-auth) client-portal endpoints ---
 // Tracks FAILED attempts per key in /rate_limits (Admin SDK only; clients can't touch it).
@@ -740,8 +741,74 @@ exports.sendClientMessage = onCall({ invoker: "public" }, async (request) => {
     status: 'sent', internal: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await eventRef.update({ lastClientMessageAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  await eventRef.update({
+    lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastMessageBody: text.slice(0, 140),
+    lastMessageDirection: 'in',
+    unreadForStaff: admin.firestore.FieldValue.increment(1),
+  }).catch(() => {});
   return { success: true, id: ref.id };
+});
+
+// Staff-side outbound message that goes through an external channel (email now, WhatsApp
+// later) AND is logged into the same thread. Portal/internal-note messages are written
+// directly from the client SDK; this is only for channels needing server credentials.
+exports.sendEventMessage = onCall({ secrets: [resendKey] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const { eventId, body, subject, channel, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const tok = request.auth.token;
+  const isStaff = tok.role === 'super_admin' || (['admin', 'staff'].includes(tok.role) && tok.tenantId === appId);
+  if (!isStaff) throw new HttpsError('permission-denied', 'Staff only.');
+
+  const db = admin.firestore();
+  const text = String(body || '').trim().slice(0, 5000);
+  if (!text) throw new HttpsError('invalid-argument', 'Message is empty.');
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
+  const evSnap = await eventRef.get();
+  if (!evSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  const ev = evSnap.data();
+
+  const msg = {
+    channel: channel === 'email' ? 'email' : 'portal',
+    direction: 'out', body: text,
+    author: request.auth.uid, authorName: tok.name || tok.email || 'Staff',
+    status: 'sent', internal: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (channel === 'email') {
+    const to = String(ev.clientEmail || '').trim();
+    if (!to) throw new HttpsError('failed-precondition', 'This client has no email address on file.');
+    const key = resendKey.value();
+    if (!key || key === 'unset') throw new HttpsError('failed-precondition', 'Email is not configured yet. Set the RESEND_KEY secret.');
+    const settings = await getPortalSettings(db, appId);
+    const venueName = settings?.venueProfile?.nameEn || settings?.venueProfile?.nameZh || 'VowsOS';
+    const replyTo = settings?.venueProfile?.email || undefined;
+    try {
+      const resp = await axios.post('https://api.resend.com/emails', {
+        from: `${venueName} <noreply@vowsos.com>`,
+        to: [to],
+        subject: String(subject || venueName).slice(0, 200),
+        text,
+        reply_to: replyTo,
+      }, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 15000 });
+      msg.meta = { to, emailId: (resp.data && resp.data.id) || '' };
+    } catch (e) {
+      msg.status = 'failed';
+      msg.meta = { to, error: String((e.response && e.response.data && e.response.data.message) || e.message || 'send failed').slice(0, 200) };
+      await eventRef.collection('messages').add(msg);
+      throw new HttpsError('internal', `Email failed: ${msg.meta.error}`);
+    }
+  }
+
+  const ref = await eventRef.collection('messages').add(msg);
+  await eventRef.update({
+    lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastMessageBody: text.slice(0, 140),
+    lastMessageDirection: 'out',
+  }).catch(() => {});
+  return { success: true, id: ref.id, status: msg.status };
 });
 
 exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {

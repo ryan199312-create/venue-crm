@@ -6,6 +6,7 @@ const { onTaskDispatched } = require("firebase-functions/v2/tasks");
 const { getFunctions } = require("firebase-admin/functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
+const { Webhook } = require("svix");
 const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
 const crypto = require("crypto");
@@ -25,6 +26,8 @@ setGlobalOptions({
 const adminPhone = defineSecret("ADMIN_PHONE");
 const deepseekKey = defineSecret("DEEPSEEK_KEY");
 const resendKey = defineSecret("RESEND_KEY"); // transactional email (Resend); "unset" until configured
+const resendWebhookSecret = defineSecret("RESEND_WEBHOOK_SECRET"); // Svix signing secret for inbound email; "unset" until configured
+const resendInboundDomain = defineSecret("RESEND_INBOUND_DOMAIN"); // receiving domain for reply routing, e.g. reply.vowsos.com; "unset" until configured
 
 // --- Rate limiting for public (phone-auth) client-portal endpoints ---
 // Tracks FAILED attempts per key in /rate_limits (Admin SDK only; clients can't touch it).
@@ -706,7 +709,7 @@ exports.submitRsvp = onCall({ invoker: "public" }, async (request) => {
 
 // Staff-side outbound message that goes through an external channel (email now, WhatsApp
 // later) AND is logged into the same thread.
-exports.sendEventMessage = onCall({ secrets: [resendKey] }, async (request) => {
+exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
   const { eventId, body, subject, channel, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
@@ -737,7 +740,21 @@ exports.sendEventMessage = onCall({ secrets: [resendKey] }, async (request) => {
     if (!key || key === 'unset') throw new HttpsError('failed-precondition', 'Email is not configured yet. Set the RESEND_KEY secret.');
     const settings = await getPortalSettings(db, appId);
     const venueName = settings?.venueProfile?.nameEn || settings?.venueProfile?.nameZh || 'VowsOS';
-    const replyTo = settings?.venueProfile?.email || undefined;
+
+    // Reply routing: if an inbound receiving domain is configured, replies go to a unique
+    // per-event address (<token>@<inboundDomain>) that the inbound webhook maps back to
+    // this exact thread. Otherwise fall back to the venue's own email.
+    const inboundDomain = resendInboundDomain.value();
+    let replyTo = settings?.venueProfile?.email || undefined;
+    if (inboundDomain && inboundDomain !== 'unset') {
+      let token = ev.mailToken;
+      if (!token) {
+        token = crypto.randomBytes(12).toString('hex'); // 24 lowercase hex chars — case-safe localpart
+        await eventRef.update({ mailToken: token }).catch(() => {});
+        await db.collection('mail_routes').doc(token).set({ appId, eventId: String(eventId), createdAt: new Date().toISOString() }).catch(() => {});
+      }
+      replyTo = `${venueName} <${token}@${inboundDomain}>`;
+    }
     try {
       const resp = await axios.post('https://api.resend.com/emails', {
         from: `${venueName} <noreply@vowsos.com>`,
@@ -762,6 +779,118 @@ exports.sendEventMessage = onCall({ secrets: [resendKey] }, async (request) => {
     lastMessageDirection: 'out',
   }).catch(() => {});
   return { success: true, id: ref.id, status: msg.status };
+});
+
+// --- Inbound-email helpers ---
+function stripHtml(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+function parseFromName(from) {
+  const m = String(from || '').match(/^\s*"?([^"<]+?)"?\s*</);
+  if (m && m[1].trim()) return m[1].trim();
+  return String(from || '').split('@')[0] || 'Client';
+}
+// Cut common quoted-reply history so a bubble shows just the new message.
+function trimQuotedReply(text) {
+  const lines = String(text).split('\n');
+  const out = [];
+  for (const ln of lines) {
+    if (/^\s*On .+ wrote:\s*$/.test(ln)) break;
+    if (/^\s*-{2,}\s*Original Message\s*-{2,}/i.test(ln)) break;
+    if (/^\s*_{5,}\s*$/.test(ln)) break;
+    out.push(ln);
+  }
+  return (out.join('\n').trim()) || String(text).trim();
+}
+
+// Inbound email webhook (Resend). Verifies the Svix signature, routes the message to the
+// right event thread via the reply-to token, fetches the body, and appends an inbound
+// bubble. Always answers 200 (except bad signature) so Resend doesn't retry on our bugs.
+exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, async (req, res) => {
+  try {
+    if (req.method !== 'POST') { res.status(405).send('Method not allowed'); return; }
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {});
+    const secret = resendWebhookSecret.value();
+
+    if (secret && secret !== 'unset') {
+      try {
+        new Webhook(secret).verify(raw, {
+          'svix-id': req.get('svix-id'),
+          'svix-timestamp': req.get('svix-timestamp'),
+          'svix-signature': req.get('svix-signature'),
+        });
+      } catch (e) {
+        console.warn('[inboundEmail] signature verify failed:', e.message);
+        res.status(401).send('invalid signature');
+        return;
+      }
+    }
+
+    const evt = (req.body && typeof req.body === 'object') ? req.body : JSON.parse(raw || '{}');
+    if (!evt || evt.type !== 'email.received') { res.status(200).send('ignored'); return; }
+    const data = evt.data || {};
+    const toList = Array.isArray(data.to) ? data.to : (data.to ? [data.to] : []);
+    const db = admin.firestore();
+
+    // Match a recipient to one of our conversation tokens.
+    let route = null;
+    for (const addr of toList) {
+      const local = String(addr).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!local) continue;
+      const snap = await db.collection('mail_routes').doc(local).get();
+      if (snap.exists) { route = snap.data(); break; }
+    }
+    if (!route) { console.warn('[inboundEmail] no route for', toList); res.status(200).send('no route'); return; }
+
+    // Fetch the full body from Resend (webhook only carries metadata).
+    let fromAddr = data.from || '';
+    let subject = data.subject || '';
+    let bodyText = '';
+    const key = resendKey.value();
+    if (data.email_id && key && key !== 'unset') {
+      try {
+        const r = await axios.get(`https://api.resend.com/emails/receiving/${data.email_id}`, { headers: { Authorization: `Bearer ${key}` }, timeout: 15000 });
+        const full = r.data || {};
+        fromAddr = full.from || fromAddr;
+        subject = full.subject || subject;
+        bodyText = String(full.text || stripHtml(full.html) || '').trim();
+      } catch (e) {
+        console.warn('[inboundEmail] fetch body failed:', e.message);
+      }
+    }
+    bodyText = trimQuotedReply(bodyText || '(empty message)').slice(0, 8000);
+
+    const eventRef = db.collection('artifacts').doc(route.appId).collection('private').doc('data').collection('events').doc(route.eventId);
+    if (!(await eventRef.get()).exists) { res.status(200).send('event gone'); return; }
+
+    await eventRef.collection('messages').add({
+      channel: 'email', direction: 'in', body: bodyText, subject,
+      author: 'client', authorName: parseFromName(fromAddr), fromEmail: fromAddr,
+      status: 'received', internal: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await eventRef.update({
+      lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastMessageBody: bodyText.slice(0, 140),
+      lastMessageDirection: 'in',
+      unreadForStaff: admin.firestore.FieldValue.increment(1),
+    }).catch(() => {});
+
+    res.status(200).send('ok');
+  } catch (e) {
+    console.error('[inboundEmail] error:', e);
+    res.status(200).send('error-logged');
+  }
 });
 
 exports.updateClientDietaryReq = onCall({ secrets: [adminPhone], invoker: "public" }, async (request) => {

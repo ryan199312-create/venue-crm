@@ -68,6 +68,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Inbound-email reply routing (token -> {appId, eventId}). Written/read ONLY by Cloud
+    // Functions (sendEventMessage mints them, inboundEmail resolves them). No client access.
+    match /mail_routes/{doc} {
+      allow read, write: if false;
+    }
+
     // --- ARTIFACTS NAMESPACE ---
     match /artifacts/{appId} {
 

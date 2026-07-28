@@ -697,62 +697,15 @@ exports.submitRsvp = onCall({ invoker: "public" }, async (request) => {
 });
 
 // ==========================================
-// 4c. CLIENT MESSAGING (in-app chat thread)
+// 4c. CLIENT MESSAGING (email + notes; logged to events/{eventId}/messages)
 // ==========================================
 // The chat thread lives at events/{eventId}/messages. Staff (Firebase-authed) read/write
-// it directly via the SDK (real-time onSnapshot); the portal (phone+password, NOT
-// Firebase-authed) goes through these callables. Internal staff notes are never returned
-// to the client.
-exports.getClientMessages = onCall({ invoker: "public" }, async (request) => {
-  const { eventId, phone, sessionToken, appId: requestAppId } = request.data;
-  const db = admin.firestore();
-  const appId = requestAppId || APP_ID;
-  const rk = rlKey('client', appId, eventId);
-  await assertNotRateLimited(db, rk);
-  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
-  const docSnap = await eventRef.get();
-  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-  if (cleanPhone8(phone) !== cleanPhone8(docSnap.data().clientPhone)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
-  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
-  const snap = await eventRef.collection('messages').orderBy('createdAt', 'asc').limit(300).get();
-  const messages = snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(m => !m.internal) // clients never see internal staff notes
-    .map(m => ({ id: m.id, channel: m.channel, direction: m.direction, body: m.body, authorName: m.authorName, status: m.status, createdAt: m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toISOString() : null }));
-  return { messages };
-});
-
-exports.sendClientMessage = onCall({ invoker: "public" }, async (request) => {
-  const { eventId, phone, sessionToken, body, appId: requestAppId } = request.data;
-  const db = admin.firestore();
-  const appId = requestAppId || APP_ID;
-  const text = String(body || '').trim().slice(0, 2000);
-  if (!text) throw new HttpsError('invalid-argument', 'Message is empty.');
-  const rk = rlKey('client', appId, eventId);
-  await assertNotRateLimited(db, rk);
-  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
-  const docSnap = await eventRef.get();
-  if (!docSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-  if (cleanPhone8(phone) !== cleanPhone8(docSnap.data().clientPhone)) { await recordFailedAttempt(db, rk); throw new HttpsError('permission-denied', 'Invalid phone.'); }
-  await assertClientSessionIfSet(db, appId, phone, sessionToken, rk);
-  const ref = await eventRef.collection('messages').add({
-    channel: 'portal', direction: 'in', body: text,
-    author: 'client', authorName: docSnap.data().clientName || 'Client',
-    status: 'sent', internal: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await eventRef.update({
-    lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
-    lastMessageBody: text.slice(0, 140),
-    lastMessageDirection: 'in',
-    unreadForStaff: admin.firestore.FieldValue.increment(1),
-  }).catch(() => {});
-  return { success: true, id: ref.id };
-});
+// notes directly via the SDK (real-time onSnapshot); outbound EMAIL goes through
+// sendEventMessage (needs the Resend key). There is no in-app client chat — clients are
+// reached by email (and WhatsApp later), and inbound replies land in the same thread.
 
 // Staff-side outbound message that goes through an external channel (email now, WhatsApp
-// later) AND is logged into the same thread. Portal/internal-note messages are written
-// directly from the client SDK; this is only for channels needing server credentials.
+// later) AND is logged into the same thread.
 exports.sendEventMessage = onCall({ secrets: [resendKey] }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
   const { eventId, body, subject, channel, appId: requestAppId } = request.data;

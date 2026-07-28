@@ -4,19 +4,19 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../../core/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
-import { Send, Loader2, MessageCircle, StickyNote, Mail } from 'lucide-react';
+import { Send, Loader2, StickyNote, Mail } from 'lucide-react';
 
 // Chat thread for an event (events/{id}/messages). Real-time via onSnapshot (staff are
-// Firebase-authed). Channels: portal (in-app, shown to the couple), email (sent + logged
-// via sendEventMessage), internal note (staff-only). Used both in the event form and the
-// global inbox (InboxView), so height is a prop.
+// Firebase-authed). Channels: email (sent + logged via sendEventMessage) and internal
+// note (staff-only). Used both in the event form and the global inbox (InboxView), so
+// height is a prop.
 const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
   const { appId, userProfile, user } = useAuth();
   const { L } = useLang();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
-  const [mode, setMode] = useState('client'); // 'client' | 'email' | 'note'
+  const [mode, setMode] = useState(clientEmail ? 'email' : 'note'); // 'email' | 'note'
   const [sending, setSending] = useState(false);
   const endRef = useRef(null);
 
@@ -48,18 +48,15 @@ const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
       if (mode === 'email') {
         await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'email' });
       } else {
+        // internal note — staff-only, never shown to the client
         const col = collection(db, 'artifacts', appId, 'private', 'data', 'events', eventId, 'messages');
         await addDoc(col, {
-          channel: mode === 'note' ? 'note' : 'portal',
-          direction: 'out', body,
+          channel: 'note', direction: 'out', body,
           author: user?.uid || 'staff',
           authorName: userProfile?.displayName || userProfile?.email || 'Staff',
-          status: 'sent', internal: mode === 'note',
+          status: 'sent', internal: true,
           createdAt: serverTimestamp(),
         });
-        if (mode === 'client') {
-          await updateDoc(eventRef(), { lastMessageAt: serverTimestamp(), lastMessageBody: body.slice(0, 140), lastMessageDirection: 'out' }).catch(() => {});
-        }
       }
       setText('');
     } catch (e) {
@@ -101,12 +98,13 @@ const MessagesTab = ({ eventId, clientEmail, heightClass = 'h-[62vh]' }) => {
       </div>
       <div className="border-t border-slate-200 p-3 bg-white">
         <div className="flex items-center gap-2 mb-2">
-          <button type="button" onClick={() => setMode('client')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'client' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}><MessageCircle size={11} className="inline mr-1" />{L('傳給客戶 (To client)')}</button>
-          {clientEmail && <button type="button" onClick={() => setMode('email')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'email' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}><Mail size={11} className="inline mr-1" />{L('電郵 (Email)')}</button>}
+          {clientEmail
+            ? <button type="button" onClick={() => setMode('email')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'email' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}><Mail size={11} className="inline mr-1" />{L('電郵 (Email)')}</button>
+            : <span className="text-[11px] text-slate-400 italic">{L('此客戶未設定電郵 (No client email on file)')}</span>}
           <button type="button" onClick={() => setMode('note')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'note' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}><StickyNote size={11} className="inline mr-1" />{L('內部備註 (Internal note)')}</button>
         </div>
         <div className="flex gap-2">
-          <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'note' ? L('輸入內部備註...(Internal note...)') : L('輸入訊息...(Type a message...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
+          <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
           <button type="button" onClick={send} disabled={sending || !text.trim()} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>

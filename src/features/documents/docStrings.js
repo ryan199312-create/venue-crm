@@ -44,7 +44,7 @@ export const docT = (lang) => {
     balanceDue: zh ? '餘額' : 'Balance Due',
     // Payment schedule / records
     paymentSchedule: zh ? '建議付款時間表' : 'Suggested Payment Schedule',
-    payment1Deposit: zh ? '第一期（訂金）' : '1st Payment (Deposit)',
+    payment1Deposit: zh ? '第一期' : '1st Payment',
     payment2: zh ? '第二期' : '2nd Payment',
     payment3: zh ? '第三期' : '3rd Payment',
     finalBalance: zh ? '尾數' : 'Final Balance',

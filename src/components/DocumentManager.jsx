@@ -300,7 +300,9 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                           onClick={async () => { 
                             setIsGenerating(true);
                             try {
-                              const docType = selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc;
+                              // previewDoc carries the selected menu language (MENU_CONFIRM_<LANG>_<id>);
+                              // use it directly so print matches the preview instead of reverting to bilingual.
+                              const docType = previewDoc;
                               await generatePdf({ docType, data: dataToRender, appSettings, lang: effectiveLang });
                             } finally {
                               setIsGenerating(false);
@@ -314,7 +316,7 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
 
                         <button 
                           type="button" 
-                          onClick={() => { onPrint(selectedMenuId ? `MENU_CONFIRM_${selectedMenuId}` : previewDoc, effectiveLang); closePreview(); }}
+                          onClick={() => { onPrint(previewDoc, effectiveLang); closePreview(); }}
                           className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                         >
                           <Printer size={14} className="mr-1.5" />

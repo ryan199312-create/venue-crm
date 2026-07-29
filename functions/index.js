@@ -722,6 +722,11 @@ async function saveAttachmentToStorage(appId, buffer, filename, contentType) {
   await file.save(buffer, { metadata: { contentType: contentType || 'application/octet-stream', metadata: { firebaseStorageDownloadTokens: token } } });
   return { url: `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${token}`, name: safeName, type: contentType || '' };
 }
+// Parse a CC/BCC value (array or comma/semicolon/space-separated string) into clean emails.
+function parseEmails(v) {
+  const arr = Array.isArray(v) ? v : String(v || '').split(/[,;\s]+/);
+  return arr.map(s => String(s).trim()).filter(s => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)).slice(0, 20);
+}
 // Download a WhatsApp media object (two-step: resolve URL, then fetch bytes with the token).
 async function fetchWaMedia(mediaId, accessToken) {
   const meta = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 15000 });
@@ -733,7 +738,7 @@ async function fetchWaMedia(mediaId, accessToken) {
 
 exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-  const { eventId, body, subject, channel, attachments, template, appId: requestAppId } = request.data;
+  const { eventId, body, subject, channel, attachments, template, cc, bcc, appId: requestAppId } = request.data;
   const appId = requestAppId || APP_ID;
   const tok = request.auth.token;
   const isStaff = tok.role === 'super_admin' || (['admin', 'staff'].includes(tok.role) && tok.tenantId === appId);
@@ -797,6 +802,12 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
         reply_to: replyTo,
       };
       if (atts.length) payload.attachments = atts.map(a => ({ path: a.url, filename: a.name }));
+      const ccList = parseEmails(cc);
+      const bccList = parseEmails(bcc);
+      // Auto-BCC the tenant's own inbox (a copy of every sent email), if configured.
+      if (mcfg.autoBcc && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mcfg.autoBcc)) bccList.push(mcfg.autoBcc);
+      if (ccList.length) { payload.cc = ccList; msg.cc = ccList; }
+      if (bccList.length) payload.bcc = Array.from(new Set(bccList));
       const resp = await axios.post('https://api.resend.com/emails', payload, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 20000 });
       msg.meta = { to, emailId: (resp.data && resp.data.id) || '' };
     } catch (e) {

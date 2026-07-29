@@ -93,6 +93,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   const [msgForm, setMsgForm] = useState({
     emailFrom: settings?.messaging?.emailFrom || '',
     emailInboundDomain: settings?.messaging?.emailInboundDomain || '',
+    autoBcc: settings?.messaging?.autoBcc || '',
   });
   const [waForm, setWaForm] = useState({ phoneNumberId: '', accessToken: '', appSecret: '', wabaId: '' });
   const [waStatus, setWaStatus] = useState(null); // { configured, phoneNumberId, wabaId, hasAppSecret }
@@ -471,7 +472,12 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
               <input value={msgForm.emailInboundDomain} onChange={e => setMsgForm(f => ({ ...f, emailInboundDomain: e.target.value.trim() }))} placeholder="reply.kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
               <p className="text-[11px] text-slate-400 mt-1">{L('客戶回覆會寄到此網域並自動歸入對話。需在 Resend 設定「接收」(MX)。 (Client replies come here and route into the thread; needs RECEIVING/MX set up in Resend.)')}</p>
             </div>
-            <button onClick={() => { handleSaveScoped({ messaging: { ...(settings.messaging || {}), emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain } }); addToast(L('已儲存 (Saved)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('自動密件副本 (Auto-BCC)')}</label>
+              <input value={msgForm.autoBcc} onChange={e => setMsgForm(f => ({ ...f, autoBcc: e.target.value.trim() }))} placeholder="banquet@kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('每封寄出的電郵會密件副本到此地址（在你的信箱留一份副本）。留空則停用。 (Every sent email is BCC\'d here — a copy in your own inbox. Leave blank to disable.)')}</p>
+            </div>
+            <button onClick={() => { handleSaveScoped({ messaging: { ...(settings.messaging || {}), emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc } }); addToast(L('已儲存 (Saved)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
             {L('步驟 (Steps)')}: 1) {L('在 Resend 新增並驗證你的網域（寄件 + 接收）。 (Add & verify your domain in Resend — sending + receiving.)')} 2) {L('在此填入地址並儲存。其他租戶各自使用自己的網域。 (Enter the addresses here and save. Each tenant uses their own domain.)')}

@@ -30,8 +30,11 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [mode, setMode] = useState(clientEmail ? 'email' : 'note'); // 'email' | 'whatsapp' | 'note'
   const [sending, setSending] = useState(false);
   const [waConfigured, setWaConfigured] = useState(false);
-  const [pendingAtt, setPendingAtt] = useState(null); // { url, name, type } | null
+  const [pendingAtts, setPendingAtts] = useState([]); // [{ url, name, type }]
   const [uploading, setUploading] = useState(false);
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [showTpl, setShowTpl] = useState(false);
   const [templates, setTemplates] = useState(null); // null = not loaded
   const [loadingTpl, setLoadingTpl] = useState(false);
@@ -67,16 +70,18 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   };
 
   const onPickFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
+    const files = Array.from(e.target.files || []);
     if (e.target) e.target.value = '';
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) { alert(L('檔案過大（上限 20MB）。 (File too large — max 20MB.)')); return; }
+    if (!files.length) return;
     setUploading(true);
     try {
-      const r = storageRef(storage, `attachments/${appId}/${Date.now()}_${file.name}`);
-      await uploadBytes(r, file);
-      const url = await getDownloadURL(r);
-      setPendingAtt({ url, name: file.name, type: file.type || '' });
+      for (const file of files) {
+        if (file.size > 20 * 1024 * 1024) { alert(`${file.name}: ${L('檔案過大（上限 20MB）。 (File too large — max 20MB.)')}`); continue; }
+        const r = storageRef(storage, `attachments/${appId}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${file.name}`);
+        await uploadBytes(r, file);
+        const url = await getDownloadURL(r);
+        setPendingAtts(prev => [...prev, { url, name: file.name, type: file.type || '' }]);
+      }
     } catch (err) {
       alert(`${L('上傳失敗 (Upload failed)')}: ${err.message}`);
     } finally { setUploading(false); }
@@ -110,12 +115,14 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
 
   const send = async () => {
     const body = text.trim();
-    if ((!body && !pendingAtt) || !eventId || sending) return;
+    if ((!body && pendingAtts.length === 0) || !eventId || sending) return;
     setSending(true);
     try {
-      const attachments = pendingAtt ? [pendingAtt] : [];
-      if (mode === 'email' || mode === 'whatsapp') {
-        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: mode, attachments });
+      const attachments = pendingAtts;
+      if (mode === 'email') {
+        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'email', attachments, cc, bcc });
+      } else if (mode === 'whatsapp') {
+        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'whatsapp', attachments });
       } else {
         // internal note — staff-only, never shown to the client
         const col = collection(db, 'artifacts', appId, 'private', 'data', 'events', eventId, 'messages');
@@ -129,7 +136,8 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
         });
       }
       setText('');
-      setPendingAtt(null);
+      setPendingAtts([]);
+      setCc(''); setBcc('');
     } catch (e) {
       alert(`${L('傳送失敗 (Send failed)')}: ${e.message}`);
     } finally { setSending(false); }
@@ -168,6 +176,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
                       : <a href={a.url} target="_blank" rel="noopener noreferrer" download className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium ${mine && !note ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}><FileText size={13} /> <span className="truncate max-w-[180px]">{a.name}</span> <Download size={12} /></a>}
                   </div>
                 ))}
+                {Array.isArray(m.cc) && m.cc.length > 0 && <p className={`text-[10px] mt-0.5 ${mine && !note ? 'text-indigo-200' : 'text-slate-400'}`}>CC: {m.cc.join(', ')}</p>}
                 <p className={`text-[10px] mt-1 ${mine && !note ? 'text-indigo-200' : 'text-slate-400'}`}>{m.authorName}{ts ? ` · ${ts}` : ''}</p>
               </div>
             </div>
@@ -215,20 +224,35 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
               )}
           </div>
         )}
-        {pendingAtt && (
-          <div className="mb-2 flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1.5 text-xs w-fit max-w-full">
-            {String(pendingAtt.type || '').startsWith('image/') ? <img src={pendingAtt.url} alt="" className="h-8 w-8 object-cover rounded" /> : <FileText size={14} className="text-slate-500" />}
-            <span className="truncate max-w-[200px] font-medium text-slate-700">{pendingAtt.name}</span>
-            <button type="button" onClick={() => setPendingAtt(null)} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
+        {mode === 'email' && (
+          <div className="mb-2">
+            <button type="button" onClick={() => setShowCcBcc(v => !v)} className="text-[11px] font-bold text-slate-400 hover:text-slate-600">{showCcBcc ? L('隱藏 CC/BCC (Hide CC/BCC)') : L('CC / BCC')}</button>
+            {showCcBcc && (
+              <div className="mt-1 space-y-1">
+                <input value={cc} onChange={e => setCc(e.target.value)} placeholder={L('CC（以逗號分隔）(CC, comma-separated)')} className="w-full p-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500" />
+                <input value={bcc} onChange={e => setBcc(e.target.value)} placeholder={L('BCC（以逗號分隔）(BCC, comma-separated)')} className="w-full p-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500" />
+              </div>
+            )}
+          </div>
+        )}
+        {pendingAtts.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pendingAtts.map((a, i) => (
+              <div key={i} className="flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1.5 text-xs max-w-full">
+                {String(a.type || '').startsWith('image/') ? <img src={a.url} alt="" className="h-8 w-8 object-cover rounded" /> : <FileText size={14} className="text-slate-500" />}
+                <span className="truncate max-w-[160px] font-medium text-slate-700">{a.name}</span>
+                <button type="button" onClick={() => setPendingAtts(prev => prev.filter((_, xi) => xi !== i))} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
+              </div>
+            ))}
           </div>
         )}
         <div className="flex gap-2 items-end">
-          <input ref={fileRef} type="file" className="hidden" onChange={onPickFile} />
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2.5 text-slate-400 hover:text-indigo-600 disabled:opacity-50" title={L('附件 (Attach file)')}>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFile} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2.5 text-slate-400 hover:text-indigo-600 disabled:opacity-50" title={L('附件 (Attach files)')}>
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
           </button>
           <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
-          <button type="button" onClick={send} disabled={sending || (!text.trim() && !pendingAtt)} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
+          <button type="button" onClick={send} disabled={sending || (!text.trim() && pendingAtts.length === 0)} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>

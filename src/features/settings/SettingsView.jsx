@@ -91,6 +91,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
 
   const [activeSubTab, setActiveSubTab] = useState(selectedVenueId === 'all' ? 'outlets' : 'venueProfile');
   const [msgForm, setMsgForm] = useState({
+    emailFromName: settings?.messaging?.emailFromName || '',
     emailFrom: settings?.messaging?.emailFrom || '',
     emailInboundDomain: settings?.messaging?.emailInboundDomain || '',
     autoBcc: settings?.messaging?.autoBcc || '',
@@ -463,6 +464,11 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
           <p className="text-xs text-slate-400 mb-6">{L('設定此租戶用於發送及接收客戶電郵的網域。留空則使用預設 vowsos.com。 (Set the domain this tenant uses to send/receive client email. Leave blank to use the shared vowsos.com default.)')}</p>
           <div className="space-y-4">
             <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('寄件人名稱 (Sender name)')}</label>
+              <input value={msgForm.emailFromName} onChange={e => setMsgForm(f => ({ ...f, emailFromName: e.target.value }))} placeholder="King Lung Heen 龍藏軒" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('客戶收件匣顯示的名稱。留空則用場地名稱。 (The name clients see in their inbox. Blank uses the venue name.)')}</p>
+            </div>
+            <div>
               <label className="text-xs font-bold text-slate-500 uppercase">{L('寄件地址 (Sender email)')}</label>
               <input value={msgForm.emailFrom} onChange={e => setMsgForm(f => ({ ...f, emailFrom: e.target.value.trim() }))} placeholder="events@kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
               <p className="text-[11px] text-slate-400 mt-1">{L('此網域必須已在 Resend 完成「寄件」驗證 (DKIM/SPF)。 (This domain must be verified for SENDING in Resend.)')}</p>
@@ -477,7 +483,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
               <input value={msgForm.autoBcc} onChange={e => setMsgForm(f => ({ ...f, autoBcc: e.target.value.trim() }))} placeholder="banquet@kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
               <p className="text-[11px] text-slate-400 mt-1">{L('每封寄出的電郵會密件副本到此地址（在你的信箱留一份副本）。留空則停用。 (Every sent email is BCC\'d here — a copy in your own inbox. Leave blank to disable.)')}</p>
             </div>
-            <button onClick={() => { handleSaveScoped({ messaging: { ...(settings.messaging || {}), emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc } }); addToast(L('已儲存 (Saved)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
+            <button onClick={() => { handleSaveScoped({ messaging: { ...(settings.messaging || {}), emailFromName: msgForm.emailFromName, emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc } }); addToast(L('已儲存 (Saved)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
             {L('步驟 (Steps)')}: 1) {L('在 Resend 新增並驗證你的網域（寄件 + 接收）。 (Add & verify your domain in Resend — sending + receiving.)')} 2) {L('在此填入地址並儲存。其他租戶各自使用自己的網域。 (Enter the addresses here and save. Each tenant uses their own domain.)')}

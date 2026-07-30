@@ -770,8 +770,12 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     const key = resendKey.value();
     if (!key || key === 'unset') throw new HttpsError('failed-precondition', 'Email is not configured yet. Set the RESEND_KEY secret.');
     const settings = await getPortalSettings(db, appId);
-    const venueName = settings?.venueProfile?.nameEn || settings?.venueProfile?.nameZh || 'VowsOS';
     const mcfg = settings?.messaging || {};
+    // Sender display name: an explicit override, then the EVENT's venue profile (venue
+    // names live in venueProfiles[venueId], not always the top-level venueProfile), then
+    // the default profile, then a safe fallback.
+    const vp = (ev.venueId && settings?.venueProfiles && settings.venueProfiles[ev.venueId]) || settings?.venueProfile || {};
+    const venueName = mcfg.emailFromName || vp.nameEn || vp.nameZh || settings?.venueProfile?.nameEn || settings?.venueProfile?.nameZh || 'VowsOS';
 
     // Per-tenant sending identity — the tenant's own from-address if configured (must be a
     // domain they've verified in Resend), otherwise the shared VowsOS sender.
@@ -783,7 +787,7 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     // venue's own email (replies just go to their normal inbox, not into the thread).
     const platformInbound = resendInboundDomain.value();
     const inboundDomain = mcfg.emailInboundDomain || (platformInbound && platformInbound !== 'unset' ? platformInbound : '');
-    let replyTo = settings?.venueProfile?.email || undefined;
+    let replyTo = vp.email || settings?.venueProfile?.email || undefined;
     if (inboundDomain) {
       let token = ev.mailToken;
       if (!token) {

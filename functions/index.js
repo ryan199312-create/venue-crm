@@ -992,10 +992,25 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
       }
       if (tenantAppId && bareFrom) {
         const q = await eventsCol(tenantAppId).where('clientEmail', '==', bareFrom).get();
-        if (!q.empty) {
-          const docs = q.docs.map(d => ({ ref: d.ref, data: d.data() }));
-          docs.sort((a, b) => new Date(b.data.date || 0) - new Date(a.data.date || 0));
-          appId = tenantAppId; eventRef = docs[0].ref;
+        const cands = q.docs.map(d => ({ ref: d.ref, data: d.data() }));
+        if (cands.length === 1) {
+          appId = tenantAppId; eventRef = cands[0].ref; // unambiguous
+        } else if (cands.length > 1) {
+          // Same client, multiple events (e.g. a corporate client over several years).
+          // Disambiguate: (1) subject names a specific event; else (2) the most recently
+          // active conversation; else (3) leave it UNASSIGNED rather than guess wrong.
+          const ms = (t) => (t && t.toMillis ? t.toMillis() : (t && t.seconds ? t.seconds * 1000 : 0));
+          const subjNorm = String(subject).replace(/^\s*(re|fwd|fw|回覆|轉寄)\s*:\s*/i, '').trim().toLowerCase();
+          let pick = subjNorm ? cands.find(c => {
+            const en = String(c.data.eventName || '').trim().toLowerCase();
+            return en.length >= 2 && subjNorm.includes(en);
+          }) : null;
+          if (!pick) {
+            const active = cands.filter(c => ms(c.data.lastMessageAt) > 0).sort((a, b) => ms(b.data.lastMessageAt) - ms(a.data.lastMessageAt));
+            if (active.length) pick = active[0]; // continue the live conversation
+          }
+          if (pick) { appId = tenantAppId; eventRef = pick.ref; }
+          // else: no confident pick -> falls through to the unassigned bucket below.
         }
       }
     }
@@ -1053,6 +1068,38 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
     console.error('[inboundEmail] error:', e);
     res.status(200).send('error-logged');
   }
+});
+
+// Staff assign a parked "unassigned" inbound email to a specific event's thread.
+exports.assignInboundEmail = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const { unassignedId, eventId, appId: requestAppId } = request.data;
+  const appId = requestAppId || APP_ID;
+  const tok = request.auth.token;
+  const isStaff = tok.role === 'super_admin' || (['admin', 'staff'].includes(tok.role) && tok.tenantId === appId);
+  if (!isStaff) throw new HttpsError('permission-denied', 'Staff only.');
+  const db = admin.firestore();
+  const uRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('unassigned_inbound').doc(String(unassignedId || ''));
+  const uSnap = await uRef.get();
+  if (!uSnap.exists) throw new HttpsError('not-found', 'Message not found (already assigned?).');
+  const u = uSnap.data();
+  const eventRef = db.collection('artifacts').doc(appId).collection('private').doc('data').collection('events').doc(String(eventId || ''));
+  if (!(await eventRef.get()).exists) throw new HttpsError('not-found', 'Event not found.');
+  await eventRef.collection('messages').add({
+    channel: 'email', direction: 'in', body: u.body || '', subject: u.subject || '',
+    author: 'client', authorName: u.authorName || u.fromEmail || 'Client', fromEmail: u.fromEmail || '',
+    status: 'received', internal: false,
+    createdAt: u.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+    ...(Array.isArray(u.attachments) && u.attachments.length ? { attachments: u.attachments } : {}),
+  });
+  await eventRef.update({
+    lastMessageAt: u.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+    lastMessageBody: String(u.body || '').slice(0, 140),
+    lastMessageDirection: 'in',
+    unreadForStaff: admin.firestore.FieldValue.increment(1),
+  }).catch(() => {});
+  await uRef.delete().catch(() => {});
+  return { success: true };
 });
 
 // ==========================================

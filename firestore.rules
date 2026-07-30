@@ -74,6 +74,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Inbound-email domain routing (receiving domain -> {appId}), for sender-based
+    // fallback when there's no token. Cloud Functions only.
+    match /mail_domains/{doc} {
+      allow read, write: if false;
+    }
+
     // Per-tenant WhatsApp Cloud API credentials (access token + app secret). Cloud
     // Functions only — never exposed to any client, not even a tenant admin.
     match /messaging_secrets/{doc} {

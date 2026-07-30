@@ -791,6 +791,8 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
         await eventRef.update({ mailToken: token }).catch(() => {});
         await db.collection('mail_routes').doc(token).set({ appId, eventId: String(eventId), createdAt: new Date().toISOString() }).catch(() => {});
       }
+      // Map the receiving domain -> tenant (idempotent) so inbound with no token can still be routed by sender.
+      await db.collection('mail_domains').doc(String(inboundDomain).toLowerCase()).set({ appId }).catch(() => {});
       replyTo = `${venueName} <${token}@${inboundDomain}>`;
     }
     try {
@@ -893,6 +895,13 @@ function parseFromName(from) {
   if (m && m[1].trim()) return m[1].trim();
   return String(from || '').split('@')[0] || 'Client';
 }
+// Pull the bare, lowercased email out of a "Name <email>" or raw address string.
+function extractBareEmail(s) {
+  const angle = String(s || '').match(/<([^>]+)>/);
+  const candidate = (angle ? angle[1] : String(s || '')).trim().toLowerCase();
+  const m = candidate.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/);
+  return m ? m[0] : '';
+}
 // Cut common quoted-reply history + trailing mobile signature so a bubble shows just the
 // new message. Handles Apple Mail / Gmail / Outlook attribution lines, which are often
 // already prefixed with ">".
@@ -936,24 +945,16 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
     const evt = (req.body && typeof req.body === 'object') ? req.body : JSON.parse(raw || '{}');
     if (!evt || evt.type !== 'email.received') { res.status(200).send('ignored'); return; }
     const data = evt.data || {};
-    const toList = Array.isArray(data.to) ? data.to : (data.to ? [data.to] : []);
     const db = admin.firestore();
+    const key = resendKey.value();
+    const asArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+    const recips = [...asArr(data.to), ...asArr(data.cc)].filter(Boolean); // token can be in To or Cc
+    const eventsCol = (aid) => db.collection('artifacts').doc(aid).collection('private').doc('data').collection('events');
 
-    // Match a recipient to one of our conversation tokens.
-    let route = null;
-    for (const addr of toList) {
-      const local = String(addr).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!local) continue;
-      const snap = await db.collection('mail_routes').doc(local).get();
-      if (snap.exists) { route = snap.data(); break; }
-    }
-    if (!route) { console.warn('[inboundEmail] no route for', toList); res.status(200).send('no route'); return; }
-
-    // Fetch the full body from Resend (webhook only carries metadata).
+    // Fetch the real from/subject/body up front — we need the sender for fallback routing.
     let fromAddr = data.from || '';
     let subject = data.subject || '';
     let bodyText = '';
-    const key = resendKey.value();
     if (data.email_id && key && key !== 'unset') {
       try {
         const r = await axios.get(`https://api.resend.com/emails/receiving/${data.email_id}`, { headers: { Authorization: `Bearer ${key}` }, timeout: 15000 });
@@ -961,33 +962,81 @@ exports.inboundEmail = onRequest({ secrets: [resendKey, resendWebhookSecret] }, 
         fromAddr = full.from || fromAddr;
         subject = full.subject || subject;
         bodyText = String(full.text || stripHtml(full.html) || '').trim();
-      } catch (e) {
-        console.warn('[inboundEmail] fetch body failed:', e.message);
-      }
+      } catch (e) { console.warn('[inboundEmail] fetch body failed:', e.message); }
     }
     bodyText = trimQuotedReply(bodyText || '(empty message)').slice(0, 8000);
+    const bareFrom = extractBareEmail(fromAddr);
 
-    // Re-host any attachments into our Storage so they live in our bucket.
+    // --- Resolve which event this belongs to ---
+    let appId = null, eventRef = null;
+    // 1) Conversation token in To/Cc — the reliable path (survives a different sender or a
+    //    colleague taking over the reply, since routing keys off the token, not the sender).
+    for (const addr of recips) {
+      const local = String(addr).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!local) continue;
+      const snap = await db.collection('mail_routes').doc(local).get();
+      if (snap.exists) { appId = snap.data().appId; const er = eventsCol(appId).doc(snap.data().eventId); if ((await er.get()).exists) eventRef = er; break; }
+    }
+    // 2) Fallback: resolve the tenant from the receiving domain, then match the sender's
+    //    email to a client on one of that tenant's events (most-recent wins). Catches a
+    //    mangled/stripped reply-to, or a known client emailing the receiving address fresh.
+    let tenantAppId = appId;
+    if (!eventRef) {
+      if (!tenantAppId) {
+        for (const addr of recips) {
+          const domain = (String(addr).split('@')[1] || '').toLowerCase();
+          if (!domain) continue;
+          const dsnap = await db.collection('mail_domains').doc(domain).get();
+          if (dsnap.exists) { tenantAppId = dsnap.data().appId; break; }
+        }
+      }
+      if (tenantAppId && bareFrom) {
+        const q = await eventsCol(tenantAppId).where('clientEmail', '==', bareFrom).get();
+        if (!q.empty) {
+          const docs = q.docs.map(d => ({ ref: d.ref, data: d.data() }));
+          docs.sort((a, b) => new Date(b.data.date || 0) - new Date(a.data.date || 0));
+          appId = tenantAppId; eventRef = docs[0].ref;
+        }
+      }
+    }
+
+    // Re-host attachments into the resolved tenant's Storage.
+    const storeAppId = appId || tenantAppId;
     const attachments = [];
-    if (data.email_id && key && key !== 'unset') {
+    if (storeAppId && data.email_id && key && key !== 'unset') {
       try {
         const ar = await axios.get(`https://api.resend.com/emails/receiving/${data.email_id}/attachments`, { headers: { Authorization: `Bearer ${key}` }, timeout: 15000 });
         const list = (ar.data && ar.data.data) || [];
         for (const at of list.slice(0, 10)) {
           try {
             const dl = await axios.get(at.download_url, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024 });
-            attachments.push(await saveAttachmentToStorage(route.appId, Buffer.from(dl.data), at.filename, at.content_type));
+            attachments.push(await saveAttachmentToStorage(storeAppId, Buffer.from(dl.data), at.filename, at.content_type));
           } catch (e) { console.warn('[inboundEmail] attachment download failed:', e.message); }
         }
       } catch (e) { console.warn('[inboundEmail] attachments list failed:', e.message); }
     }
 
-    const eventRef = db.collection('artifacts').doc(route.appId).collection('private').doc('data').collection('events').doc(route.eventId);
-    if (!(await eventRef.get()).exists) { res.status(200).send('event gone'); return; }
+    // 3) Still unmatched? NEVER silently drop — park it in the tenant's unassigned bucket
+    //    for staff review (if we at least know the tenant); otherwise log it.
+    if (!eventRef) {
+      if (tenantAppId) {
+        await db.collection('artifacts').doc(tenantAppId).collection('private').doc('data').collection('unassigned_inbound').add({
+          channel: 'email', direction: 'in', body: bodyText, subject,
+          fromEmail: bareFrom || fromAddr, authorName: parseFromName(fromAddr),
+          toList: recips, status: 'unassigned',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(attachments.length ? { attachments } : {}),
+        }).catch((e) => console.warn('[inboundEmail] unassigned store failed:', e.message));
+        console.warn('[inboundEmail] UNASSIGNED (parked) from', bareFrom, 'tenant', tenantAppId);
+      } else {
+        console.warn('[inboundEmail] UNMATCHED, no tenant, from', bareFrom, 'to', recips);
+      }
+      res.status(200).send('unassigned'); return;
+    }
 
     await eventRef.collection('messages').add({
       channel: 'email', direction: 'in', body: bodyText, subject,
-      author: 'client', authorName: parseFromName(fromAddr), fromEmail: fromAddr,
+      author: 'client', authorName: parseFromName(fromAddr), fromEmail: bareFrom || fromAddr,
       status: 'received', internal: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(attachments.length ? { attachments } : {}),

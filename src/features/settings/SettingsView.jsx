@@ -108,6 +108,13 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, appId]);
 
+  // Email config is per-outlet: load the selected outlet's messaging (falls back to the
+  // tenant default via getScopedSettings) whenever the active outlet or settings change.
+  useEffect(() => {
+    const m = getScopedSettings(settings, selectedVenueId)?.messaging || {};
+    setMsgForm({ emailFromName: m.emailFromName || '', emailFrom: m.emailFrom || '', emailInboundDomain: m.emailInboundDomain || '', autoBcc: m.autoBcc || '' });
+  }, [selectedVenueId, settings]);
+
   const saveWhatsapp = async () => {
     if (!waStatus?.configured && (!waForm.phoneNumberId.trim() || !waForm.accessToken.trim())) { addToast(L('請填寫 Phone Number ID 及 Access Token (Phone Number ID and access token required)'), 'error'); return; }
     setWaSaving(true);
@@ -461,7 +468,10 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
       {activeSubTab === 'messaging' && (
         <Card className="p-6 border-l-4 border-l-indigo-500 animate-in fade-in max-w-2xl">
           <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2"><Mail size={20} /> {L('電郵通訊設定 (Email Messaging)')}</h3>
-          <p className="text-xs text-slate-400 mb-6">{L('設定此租戶用於發送及接收客戶電郵的網域。留空則使用預設 vowsos.com。 (Set the domain this tenant uses to send/receive client email. Leave blank to use the shared vowsos.com default.)')}</p>
+          <div className={`mb-3 text-[11px] font-bold px-2.5 py-1 rounded-md inline-block ${selectedVenueId === 'all' ? 'bg-slate-100 text-slate-500' : 'bg-indigo-50 text-indigo-600'}`}>
+            {selectedVenueId === 'all' ? L('集團預設 — 切換到個別分店可設定該店專屬電郵 (Tenant default — switch to an outlet to set its own email)') : `${L('分店設定 (Outlet)')}: ${outlets.find(o => o.id === selectedVenueId)?.name || selectedVenueId}`}
+          </div>
+          <p className="text-xs text-slate-400 mb-6">{L('每間分店可用自己的電郵網域。留空則沿用集團預設或 vowsos.com。 (Each outlet can use its own email domain. Blank falls back to the tenant default / vowsos.com.)')}</p>
           <div className="space-y-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">{L('寄件人名稱 (Sender name)')}</label>
@@ -483,7 +493,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
               <input value={msgForm.autoBcc} onChange={e => setMsgForm(f => ({ ...f, autoBcc: e.target.value.trim() }))} placeholder="banquet@kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
               <p className="text-[11px] text-slate-400 mt-1">{L('每封寄出的電郵會密件副本到此地址（在你的信箱留一份副本）。留空則停用。 (Every sent email is BCC\'d here — a copy in your own inbox. Leave blank to disable.)')}</p>
             </div>
-            <button onClick={() => { handleSaveScoped({ messaging: { ...(settings.messaging || {}), emailFromName: msgForm.emailFromName, emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc } }); addToast(L('已儲存 (Saved)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
+            <button onClick={() => { handleSaveScoped({ messaging: { emailFromName: msgForm.emailFromName, emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc } }); addToast(selectedVenueId === 'all' ? L('已儲存集團預設 (Saved tenant default)') : L('已儲存分店設定 (Saved for this outlet)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
             {L('步驟 (Steps)')}: 1) {L('在 Resend 新增並驗證你的網域（寄件 + 接收）。 (Add & verify your domain in Resend — sending + receiving.)')} 2) {L('在此填入地址並儲存。其他租戶各自使用自己的網域。 (Enter the addresses here and save. Each tenant uses their own domain.)')}

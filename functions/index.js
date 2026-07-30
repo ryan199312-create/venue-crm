@@ -770,7 +770,8 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
     const key = resendKey.value();
     if (!key || key === 'unset') throw new HttpsError('failed-precondition', 'Email is not configured yet. Set the RESEND_KEY secret.');
     const settings = await getPortalSettings(db, appId);
-    const mcfg = settings?.messaging || {};
+    // Email config is PER-STORE: use the event's outlet override, else the tenant default.
+    const mcfg = (ev.venueId && settings?.venues && settings.venues[ev.venueId] && settings.venues[ev.venueId].messaging) || settings?.messaging || {};
     // Sender display name: an explicit override, then the EVENT's venue profile (venue
     // names live in venueProfiles[venueId], not always the top-level venueProfile), then
     // the default profile, then a safe fallback.

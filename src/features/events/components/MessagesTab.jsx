@@ -34,6 +34,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [uploading, setUploading] = useState(false);
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
+  const [subject, setSubject] = useState('');
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [showTpl, setShowTpl] = useState(false);
   const [templates, setTemplates] = useState(null); // null = not loaded
@@ -120,7 +121,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     try {
       const attachments = pendingAtts;
       if (mode === 'email') {
-        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'email', attachments, cc, bcc });
+        await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'email', attachments, cc, bcc, subject });
       } else if (mode === 'whatsapp') {
         await httpsCallable(functions, 'sendEventMessage')({ appId, eventId, body, channel: 'whatsapp', attachments });
       } else {
@@ -137,7 +138,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
       }
       setText('');
       setPendingAtts([]);
-      setCc(''); setBcc('');
+      setCc(''); setBcc(''); setSubject('');
     } catch (e) {
       alert(`${L('傳送失敗 (Send failed)')}: ${e.message}`);
     } finally { setSending(false); }
@@ -168,6 +169,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm shadow-sm ${note ? 'bg-amber-50 border border-amber-200 text-amber-900' : mine ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-800'}`}>
                 {tag && <p className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 flex items-center gap-1 ${mine && !note ? 'text-indigo-200' : tag.cls}`}><tag.icon size={10} /> {tag.label}{m.status === 'failed' ? ` · ${L('傳送失敗 (failed)')}` : ''}</p>}
+                {m.channel === 'email' && m.subject && <p className={`text-[10px] italic mb-0.5 ${mine && !note ? 'text-indigo-200' : 'text-slate-500'}`}>{L('主旨 (Subject)')}: {m.subject}</p>}
                 {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                 {Array.isArray(m.attachments) && m.attachments.map((a, i) => (
                   <div key={i} className="mt-1.5">
@@ -226,6 +228,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
         )}
         {mode === 'email' && (
           <div className="mb-2">
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder={L('主旨（留空則用活動名稱）(Subject — blank uses the event name)')} className="w-full mb-1 p-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500" />
             <button type="button" onClick={() => setShowCcBcc(v => !v)} className="text-[11px] font-bold text-slate-400 hover:text-slate-600">{showCcBcc ? L('隱藏 CC/BCC (Hide CC/BCC)') : L('CC / BCC')}</button>
             {showCcBcc && (
               <div className="mt-1 space-y-1">

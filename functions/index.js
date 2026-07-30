@@ -794,10 +794,14 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
       replyTo = `${venueName} <${token}@${inboundDomain}>`;
     }
     try {
+      // Default the subject to the event name so the client's mail app threads the
+      // conversation together. Staff can override it from the composer.
+      const emailSubject = String(subject || ev.eventName || venueName).slice(0, 200);
+      msg.subject = emailSubject;
       const payload = {
         from: fromLine,
         to: [to],
-        subject: String(subject || venueName).slice(0, 200),
+        subject: emailSubject,
         text: text || `📎 ${atts.map(a => a.name).join(', ')}`,
         reply_to: replyTo,
       };
@@ -889,17 +893,21 @@ function parseFromName(from) {
   if (m && m[1].trim()) return m[1].trim();
   return String(from || '').split('@')[0] || 'Client';
 }
-// Cut common quoted-reply history so a bubble shows just the new message.
+// Cut common quoted-reply history + trailing mobile signature so a bubble shows just the
+// new message. Handles Apple Mail / Gmail / Outlook attribution lines, which are often
+// already prefixed with ">".
 function trimQuotedReply(text) {
   const lines = String(text).split('\n');
   const out = [];
   for (const ln of lines) {
-    if (/^\s*On .+ wrote:\s*$/.test(ln)) break;
-    if (/^\s*-{2,}\s*Original Message\s*-{2,}/i.test(ln)) break;
+    if (/^\s*>*\s*On\b.*\bwrote:\s*$/i.test(ln)) break;           // "On <date> … wrote:"
+    if (/^\s*>*\s*-{2,}\s*Original Message\s*-{2,}/i.test(ln)) break;
+    if (/^\s*>*\s*(From|發件人|寄件者):\s.+@.+/i.test(ln) && out.length) break; // Outlook header block
     if (/^\s*_{5,}\s*$/.test(ln)) break;
     out.push(ln);
   }
-  return (out.join('\n').trim()) || String(text).trim();
+  const result = out.join('\n').replace(/\s*Sent from my [^\n]*\s*$/i, '').trim();
+  return result || String(text).trim();
 }
 
 // Inbound email webhook (Resend). Verifies the Svix signature, routes the message to the

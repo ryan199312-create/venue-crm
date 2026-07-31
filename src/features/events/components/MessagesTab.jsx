@@ -71,6 +71,15 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [aiLang, setAiLang] = useState('auto'); // 'auto' | 'zh' | 'en'
   const endRef = useRef(null);
   const fileRef = useRef(null);
+  const taRef = useRef(null);
+
+  // Auto-grow the composer so long drafts (AI / translated / pasted) are fully readable.
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 220)}px`;
+  }, [text]);
 
   const venueName = (appSettings?.venueProfiles?.[eventData?.venueId]?.nameEn)
     || (appSettings?.outlets || []).find(o => o.id === eventData?.venueId)?.name
@@ -485,7 +494,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
               <Files size={18} />
             </button>
           )}
-          <textarea rows="1" value={text} onChange={e => { setText(e.target.value); if (preTx !== null) setPreTx(null); }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
+          <textarea ref={taRef} rows="2" value={text} onChange={e => { setText(e.target.value); if (preTx !== null) setPreTx(null); }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 min-w-0 resize-none p-2.5 border border-slate-200 rounded-xl text-sm leading-relaxed focus:border-indigo-500 outline-none min-h-[52px] max-h-[220px] overflow-y-auto" />
           <button type="button" onClick={translateDraft} disabled={draftTx || (!text.trim() && preTx === null)} className={`px-2.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1 disabled:opacity-40 ${preTx !== null ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'}`} title={L('一鍵翻譯 (Translate draft)')}>
             {draftTx ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
             <span className="hidden sm:inline">{preTx !== null ? L('還原 (Undo)') : L('一鍵翻譯 (Translate)')}</span>

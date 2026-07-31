@@ -95,6 +95,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
     emailFrom: settings?.messaging?.emailFrom || '',
     emailInboundDomain: settings?.messaging?.emailInboundDomain || '',
     autoBcc: settings?.messaging?.autoBcc || '',
+    emailSignature: settings?.messaging?.emailSignature || '',
   });
   const [waForm, setWaForm] = useState({ phoneNumberId: '', accessToken: '', appSecret: '', wabaId: '' });
   const [waStatus, setWaStatus] = useState(null); // { configured, phoneNumberId, wabaId, hasAppSecret }
@@ -112,7 +113,7 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
   // tenant default via getScopedSettings) whenever the active outlet or settings change.
   useEffect(() => {
     const m = getScopedSettings(settings, selectedVenueId)?.messaging || {};
-    setMsgForm({ emailFromName: m.emailFromName || '', emailFrom: m.emailFrom || '', emailInboundDomain: m.emailInboundDomain || '', autoBcc: m.autoBcc || '' });
+    setMsgForm({ emailFromName: m.emailFromName || '', emailFrom: m.emailFrom || '', emailInboundDomain: m.emailInboundDomain || '', autoBcc: m.autoBcc || '', emailSignature: m.emailSignature || '' });
   }, [selectedVenueId, settings]);
 
   const saveWhatsapp = async () => {
@@ -493,7 +494,12 @@ const SettingsView = ({ settings, onSave, addToast, onUploadProof, users, pendin
               <input value={msgForm.autoBcc} onChange={e => setMsgForm(f => ({ ...f, autoBcc: e.target.value.trim() }))} placeholder="banquet@kinglungheen.com" className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none" />
               <p className="text-[11px] text-slate-400 mt-1">{L('每封寄出的電郵會密件副本到此地址（在你的信箱留一份副本）。留空則停用。 (Every sent email is BCC\'d here — a copy in your own inbox. Leave blank to disable.)')}</p>
             </div>
-            <button onClick={() => { handleSaveScoped({ messaging: { emailFromName: msgForm.emailFromName, emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc } }); addToast(selectedVenueId === 'all' ? L('已儲存集團預設 (Saved tenant default)') : L('已儲存分店設定 (Saved for this outlet)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">{L('電郵簽名 (Email signature)')}</label>
+              <textarea value={msgForm.emailSignature} onChange={e => setMsgForm(f => ({ ...f, emailSignature: e.target.value }))} rows="4" placeholder={"King Lung Heen 龍藏軒\nBanquet Team\n+852 2762 8283\nbanquet@kinglungheen.com"} className="w-full mt-1 p-2.5 border border-slate-200 rounded-lg text-sm focus:border-indigo-500 outline-none resize-y" />
+              <p className="text-[11px] text-slate-400 mt-1">{L('自動附加在每封寄出電郵的結尾。對話紀錄只顯示你輸入的內容。 (Auto-appended to the end of every sent email. The chat log keeps just what you typed.)')}</p>
+            </div>
+            <button onClick={() => { handleSaveScoped({ messaging: { emailFromName: msgForm.emailFromName, emailFrom: msgForm.emailFrom, emailInboundDomain: msgForm.emailInboundDomain, autoBcc: msgForm.autoBcc, emailSignature: msgForm.emailSignature } }); addToast(selectedVenueId === 'all' ? L('已儲存集團預設 (Saved tenant default)') : L('已儲存分店設定 (Saved for this outlet)'), 'success'); }} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">{L('儲存 (Save)')}</button>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
             {L('步驟 (Steps)')}: 1) {L('在 Resend 新增並驗證你的網域（寄件 + 接收）。 (Add & verify your domain in Resend — sending + receiving.)')} 2) {L('在此填入地址並儲存。其他租戶各自使用自己的網域。 (Enter the addresses here and save. Each tenant uses their own domain.)')}

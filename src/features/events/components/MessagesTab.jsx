@@ -5,7 +5,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { db, functions, storage } from '../../../core/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
-import { Send, Loader2, StickyNote, Mail, MessageCircle, Paperclip, X, FileText, Download } from 'lucide-react';
+import { usePdfGenerator } from '../../documents/hooks/usePdfGenerator';
+import { Send, Loader2, StickyNote, Mail, MessageCircle, Paperclip, X, FileText, Download, Files, Languages } from 'lucide-react';
 
 // Whether the tenant has WhatsApp configured — fetched once per appId per session.
 const _waStatusCache = {};
@@ -20,10 +21,12 @@ const fetchWaStatus = (appId) => {
 // Chat thread for an event (events/{id}/messages). Real-time via onSnapshot (staff are
 // Firebase-authed). Channels: email + WhatsApp (sent + logged via sendEventMessage) and
 // internal note (staff-only). Used both in the event form and the global inbox
-// (InboxView), so height is a prop.
-const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh]' }) => {
+// (InboxView), so height is a prop. eventData + appSettings (optional) enable the
+// one-tap "attach a system document" picker (generates the PDF on the fly).
+const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh]', eventData = null, appSettings = null }) => {
   const { appId, userProfile, user } = useAuth();
   const { L } = useLang();
+  const { generatePdf } = usePdfGenerator();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -41,8 +44,33 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [loadingTpl, setLoadingTpl] = useState(false);
   const [selTpl, setSelTpl] = useState(null);
   const [tplParams, setTplParams] = useState([]);
+  // Document picker (generate a system PDF and attach it)
+  const [showDocs, setShowDocs] = useState(false);
+  const [docLang, setDocLang] = useState('zh'); // 'zh' | 'en'
+  const [genDoc, setGenDoc] = useState(''); // docType currently generating
+  // Translation state
+  const [msgTx, setMsgTx] = useState({});      // { [msgId]: translatedText }
+  const [txLoading, setTxLoading] = useState({}); // { [msgId]: bool }
+  const [draftTx, setDraftTx] = useState(false);  // composer translating
+  const [preTx, setPreTx] = useState(null);       // pre-translation draft, for revert
   const endRef = useRef(null);
   const fileRef = useRef(null);
+
+  // System documents we can generate + attach on the fly. Menu confirmations are one per
+  // menu on the event. printMode strings match DocumentRouter.
+  const docChoices = React.useMemo(() => {
+    if (!eventData) return [];
+    const list = [
+      { docType: 'QUOTATION', label: L('報價單 (Quotation)') },
+      { docType: 'CONTRACT', label: L('合約 (Contract)') },
+      { docType: 'INVOICE', label: L('發票 (Invoice)') },
+      { docType: 'RECEIPT', label: L('收據 (Receipt)') },
+    ];
+    (eventData.menus || []).forEach(m => {
+      list.push({ docType: `MENU_CONFIRM_BILINGUAL_${m.id}`, label: `${L('菜單確認 (Menu)')}: ${m.title || m.type || m.id}` });
+    });
+    return list;
+  }, [eventData, L]);
 
   const openTemplates = async () => {
     setShowTpl(true);
@@ -86,6 +114,54 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     } catch (err) {
       alert(`${L('上傳失敗 (Upload failed)')}: ${err.message}`);
     } finally { setUploading(false); }
+  };
+
+  // Generate a system document PDF and add it as a pending attachment.
+  const attachDoc = async (choice) => {
+    if (!eventData || genDoc) return;
+    setGenDoc(choice.docType);
+    try {
+      const { url, fileName } = await generatePdf({
+        docType: choice.docType,
+        data: eventData,
+        appSettings: appSettings || {},
+        lang: docLang,
+        silent: true, // don't pop the PDF open — we're attaching it
+      });
+      setPendingAtts(prev => [...prev, { url, name: fileName || `${choice.label}.pdf`, type: 'application/pdf' }]);
+      setShowDocs(false);
+    } catch (e) {
+      alert(`${L('產生文件失敗 (Failed to generate document)')}: ${e.message}`);
+    } finally { setGenDoc(''); }
+  };
+
+  // Translate one message bubble (toggle). Direction auto-detected server-side.
+  const translateMsg = async (m) => {
+    if (msgTx[m.id]) { setMsgTx(p => { const n = { ...p }; delete n[m.id]; return n; }); return; }
+    if (!m.body || txLoading[m.id]) return;
+    setTxLoading(p => ({ ...p, [m.id]: true }));
+    try {
+      const r = await httpsCallable(functions, 'translateText')({ text: m.body });
+      setMsgTx(p => ({ ...p, [m.id]: r.data.translated }));
+    } catch (e) {
+      alert(`${L('翻譯失敗 (Translate failed)')}: ${e.message}`);
+    } finally { setTxLoading(p => ({ ...p, [m.id]: false })); }
+  };
+
+  // Translate the composer draft in place; a second tap reverts to the original.
+  const translateDraft = async () => {
+    if (draftTx) return;
+    if (preTx !== null) { setText(preTx); setPreTx(null); return; }
+    const orig = text.trim();
+    if (!orig) return;
+    setDraftTx(true);
+    try {
+      const r = await httpsCallable(functions, 'translateText')({ text: orig });
+      setPreTx(text);
+      setText(r.data.translated);
+    } catch (e) {
+      alert(`${L('翻譯失敗 (Translate failed)')}: ${e.message}`);
+    } finally { setDraftTx(false); }
   };
 
   useEffect(() => {
@@ -137,6 +213,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
         });
       }
       setText('');
+      setPreTx(null);
       setPendingAtts([]);
       setCc(''); setBcc(''); setSubject('');
     } catch (e) {
@@ -171,6 +248,17 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
                 {tag && <p className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 flex items-center gap-1 ${mine && !note ? 'text-indigo-200' : tag.cls}`}><tag.icon size={10} /> {tag.label}{m.status === 'failed' ? ` · ${L('傳送失敗 (failed)')}` : ''}</p>}
                 {m.channel === 'email' && m.subject && <p className={`text-[10px] italic mb-0.5 ${mine && !note ? 'text-indigo-200' : 'text-slate-500'}`}>{L('主旨 (Subject)')}: {m.subject}</p>}
                 {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                {m.body && (
+                  <>
+                    <button type="button" onClick={() => translateMsg(m)} className={`mt-1 text-[10px] font-semibold inline-flex items-center gap-1 ${mine && !note ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-indigo-600'}`}>
+                      {txLoading[m.id] ? <Loader2 size={10} className="animate-spin" /> : <Languages size={10} />}
+                      {msgTx[m.id] ? L('隱藏翻譯 (Hide)') : L('翻譯 (Translate)')}
+                    </button>
+                    {msgTx[m.id] && (
+                      <p className={`mt-1 pt-1 border-t whitespace-pre-wrap break-words ${mine && !note ? 'border-white/20 text-indigo-50' : 'border-slate-200 text-slate-600'}`}>{msgTx[m.id]}</p>
+                    )}
+                  </>
+                )}
                 {Array.isArray(m.attachments) && m.attachments.map((a, i) => (
                   <div key={i} className="mt-1.5">
                     {String(a.type || '').startsWith('image/')
@@ -226,6 +314,29 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
               )}
           </div>
         )}
+        {showDocs && eventData && (
+          <div className="mb-2 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-indigo-800 flex items-center gap-1"><Files size={13} /> {L('附上系統文件 (Attach a document)')}</span>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-lg overflow-hidden border border-indigo-200 text-[11px] font-bold">
+                  <button type="button" onClick={() => setDocLang('zh')} className={`px-2 py-0.5 ${docLang === 'zh' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600'}`}>中文</button>
+                  <button type="button" onClick={() => setDocLang('en')} className={`px-2 py-0.5 ${docLang === 'en' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600'}`}>EN</button>
+                </div>
+                <button type="button" onClick={() => setShowDocs(false)} className="text-indigo-600"><X size={14} /></button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto">
+              {docChoices.map(c => (
+                <button key={c.docType} type="button" onClick={() => attachDoc(c)} disabled={!!genDoc} className="flex items-center gap-1.5 p-2 rounded-lg bg-white border border-indigo-100 hover:border-indigo-300 text-xs text-left disabled:opacity-50">
+                  {genDoc === c.docType ? <Loader2 size={13} className="animate-spin text-indigo-500 shrink-0" /> : <FileText size={13} className="text-indigo-500 shrink-0" />}
+                  <span className="truncate">{c.label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-indigo-500/70 mt-1.5">{L('產生 PDF 後加入附件，隨訊息一同傳送。 (Generates a PDF and adds it as an attachment.)')}</p>
+          </div>
+        )}
         {mode === 'email' && (
           <div className="mb-2">
             <input value={subject} onChange={e => setSubject(e.target.value)} placeholder={L('主旨（留空則用活動名稱）(Subject — blank uses the event name)')} className="w-full mb-1 p-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500" />
@@ -254,7 +365,16 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
           <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2.5 text-slate-400 hover:text-indigo-600 disabled:opacity-50" title={L('附件 (Attach files)')}>
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
           </button>
-          <textarea rows="1" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
+          {eventData && docChoices.length > 0 && (
+            <button type="button" onClick={() => setShowDocs(v => !v)} className={`p-2.5 hover:text-indigo-600 ${showDocs ? 'text-indigo-600' : 'text-slate-400'}`} title={L('附上系統文件 (Attach a document)')}>
+              <Files size={18} />
+            </button>
+          )}
+          <textarea rows="1" value={text} onChange={e => { setText(e.target.value); if (preTx !== null) setPreTx(null); }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={mode === 'email' ? `${L('以電郵傳送給 (Email to)')} ${clientEmail}` : mode === 'whatsapp' ? `${L('以 WhatsApp 傳送給 (WhatsApp to)')} ${clientPhone}` : L('輸入內部備註...(Internal note...)')} className="flex-1 resize-none p-2.5 border border-slate-200 rounded-xl text-sm focus:border-indigo-500 outline-none" />
+          <button type="button" onClick={translateDraft} disabled={draftTx || (!text.trim() && preTx === null)} className={`px-2.5 py-2.5 rounded-xl text-xs font-bold border flex items-center gap-1 disabled:opacity-40 ${preTx !== null ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'}`} title={L('一鍵翻譯 (Translate draft)')}>
+            {draftTx ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
+            <span className="hidden sm:inline">{preTx !== null ? L('還原 (Undo)') : L('一鍵翻譯 (Translate)')}</span>
+          </button>
           <button type="button" onClick={send} disabled={sending || (!text.trim() && pendingAtts.length === 0)} className="px-4 bg-indigo-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>

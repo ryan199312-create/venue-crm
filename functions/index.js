@@ -809,7 +809,9 @@ exports.sendEventMessage = onCall({ secrets: [resendKey, resendInboundDomain] },
         from: fromLine,
         to: [to],
         subject: emailSubject,
-        text: text || `📎 ${atts.map(a => a.name).join(', ')}`,
+        // Append the per-store email signature (boilerplate) to the outgoing mail only —
+        // the in-app bubble keeps just what staff typed, so the thread stays clean.
+        text: (text || `📎 ${atts.map(a => a.name).join(', ')}`) + (mcfg.emailSignature ? `\n\n${mcfg.emailSignature}` : ''),
         reply_to: replyTo,
       };
       if (atts.length) payload.attachments = atts.map(a => ({ path: a.url, filename: a.name }));
@@ -1643,4 +1645,44 @@ exports.callAiAssistant = onRequest({
     // Wrap in { data } so the client reads resultData.data.choices[...] consistently.
     res.status(200).json({ data: response.data });
   } catch (error) { res.status(500).json({ error: { message: error.message } }); }
+});
+
+// One-tap translation for the staff comms inbox. Most staff read/write Chinese, but the
+// email thread with clients is usually in English (and vice-versa). Auto-detects direction
+// — CJK-heavy text -> English, otherwise -> Traditional Chinese (zh-HK) — unless `target`
+// ('en' | 'zh') is given. Reuses the same DeepSeek key. Staff-only.
+exports.translateText = onCall({ secrets: [deepseekKey] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const tok = request.auth.token;
+  if (!['super_admin', 'admin', 'staff'].includes(tok.role)) throw new HttpsError('permission-denied', 'Staff only.');
+  const src = String(request.data?.text || '').trim().slice(0, 5000);
+  if (!src) throw new HttpsError('invalid-argument', 'Nothing to translate.');
+  const key = deepseekKey.value();
+  if (!key || key === 'unset') throw new HttpsError('failed-precondition', 'Translation is not configured.');
+
+  // Direction: an explicit target wins; otherwise detect by counting CJK characters.
+  let target = request.data?.target;
+  if (target !== 'en' && target !== 'zh') {
+    const cjk = (src.match(/[㐀-鿿豈-﫿]/g) || []).length;
+    target = cjk >= 2 ? 'en' : 'zh';
+  }
+  const instruction = target === 'en'
+    ? 'You are a professional translator. Translate the user message into natural, professional English suitable for client communication at a wedding/banquet venue. Preserve line breaks, names, dates, numbers, and currency exactly. Output ONLY the translation — no quotes, labels, or notes.'
+    : 'You are a professional translator. Translate the user message into natural Traditional Chinese as used in Hong Kong (zh-HK). Preserve line breaks, names, dates, numbers, and currency exactly. Output ONLY the translation — no quotes, labels, or notes.';
+  try {
+    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+      model: 'deepseek-chat',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: instruction },
+        { role: 'user', content: src },
+      ],
+    }, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 30000 });
+    const translated = String(response.data?.choices?.[0]?.message?.content || '').trim();
+    if (!translated) throw new Error('Empty translation');
+    return { translated, target };
+  } catch (e) {
+    const detail = (e.response && e.response.data && e.response.data.error && e.response.data.error.message) || e.message || 'translate failed';
+    throw new HttpsError('internal', `Translation failed: ${String(detail).slice(0, 200)}`);
+  }
 });

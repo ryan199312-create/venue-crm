@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../../core/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
+import { getScopedSettings } from '../../../services/helpers';
 import { MessageSquare, Search, ChevronLeft, ExternalLink, Mail, Inbox, FileText, Loader2 } from 'lucide-react';
 import MessagesTab from './MessagesTab';
 
@@ -13,7 +14,7 @@ const millis = (t) => (t && t.toMillis ? t.toMillis() : (t && t.seconds ? t.seco
 const UNASSIGNED = '__unassigned__';
 
 const InboxView = ({ events = [], openEditModal }) => {
-  const { appId } = useAuth();
+  const { appId, appSettings } = useAuth();
   const { L } = useLang();
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
@@ -145,7 +146,7 @@ const InboxView = ({ events = [], openEditModal }) => {
               {openEditModal && <button onClick={() => openEditModal(selected)} className="text-xs text-indigo-600 font-bold flex items-center gap-1 hover:underline shrink-0"><ExternalLink size={12} /> {L('開啟訂單 (Open EO)')}</button>}
             </div>
             <div className="flex-1 min-h-0 p-3">
-              <MessagesTab key={selected.id} eventId={selected.id} clientEmail={selected.clientEmail} clientPhone={selected.clientPhone} heightClass="h-full" />
+              <MessagesTab key={selected.id} eventId={selected.id} clientEmail={selected.clientEmail} clientPhone={selected.clientPhone} eventData={selected} appSettings={getScopedSettings(appSettings, selected.venueId)} heightClass="h-full" />
             </div>
           </>
         ) : (

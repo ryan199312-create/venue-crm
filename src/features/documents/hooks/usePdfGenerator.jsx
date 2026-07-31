@@ -11,7 +11,7 @@ import { useAuth } from '../../../context/AuthContext';
 export function usePdfGenerator() {
   const { appId } = useAuth();
   
-  const generatePdf = async ({ docType, data, appSettings, download = false, lang = 'en' }) => {
+  const generatePdf = async ({ docType, data, appSettings, download = false, lang = 'en', silent = false }) => {
     const docFont = getDocStyle(appSettings).font;
     const jobId = Math.random().toString(36).substring(7);
     const fileName = `${data.orderId}_${docType}_${new Date().toISOString().split('T')[0]}.pdf`;

@@ -70,7 +70,6 @@ export default function EventFormModal({
     if (isOpen) {
       const tabs = [
         { id: 'basic', permission: 'tab_basic' },
-        { id: 'messages', permission: 'tab_basic' },
         { id: 'fnb', permission: 'tab_fnb' },
         { id: 'billing', permission: 'tab_billing' },
         { id: 'venue', permission: 'tab_venue' },
@@ -347,7 +346,6 @@ export default function EventFormModal({
         <div className="flex border-b border-slate-200 bg-white sticky top-0 z-[60] overflow-x-auto no-scrollbar shadow-sm">
           {[
             { id: 'basic', label: L('基本資料 (Basics)'), icon: FileText, permission: 'tab_basic' },
-            { id: 'messages', label: L('對話 (Messages)'), icon: MessageCircle, permission: 'tab_basic' },
             { id: 'fnb', label: L('餐飲與酒水 (F&B)'), icon: Utensils, permission: 'tab_fnb' },
             { id: 'billing', label: L('帳務與支付 (Billing)'), icon: CreditCard, permission: 'tab_billing' },
             { id: 'venue', label: L('場地佈置 (Venue)'), icon: Monitor, permission: 'tab_venue' },
@@ -474,6 +472,21 @@ export default function EventFormModal({
         {/* Footer inside Modal */}
         <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-[70] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-xl">
           <div className="flex items-center space-x-3 relative">
+            {/* Chat launcher — opens the full-width Messages view (was the AI Assistant slot) */}
+            {hasPermission('tab_basic') && (
+              <button
+                type="button"
+                onClick={() => setFormTab('messages')}
+                className={`relative px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${formTab === 'messages' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
+              >
+                <MessageCircle size={16} />
+                <span>{L('對話 (Messages)')}</span>
+                {formData.unreadForStaff > 0 && formTab !== 'messages' && (
+                  <span className="bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{formData.unreadForStaff}</span>
+                )}
+              </button>
+            )}
+
             {/* Document Manager Launch Button */}
             {editingEvent && hasPermission('send_messages') && (
               <div className="relative">

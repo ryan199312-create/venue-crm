@@ -82,9 +82,10 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     ta.style.height = `${Math.min(ta.scrollHeight, 220)}px`;
   }, [text]);
 
-  const venueName = (appSettings?.venueProfiles?.[eventData?.venueId]?.nameEn)
-    || (appSettings?.outlets || []).find(o => o.id === eventData?.venueId)?.name
-    || eventData?.venueLocation || '';
+  const vProfile = appSettings?.venueProfiles?.[eventData?.venueId] || appSettings?.venueProfile || {};
+  const venueNameEn = vProfile.nameEn || (appSettings?.outlets || []).find(o => o.id === eventData?.venueId)?.name || '';
+  const venueNameZh = vProfile.nameZh || '';
+  const venueName = venueNameZh || venueNameEn || eventData?.venueLocation || '';
 
   // System documents we can generate + attach on the fly. Menu confirmations are one per
   // menu on the event. printMode strings match DocumentRouter.
@@ -201,7 +202,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     const push = (k, v) => { if (v !== undefined && v !== null && String(v).trim() !== '') lines.push(`- ${k}: ${v}`); };
     push('Client', e.clientName);
     push('Company', e.companyName);
-    push('Contact', [e.clientPhone, e.clientEmail].filter(Boolean).join(' / '));
+    push("Client's own phone/email (this is the CLIENT — never quote it as the venue's contact)", [e.clientPhone, e.clientEmail].filter(Boolean).join(' / '));
     push('Event name', e.eventName);
     push('Event type', e.customEventType || e.eventType);
     push('Date', e.date);
@@ -214,7 +215,17 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     push('Guests', e.guestCount);
     push('Serving style', e.servingStyle);
     push('Drinks package', e.drinksPackage);
-    if (Array.isArray(e.menus) && e.menus.length) push('Menus', e.menus.map(m => `${m.title || m.type || 'Menu'}${m.price ? ` ($${m.price}/table)` : ''}`).join('; '));
+    if (Array.isArray(e.menus) && e.menus.length) {
+      // Include the ACTUAL dishes (menu.content). Multiple menus = options the client is
+      // choosing between (not all served) — never present menu qty as a per-table portion.
+      const blocks = e.menus.map(m => {
+        const head = `${m.title || m.type || 'Menu'}${m.price ? ` — HK$${m.price}/table` : ''}`;
+        const dishes = String(m.content || '').trim();
+        return dishes ? `${head}\n${dishes.slice(0, 700)}` : head;
+      });
+      const label = e.menus.length > 1 ? `Menu options (client is choosing between these ${e.menus.length}; not all are served)` : 'Menu';
+      push(label, `\n${blocks.join('\n----\n')}`);
+    }
     // Payments — use the authoritative billing calc. depositNReceived are BOOLEAN paid-flags
     // (not amounts); depositN are the scheduled amounts. Only surface figures when the total
     // is actually costed, so the AI never quotes a stray/inconsistent number.
@@ -239,7 +250,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const prunedEventJson = () => {
     // Also drop raw payment fields (deposit1, deposit1Received boolean, balanceReceived, …)
     // — the Payments section above already states them correctly; raw fields only mislead.
-    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb|deposit|received|balance|location/i;
+    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb|deposit|received|balance|location|menu/i;
     const e = eventData || {};
     const out = {};
     Object.keys(e).forEach(k => {
@@ -256,10 +267,17 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     const instruction = (presetPrompt || aiInstruction || '').trim()
       || "Write a helpful, professional reply to the client's most recent message.";
     const channelName = mode === 'whatsapp' ? 'WhatsApp' : 'email';
-    const langLine = aiLang === 'zh' ? 'Write the reply in Traditional Chinese (Hong Kong).'
+    const langLine = aiLang === 'zh' ? 'Write the reply ENTIRELY in Traditional Chinese (Hong Kong). Do NOT add English words or English translations in parentheses (e.g. never write "（tentative）").'
       : aiLang === 'en' ? 'Write the reply in English.'
-        : "Write the reply in the same language as the client's most recent message; if unclear, use Traditional Chinese (Hong Kong).";
-    const sys = `You are an experienced wedding & banquet coordinator at ${venueName || 'the venue'}, writing to a client on the venue's behalf. Write a warm, professional ${channelName} message. Use ONLY the event details provided — dates, tables, menu, payments — and never invent facts that are not given; if a detail is missing, leave it out rather than guessing. MONEY & PAYMENTS: state amounts ONLY as written in the "Payments" lines of the brief; never compute, guess, or restate a figure another way, and NEVER invent a payment due date (do not say a payment is "due by" a date unless the brief explicitly gives that due date). If no payment lines are provided, do not mention money at all — instead invite the client to refer to their quotation/invoice. ${langLine} Output ONLY the message body, ready to send: no subject line, no "[placeholders]", no explanations.`;
+        : "Write the reply in the same language as the client's most recent message; if unclear, use Traditional Chinese (Hong Kong). If you write in Chinese, write ENTIRELY in Chinese with no English glosses in parentheses.";
+    const vPhone = vProfile.phone || '';
+    const vEmail = vProfile.email || '';
+    const vAddr = vProfile.address || '';
+    const identity = `You are an experienced wedding & banquet coordinator writing to a client on behalf of the venue. The venue's name is exactly "${venueNameZh || venueNameEn || 'the venue'}"${venueNameEn && venueNameZh ? ` (in English: "${venueNameEn}")` : ''}. Always use this exact name — never translate, transliterate, abbreviate, or invent a different name.`;
+    const contactRule = (vPhone || vEmail || vAddr)
+      ? `The venue's OWN contact details are:${vPhone ? ` phone ${vPhone};` : ''}${vEmail ? ` email ${vEmail};` : ''}${vAddr ? ` address ${vAddr};` : ''} If you invite the client to contact the venue, use ONLY these details. NEVER present the client's own phone or email as the venue's contact.`
+      : `Do NOT invent a venue phone number, email, or address, and NEVER present the client's own phone or email as the venue's contact — if you invite them to get in touch, simply ask them to reply to this email.`;
+    const sys = `${identity} ${contactRule} Write a warm, professional ${channelName} message. Use ONLY the event details provided and never invent facts; if a detail is missing, leave it out rather than guessing. MENUS: when more than one menu is listed they are OPTIONS the client is choosing between — do not say all of them are being served, and never state a per-table portion or quantity for a menu. MONEY & PAYMENTS: state amounts ONLY as written in the "Payments" lines; never compute, guess, or restate a figure, and NEVER invent a payment due date. If no payment lines are given, do not mention money at all — invite the client to refer to their quotation/invoice. ${langLine} Output ONLY the message body, ready to send: no subject line, no "[placeholders]", no explanations.`;
     const transcript = messages.slice(-12).map(m => `${m.direction === 'in' ? 'CLIENT' : 'STAFF'} (${m.channel}): ${m.body || (Array.isArray(m.attachments) && m.attachments.length ? '[attachment]' : '')}`).join('\n') || '(no messages yet)';
     const userPrompt = `EVENT BRIEF:\n${buildEventBrief()}\n\nADDITIONAL STRUCTURED DATA (JSON):\n${prunedEventJson()}\n\nCONVERSATION (oldest to newest):\n${transcript}\n\nTASK: ${instruction}`;
     setAiBusy(true);

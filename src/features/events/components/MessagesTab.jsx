@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
 import { usePdfGenerator } from '../../documents/hooks/usePdfGenerator';
 import { useAI } from '../../../hooks/useAI';
+import { generateBillingSummary, formatMoney } from '../../../services/billingService';
 import { Send, Loader2, StickyNote, Mail, MessageCircle, Paperclip, X, FileText, Download, Files, Languages, Sparkles } from 'lucide-react';
 
 // Quick starting points for the AI draft assistant. Labels are bilingual so L() can pick.
@@ -210,11 +211,20 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     push('Guests', e.guestCount);
     push('Serving style', e.servingStyle);
     push('Drinks package', e.drinksPackage);
-    if (Array.isArray(e.menus) && e.menus.length) push('Menus', e.menus.map(m => `${m.title || m.type || 'Menu'}${m.price ? ` ($${m.price})` : ''}`).join('; '));
-    const pay = [];
-    [1, 2, 3].forEach(n => { if (e[`deposit${n}Received`]) pay.push(`Deposit ${n}: ${e[`deposit${n}Received`]}${e[`deposit${n}Date`] ? ` on ${e[`deposit${n}Date`]}` : ''}`); });
-    if (e.balanceReceived) pay.push(`Balance received: ${e.balanceReceived}`);
-    if (pay.length) push('Payments', pay.join(' | '));
+    if (Array.isArray(e.menus) && e.menus.length) push('Menus', e.menus.map(m => `${m.title || m.type || 'Menu'}${m.price ? ` ($${m.price}/table)` : ''}`).join('; '));
+    // Payments — use the authoritative billing calc. depositNReceived are BOOLEAN paid-flags
+    // (not amounts); depositN are the scheduled amounts. Only surface figures when the total
+    // is actually costed, so the AI never quotes a stray/inconsistent number.
+    let bill = null;
+    try { bill = generateBillingSummary(e, appSettings || {}); } catch { bill = null; }
+    if (bill && bill.grandTotal > 0) {
+      push('Estimated total (incl. service charge)', `HK$${formatMoney(bill.grandTotal)}`);
+      const deps = [];
+      [1, 2, 3].forEach(n => { const amt = bill[`dep${n}`]; if (amt > 0) deps.push(`Deposit ${n} HK$${formatMoney(amt)} — ${e[`deposit${n}Received`] ? 'received' : 'not yet received'}`); });
+      if (deps.length) push('Deposit schedule', deps.join('; '));
+      push('Received to date', `HK$${formatMoney(bill.totalPaid)}`);
+      push('Outstanding balance', `HK$${formatMoney(bill.balanceDue)}`);
+    }
     push('Special menu request', e.specialMenuReq);
     push('Allergies', e.allergies);
     push('Remarks', e.remarks || e.generalRemarks || e.otherNotes);
@@ -224,7 +234,9 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   // A pruned JSON of the rest of the event so the AI can reference anything else, minus
   // heavy/irrelevant fields (photos, floor plan, signatures, guest lists, note log).
   const prunedEventJson = () => {
-    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb/i;
+    // Also drop raw payment fields (deposit1, deposit1Received boolean, balanceReceived, …)
+    // — the Payments section above already states them correctly; raw fields only mislead.
+    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb|deposit|received|balance/i;
     const e = eventData || {};
     const out = {};
     Object.keys(e).forEach(k => {
@@ -244,7 +256,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     const langLine = aiLang === 'zh' ? 'Write the reply in Traditional Chinese (Hong Kong).'
       : aiLang === 'en' ? 'Write the reply in English.'
         : "Write the reply in the same language as the client's most recent message; if unclear, use Traditional Chinese (Hong Kong).";
-    const sys = `You are an experienced wedding & banquet coordinator at ${venueName || 'the venue'}, writing to a client on the venue's behalf. Write a warm, professional ${channelName} message. Use ONLY the event details provided — dates, tables, menu, payments — and never invent facts that are not given; if a detail is missing, leave it out rather than guessing. ${langLine} Output ONLY the message body, ready to send: no subject line, no "[placeholders]", no explanations.`;
+    const sys = `You are an experienced wedding & banquet coordinator at ${venueName || 'the venue'}, writing to a client on the venue's behalf. Write a warm, professional ${channelName} message. Use ONLY the event details provided — dates, tables, menu, payments — and never invent facts that are not given; if a detail is missing, leave it out rather than guessing. MONEY & PAYMENTS: state amounts ONLY as written in the "Payments" lines of the brief; never compute, guess, or restate a figure another way, and NEVER invent a payment due date (do not say a payment is "due by" a date unless the brief explicitly gives that due date). If no payment lines are provided, do not mention money at all — instead invite the client to refer to their quotation/invoice. ${langLine} Output ONLY the message body, ready to send: no subject line, no "[placeholders]", no explanations.`;
     const transcript = messages.slice(-12).map(m => `${m.direction === 'in' ? 'CLIENT' : 'STAFF'} (${m.channel}): ${m.body || (Array.isArray(m.attachments) && m.attachments.length ? '[attachment]' : '')}`).join('\n') || '(no messages yet)';
     const userPrompt = `EVENT BRIEF:\n${buildEventBrief()}\n\nADDITIONAL STRUCTURED DATA (JSON):\n${prunedEventJson()}\n\nCONVERSATION (oldest to newest):\n${transcript}\n\nTASK: ${instruction}`;
     setAiBusy(true);

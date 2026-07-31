@@ -21,6 +21,11 @@ const AI_PRESETS = [
 
 // Whether the tenant has WhatsApp configured — fetched once per appId per session.
 const _waStatusCache = {};
+
+// Unsent composer drafts, keyed by eventId. The event form unmounts this tab when you
+// switch tabs (餐飲與酒水 etc.), which would otherwise wipe what you've typed — so we
+// stash the draft here and restore it on remount. Cleared once the message is sent.
+const _draftCache = {};
 const fetchWaStatus = (appId) => {
   if (!_waStatusCache[appId]) {
     _waStatusCache[appId] = httpsCallable(functions, 'getWhatsappStatus')({ appId })
@@ -39,17 +44,18 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const { L } = useLang();
   const { generatePdf } = usePdfGenerator();
   const { generate } = useAI();
+  const draft0 = (eventId && _draftCache[eventId]) || {}; // restored on remount (tab switch)
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [text, setText] = useState('');
-  const [mode, setMode] = useState(clientEmail ? 'email' : 'note'); // 'email' | 'whatsapp' | 'note'
+  const [text, setText] = useState(draft0.text || '');
+  const [mode, setMode] = useState(draft0.mode || (clientEmail ? 'email' : 'note')); // 'email' | 'whatsapp' | 'note'
   const [sending, setSending] = useState(false);
   const [waConfigured, setWaConfigured] = useState(false);
-  const [pendingAtts, setPendingAtts] = useState([]); // [{ url, name, type }]
+  const [pendingAtts, setPendingAtts] = useState(draft0.pendingAtts || []); // [{ url, name, type }]
   const [uploading, setUploading] = useState(false);
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
-  const [subject, setSubject] = useState('');
+  const [cc, setCc] = useState(draft0.cc || '');
+  const [bcc, setBcc] = useState(draft0.bcc || '');
+  const [subject, setSubject] = useState(draft0.subject || '');
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [showTpl, setShowTpl] = useState(false);
   const [templates, setTemplates] = useState(null); // null = not loaded
@@ -81,6 +87,14 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     ta.style.height = 'auto';
     ta.style.height = `${Math.min(ta.scrollHeight, 220)}px`;
   }, [text]);
+
+  // Keep the unsent draft stashed so switching tabs in the event form doesn't wipe it.
+  useEffect(() => {
+    if (!eventId) return;
+    const hasContent = text || subject || cc || bcc || pendingAtts.length;
+    if (hasContent) _draftCache[eventId] = { text, subject, cc, bcc, mode, pendingAtts };
+    else delete _draftCache[eventId];
+  }, [eventId, text, subject, cc, bcc, mode, pendingAtts]);
 
   const vProfile = appSettings?.venueProfiles?.[eventData?.venueId] || appSettings?.venueProfile || {};
   const venueNameEn = vProfile.nameEn || (appSettings?.outlets || []).find(o => o.id === eventData?.venueId)?.name || '';

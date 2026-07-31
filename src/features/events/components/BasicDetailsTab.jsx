@@ -109,6 +109,7 @@ const BasicDetailsTab = ({ formData, setFormData, handleInputChange, minSpendInf
             options={[
               { value: '圍餐', label: L('標準圍餐 (Banquet)') },
               { value: '位上', label: L('位上 (Indiv. Plating)') },
+              { value: '位出', label: L('位出 (Indiv. Serving)') },
               { value: 'Buffet', label: L('自助餐 (Buffet)') },
               { value: 'Other', label: L('其他 (Other)') }
             ]}

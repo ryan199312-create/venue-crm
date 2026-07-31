@@ -3,7 +3,7 @@ export const EVENT_TYPES = [
   '演唱會 (Concert)', '會議 (Conference)', '私人聚會 (Private Party)', '其他 (Other)'
 ];
 
-export const SERVING_STYLES = ['位上', '圍餐', '分菜', '自助餐'];
+export const SERVING_STYLES = ['位上', '位出', '圍餐', '分菜', '自助餐'];
 export const DEFAULT_DRINK_PACKAGES = [];
 export const DECOR_COLORS = ['白 (White)', '金 (Gold)', '紅 (Red)'];
 export const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

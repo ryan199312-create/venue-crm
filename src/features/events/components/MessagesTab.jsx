@@ -6,7 +6,17 @@ import { db, functions, storage } from '../../../core/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { useLang } from '../../../i18n/language';
 import { usePdfGenerator } from '../../documents/hooks/usePdfGenerator';
-import { Send, Loader2, StickyNote, Mail, MessageCircle, Paperclip, X, FileText, Download, Files, Languages } from 'lucide-react';
+import { useAI } from '../../../hooks/useAI';
+import { Send, Loader2, StickyNote, Mail, MessageCircle, Paperclip, X, FileText, Download, Files, Languages, Sparkles } from 'lucide-react';
+
+// Quick starting points for the AI draft assistant. Labels are bilingual so L() can pick.
+const AI_PRESETS = [
+  { key: 'reply', label: '回覆最新訊息 (Reply to latest)', prompt: "Write a helpful, professional reply to the client's most recent message." },
+  { key: 'followup', label: '跟進 (Follow up)', prompt: 'Politely follow up on the outstanding quotation/booking and invite the client to confirm the next step.' },
+  { key: 'payment', label: '提醒付款 (Payment reminder)', prompt: 'Write a courteous reminder about the next outstanding payment/deposit for this event, referencing what has already been paid.' },
+  { key: 'confirm', label: '確認細節 (Confirm details)', prompt: 'Summarise and confirm the key event details (date, time, tables, menu) and ask the client to confirm they are correct.' },
+  { key: 'thanks', label: '答謝 (Thank you)', prompt: 'Write a warm thank-you message to the client for choosing the venue; reassure them we look forward to hosting their event.' },
+];
 
 // Whether the tenant has WhatsApp configured — fetched once per appId per session.
 const _waStatusCache = {};
@@ -27,6 +37,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const { appId, userProfile, user } = useAuth();
   const { L } = useLang();
   const { generatePdf } = usePdfGenerator();
+  const { generate } = useAI();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -53,8 +64,17 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const [txLoading, setTxLoading] = useState({}); // { [msgId]: bool }
   const [draftTx, setDraftTx] = useState(false);  // composer translating
   const [preTx, setPreTx] = useState(null);       // pre-translation draft, for revert
+  // AI draft assistant
+  const [showAi, setShowAi] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiLang, setAiLang] = useState('auto'); // 'auto' | 'zh' | 'en'
   const endRef = useRef(null);
   const fileRef = useRef(null);
+
+  const venueName = (appSettings?.venueProfiles?.[eventData?.venueId]?.nameEn)
+    || (appSettings?.outlets || []).find(o => o.id === eventData?.venueId)?.name
+    || eventData?.venueLocation || '';
 
   // System documents we can generate + attach on the fly. Menu confirmations are one per
   // menu on the event. printMode strings match DocumentRouter.
@@ -162,6 +182,73 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     } catch (e) {
       alert(`${L('翻譯失敗 (Translate failed)')}: ${e.message}`);
     } finally { setDraftTx(false); }
+  };
+
+  // Build a compact, factual brief of THIS event for the AI (never invents data).
+  const buildEventBrief = () => {
+    const e = eventData || {};
+    const lines = [];
+    const push = (k, v) => { if (v !== undefined && v !== null && String(v).trim() !== '') lines.push(`- ${k}: ${v}`); };
+    push('Client', e.clientName);
+    push('Company', e.companyName);
+    push('Contact', [e.clientPhone, e.clientEmail].filter(Boolean).join(' / '));
+    push('Event name', e.eventName);
+    push('Event type', e.customEventType || e.eventType);
+    push('Date', e.date);
+    push('Time', [e.startTime, e.endTime].filter(Boolean).join('–') || e.servingTime);
+    push('Venue', venueName || e.venueId);
+    push('Tables', e.tableCount);
+    push('Guests', e.guestCount);
+    push('Serving style', e.servingStyle);
+    push('Drinks package', e.drinksPackage);
+    if (Array.isArray(e.menus) && e.menus.length) push('Menus', e.menus.map(m => `${m.title || m.type || 'Menu'}${m.price ? ` ($${m.price})` : ''}`).join('; '));
+    const pay = [];
+    [1, 2, 3].forEach(n => { if (e[`deposit${n}Received`]) pay.push(`Deposit ${n}: ${e[`deposit${n}Received`]}${e[`deposit${n}Date`] ? ` on ${e[`deposit${n}Date`]}` : ''}`); });
+    if (e.balanceReceived) pay.push(`Balance received: ${e.balanceReceived}`);
+    if (pay.length) push('Payments', pay.join(' | '));
+    push('Special menu request', e.specialMenuReq);
+    push('Allergies', e.allergies);
+    push('Remarks', e.remarks || e.generalRemarks || e.otherNotes);
+    return lines.join('\n') || '(no details on file)';
+  };
+
+  // A pruned JSON of the rest of the event so the AI can reference anything else, minus
+  // heavy/irrelevant fields (photos, floor plan, signatures, guest lists, note log).
+  const prunedEventJson = () => {
+    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb/i;
+    const e = eventData || {};
+    const out = {};
+    Object.keys(e).forEach(k => {
+      if (drop.test(k)) return;
+      const v = e[k];
+      if (v == null) return;
+      out[k] = (typeof v === 'string' && v.length > 400) ? v.slice(0, 400) : v;
+    });
+    try { return JSON.stringify(out).slice(0, 6000); } catch { return ''; }
+  };
+
+  const runAiDraft = async (presetPrompt) => {
+    if (aiBusy) return;
+    const instruction = (presetPrompt || aiInstruction || '').trim()
+      || "Write a helpful, professional reply to the client's most recent message.";
+    const channelName = mode === 'whatsapp' ? 'WhatsApp' : 'email';
+    const langLine = aiLang === 'zh' ? 'Write the reply in Traditional Chinese (Hong Kong).'
+      : aiLang === 'en' ? 'Write the reply in English.'
+        : "Write the reply in the same language as the client's most recent message; if unclear, use Traditional Chinese (Hong Kong).";
+    const sys = `You are an experienced wedding & banquet coordinator at ${venueName || 'the venue'}, writing to a client on the venue's behalf. Write a warm, professional ${channelName} message. Use ONLY the event details provided — dates, tables, menu, payments — and never invent facts that are not given; if a detail is missing, leave it out rather than guessing. ${langLine} Output ONLY the message body, ready to send: no subject line, no "[placeholders]", no explanations.`;
+    const transcript = messages.slice(-12).map(m => `${m.direction === 'in' ? 'CLIENT' : 'STAFF'} (${m.channel}): ${m.body || (Array.isArray(m.attachments) && m.attachments.length ? '[attachment]' : '')}`).join('\n') || '(no messages yet)';
+    const userPrompt = `EVENT BRIEF:\n${buildEventBrief()}\n\nADDITIONAL STRUCTURED DATA (JSON):\n${prunedEventJson()}\n\nCONVERSATION (oldest to newest):\n${transcript}\n\nTASK: ${instruction}`;
+    setAiBusy(true);
+    try {
+      const out = await generate(userPrompt, sys);
+      if (out && out.trim()) {
+        setPreTx(null);
+        setText(out.trim());
+        setShowAi(false);
+      } else {
+        alert(L('AI 產生失敗，請重試。 (AI draft failed — please try again.)'));
+      }
+    } finally { setAiBusy(false); }
   };
 
   useEffect(() => {
@@ -275,13 +362,41 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
         <div ref={endRef} />
       </div>
       <div className="border-t border-slate-200 p-3 bg-white">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center flex-wrap gap-2 mb-2">
           {clientEmail && <button type="button" onClick={() => setMode('email')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'email' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}><Mail size={11} className="inline mr-1" />{L('電郵 (Email)')}</button>}
           {waConfigured && clientPhone && <button type="button" onClick={() => setMode('whatsapp')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}><MessageCircle size={11} className="inline mr-1" />WhatsApp</button>}
           <button type="button" onClick={() => setMode('note')} className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${mode === 'note' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}><StickyNote size={11} className="inline mr-1" />{L('內部備註 (Internal note)')}</button>
-          {mode === 'whatsapp' && <button type="button" onClick={openTemplates} className="text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 ml-auto">{L('範本 (Templates)')}</button>}
-          {!clientEmail && !(waConfigured && clientPhone) && <span className="text-[11px] text-slate-400 italic">{L('此客戶未設定電郵/電話 (No client email or phone on file)')}</span>}
+          <div className="ml-auto flex items-center gap-1.5">
+            {mode === 'whatsapp' && <button type="button" onClick={openTemplates} className="text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">{L('範本 (Templates)')}</button>}
+            <button type="button" onClick={() => setShowAi(v => !v)} className={`text-xs px-2.5 py-1 rounded-full font-bold border inline-flex items-center gap-1 ${showAi ? 'bg-violet-600 text-white border-violet-600' : 'bg-violet-50 text-violet-600 border-violet-200'}`}><Sparkles size={11} /> {L('AI 草擬 (AI)')}</button>
+          </div>
+          {!clientEmail && !(waConfigured && clientPhone) && <span className="text-[11px] text-slate-400 italic w-full">{L('此客戶未設定電郵/電話 (No client email or phone on file)')}</span>}
         </div>
+        {showAi && (
+          <div className="mb-2 p-3 bg-violet-50 border border-violet-200 rounded-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-violet-800 flex items-center gap-1"><Sparkles size={13} /> {L('AI 協助草擬 (AI draft assistant)')}</span>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-lg overflow-hidden border border-violet-200 text-[11px] font-bold">
+                  <button type="button" onClick={() => setAiLang('auto')} className={`px-2 py-0.5 ${aiLang === 'auto' ? 'bg-violet-600 text-white' : 'bg-white text-violet-600'}`}>{L('自動 (Auto)')}</button>
+                  <button type="button" onClick={() => setAiLang('zh')} className={`px-2 py-0.5 ${aiLang === 'zh' ? 'bg-violet-600 text-white' : 'bg-white text-violet-600'}`}>中</button>
+                  <button type="button" onClick={() => setAiLang('en')} className={`px-2 py-0.5 ${aiLang === 'en' ? 'bg-violet-600 text-white' : 'bg-white text-violet-600'}`}>EN</button>
+                </div>
+                <button type="button" onClick={() => setShowAi(false)} className="text-violet-600"><X size={14} /></button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {AI_PRESETS.map(p => (
+                <button key={p.key} type="button" disabled={aiBusy} onClick={() => runAiDraft(p.prompt)} className="text-[11px] px-2 py-1 rounded-full bg-white border border-violet-200 text-violet-700 hover:border-violet-400 disabled:opacity-50">{L(p.label)}</button>
+              ))}
+            </div>
+            <textarea value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} rows="2" placeholder={L('給 AI 的指示（例如：確認日期並提醒第二期訂金）。留空＝回覆客戶最新訊息。 (Tell the AI what to write — e.g. confirm the date and remind about the 2nd deposit. Blank = reply to the latest client message.)')} className="w-full p-2 border border-violet-200 rounded-lg text-xs outline-none focus:border-violet-500 resize-y" />
+            <button type="button" onClick={() => runAiDraft()} disabled={aiBusy} className="mt-2 w-full py-2 bg-violet-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-1.5">
+              {aiBusy ? <><Loader2 size={13} className="animate-spin" /> {L('產生中… (Generating…)')}</> : <><Sparkles size={13} /> {L('產生草稿 (Generate draft)')}</>}
+            </button>
+            <p className="text-[10px] text-violet-500/70 mt-1.5">{L('草稿會填入輸入框，你可修改後再傳送。AI 只會使用此活動的資料。 (The draft fills the message box — edit before sending. The AI uses only this event\'s details.)')}</p>
+          </div>
+        )}
         {showTpl && mode === 'whatsapp' && (
           <div className="mb-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
             <div className="flex items-center justify-between mb-2">

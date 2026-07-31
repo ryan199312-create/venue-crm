@@ -8,7 +8,6 @@ import { DEFAULT_DRINK_PACKAGES } from '../../../services/billingService';
 import DocumentManager from '../../../components/DocumentManager';
 import BasicDetailsTab from './BasicDetailsTab';
 import MessagesTab from './MessagesTab';
-import EventChatDock from './EventChatDock';
 import LogisticsTab from './LogisticsTab';
 import FoodAndBeverageTab from './FoodAndBeverageTab';
 import BillingTab from '../../billing/BillingTab';
@@ -71,6 +70,7 @@ export default function EventFormModal({
     if (isOpen) {
       const tabs = [
         { id: 'basic', permission: 'tab_basic' },
+        { id: 'messages', permission: 'tab_basic' },
         { id: 'fnb', permission: 'tab_fnb' },
         { id: 'billing', permission: 'tab_billing' },
         { id: 'venue', permission: 'tab_venue' },
@@ -347,6 +347,7 @@ export default function EventFormModal({
         <div className="flex border-b border-slate-200 bg-white sticky top-0 z-[60] overflow-x-auto no-scrollbar shadow-sm">
           {[
             { id: 'basic', label: L('基本資料 (Basics)'), icon: FileText, permission: 'tab_basic' },
+            { id: 'messages', label: L('對話 (Messages)'), icon: MessageCircle, permission: 'tab_basic' },
             { id: 'fnb', label: L('餐飲與酒水 (F&B)'), icon: Utensils, permission: 'tab_fnb' },
             { id: 'billing', label: L('帳務與支付 (Billing)'), icon: CreditCard, permission: 'tab_billing' },
             { id: 'venue', label: L('場地佈置 (Venue)'), icon: Monitor, permission: 'tab_venue' },
@@ -376,6 +377,10 @@ export default function EventFormModal({
               users={users}
               scopedAppSettings={scopedAppSettings}
             />
+          )}
+
+          {formTab === 'messages' && (
+            <MessagesTab eventId={editingEvent?.id} clientEmail={formData.clientEmail} clientPhone={formData.clientPhone} eventData={formData} appSettings={scopedAppSettings} />
           )}
 
           {formTab === 'fnb' && (
@@ -519,18 +524,6 @@ export default function EventFormModal({
           </div>
         </div>
       </form>
-
-      {/* Floating chat dock — available on every tab, for saved events */}
-      {editingEvent?.id && hasPermission('tab_basic') && (
-        <EventChatDock
-          eventId={editingEvent.id}
-          clientEmail={formData.clientEmail}
-          clientPhone={formData.clientPhone}
-          eventData={formData}
-          appSettings={scopedAppSettings}
-          clientName={formData.clientName || formData.eventName}
-        />
-      )}
 
       <VersionPreviewModal
         isOpen={!!previewVersion} 

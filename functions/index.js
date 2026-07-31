@@ -284,19 +284,9 @@ exports.enqueuePdfJob = onRequest({
           format: "A4", 
           printBackground: true, 
           preferCSSPageSize: false, 
-          displayHeaderFooter: true,
-          headerTemplate: '<span></span>',
-          footerTemplate: `
-            <style>
-              #footer { padding: 0 !important; margin: 0 !important; -webkit-print-color-adjust: exact; }
-            </style>
-            <div style="width: 100%; font-size: 10px; padding: 0 15mm; display: flex; justify-content: space-between; align-items: center; color: #1e293b; font-family: 'Helvetica', 'Arial', sans-serif; border-top: 0.5px solid #cbd5e1; padding-top: 3mm; font-weight: bold;">
-              <div style="text-transform: uppercase; letter-spacing: 0.02em;">
-                ORDER: ${orderId || ''} | ${eventName || ''}
-              </div>
-              <div style="color: #64748b;">PAGE <span class="pageNumber"></span> OF <span class="totalPages"></span></div>
-            </div>
-          `,
+          // Footer is drawn by the document's own paged.js CSS (@bottom-left / @bottom-right).
+          // Puppeteer's built-in header/footer stays OFF, otherwise both render and overlap.
+          displayHeaderFooter: false,
           margin: { top: '10mm', bottom: '15mm', left: '10mm', right: '10mm' }
         });
 
@@ -367,23 +357,9 @@ exports.generatePdfTask = onTaskDispatched({
         format: "A4", 
         printBackground: true, 
         preferCSSPageSize: false, 
-        displayHeaderFooter: true,
-        headerTemplate: '<span></span>',
-        footerTemplate: `
-          <style>
-            #footer { 
-              padding: 0 !important; 
-              margin: 0 !important; 
-              -webkit-print-color-adjust: exact;
-            }
-          </style>
-          <div style="width: 100%; font-size: 10px; padding: 0 15mm; display: flex; justify-content: space-between; align-items: center; color: #1e293b; font-family: 'Helvetica', 'Arial', sans-serif; border-top: 0.5px solid #cbd5e1; padding-top: 3mm; font-weight: bold;">
-            <div style="text-transform: uppercase; letter-spacing: 0.02em;">
-              ORDER: ${orderId || ''} | ${eventName || ''}
-            </div>
-            <div style="color: #64748b;">PAGE <span class="pageNumber"></span> OF <span class="totalPages"></span></div>
-          </div>
-        `,
+        // Footer is drawn by the document's own paged.js CSS (@bottom-left / @bottom-right).
+        // Puppeteer's built-in header/footer stays OFF, otherwise both render and overlap.
+        displayHeaderFooter: false,
         margin: {
           top: '10mm',
           bottom: '15mm',

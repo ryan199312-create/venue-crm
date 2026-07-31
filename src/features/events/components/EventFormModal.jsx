@@ -23,7 +23,7 @@ import { useLang } from '../../../i18n/language';
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings, users,
   onSubmit, onSaveSignature, onUploadProof, onMultiImageUpload, onRemoveProof, addToast,
-  onOpenAi, onPrint, events
+  onPrint, events
 }) {
   const { hasPermission, userProfile } = useAuth();
   const { generate } = useAI();
@@ -474,13 +474,6 @@ export default function EventFormModal({
         {/* Footer inside Modal */}
         <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-[70] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-xl">
           <div className="flex items-center space-x-3 relative">
-            {hasPermission('ai_assistant') && (
-              <button type="button" onClick={onOpenAi} className="group relative px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg font-bold shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2 text-sm">
-                <Sparkles size={16} className="text-yellow-200" />
-                <span>{L('AI 活動助理 (AI Assistant)')}</span>
-              </button>
-            )}
-
             {/* Document Manager Launch Button */}
             {editingEvent && hasPermission('send_messages') && (
               <div className="relative">

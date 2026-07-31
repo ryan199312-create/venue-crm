@@ -30,7 +30,6 @@ const SettingsView = React.lazy(() => import('../features/settings/SettingsView'
 const DocumentationHub = React.lazy(() => import('../features/documents/components/DocumentationHub'));
 const EventFormModal = React.lazy(() => import('../features/events/components/EventFormModal'));
 const DocumentRouter = React.lazy(() => import('../features/documents/components/DocumentRouter'));
-const AiAssistant = React.lazy(() => import('../components/AiAssistant'));
 const AnalysisAssistant = React.lazy(() => import('../components/AnalysisAssistant'));
 
 import { usePdfGenerator } from '../features/documents/hooks/usePdfGenerator';
@@ -79,7 +78,6 @@ export default function AdminLayout() {
   const [printData, setPrintData] = useState(null);
   const [printMode, setPrintMode] = useState('EO');
   const [printLang, setPrintLang] = useState('en');
-  const [isAiOpen, setIsAiOpen] = useState(false);
   const [isDataAiOpen, setIsDataAiOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
@@ -556,10 +554,9 @@ export default function AdminLayout() {
             if (newUrls.length > 0) setFormData(prev => ({ ...prev, [fieldName]: [...(prev[fieldName] || []), ...newUrls] }));
           }}
           onRemoveProof={(key, url) => setConfirmConfig({ isOpen: true, title: L('移除收據 (Remove Receipt)'), message: L('確定嗎？ (Are you sure?)'), onConfirm: () => setFormData(p => ({ ...p, [key]: p[key].filter(u => u !== url) })) })}
-          addToast={addToast} onOpenAi={() => setIsAiOpen(true)} 
+          addToast={addToast}
           onPrint={triggerPrint}
         />
-        {isAiOpen && <AiAssistant formData={formData} setFormData={setFormData} onClose={() => setIsAiOpen(false)} />}
         {isDataAiOpen && <AnalysisAssistant events={events} onClose={() => setIsDataAiOpen(false)} />}
         {printData && (
           <div className="print-container absolute -left-[10000px] -top-[10000px] -z-50 print:static print:left-auto print:top-auto print:z-auto">

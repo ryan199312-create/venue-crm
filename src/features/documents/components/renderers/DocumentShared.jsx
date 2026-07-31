@@ -67,7 +67,14 @@ export const onlyEnglish = (text) => {
   return out.length ? out.join('\n') : text;
 };
 
-export const cleanLocation = (loc) => loc ? loc.replace(/^,\s*/, '') : '';
+export const cleanLocation = (loc) => {
+  if (!loc) return '';
+  const cleaned = loc.replace(/^,\s*/, '');
+  // Whole-venue bookings store '全場' alongside every zone (LocationSelector keeps the zone
+  // list for floor-plan data integrity). Documents should show just '全場', not the full list.
+  if (cleaned.includes('全場')) return '全場';
+  return cleaned;
+};
 
 export const getVenueEn = (loc, appSettings) => {
   let clean = cleanLocation(loc);

@@ -207,6 +207,9 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
     push('Date', e.date);
     push('Time', [e.startTime, e.endTime].filter(Boolean).join('–') || e.servingTime);
     push('Venue', venueName || e.venueId);
+    // Hall / area: whole-venue bookings store '全場' + every zone; show just '全場'.
+    const rawLoc = e.venueLocation || (Array.isArray(e.selectedLocations) ? e.selectedLocations.join(', ') : '');
+    if (rawLoc) push('Hall / area', rawLoc.includes('全場') ? '全場 (Whole Venue)' : rawLoc.replace(/^,\s*/, ''));
     push('Tables', e.tableCount);
     push('Guests', e.guestCount);
     push('Serving style', e.servingStyle);
@@ -236,7 +239,7 @@ const MessagesTab = ({ eventId, clientEmail, clientPhone, heightClass = 'h-[62vh
   const prunedEventJson = () => {
     // Also drop raw payment fields (deposit1, deposit1Received boolean, balanceReceived, …)
     // — the Payments section above already states them correctly; raw fields only mislead.
-    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb|deposit|received|balance/i;
+    const drop = /photo|image|bgimage|signature|floor|guests|notelog|decor|base64|thumb|deposit|received|balance|location/i;
     const e = eventData || {};
     const out = {};
     Object.keys(e).forEach(k => {

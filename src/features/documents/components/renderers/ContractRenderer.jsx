@@ -12,6 +12,7 @@ import {
   onlyChinese,
   formatDateEn,
   getVenueEn,
+  cleanLocation,
   formatBoldText,
   PaymentMethodBlock
 } from './DocumentShared';
@@ -131,7 +132,7 @@ export const ContractRenderer = ({ data, appSettings, onSign, onAdminSign, isCn 
                <span className="text-[10px] font-bold text-slate-400 uppercase">
                  {isCn ? '場地' : 'Venue'}
                </span>
-               <span className="text-xs font-black text-slate-800">{isCn ? data.venueLocation : getVenueEn(data.venueLocation)}</span>
+               <span className="text-xs font-black text-slate-800">{isCn ? cleanLocation(data.venueLocation) : getVenueEn(data.venueLocation)}</span>
              </div>
              <div className="flex justify-between items-end">
                <span className="text-[10px] font-bold text-slate-400 uppercase">

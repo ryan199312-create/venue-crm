@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FileText, CreditCard, Monitor, Truck, PenTool, Printer, Sparkles, ChevronUp, Send, MessageCircle, Mail, Utensils, Info
 } from 'lucide-react';
@@ -58,6 +58,17 @@ export default function EventFormModal({
 
   // Internal UI State
   const [formTab, setFormTab] = useState('basic');
+  const prevTabRef = useRef('basic'); // tab to return to when toggling the chat off
+
+  // Toggle the chat: open it (remembering the current tab), or go back to that tab.
+  const toggleChat = () => {
+    if (formTab === 'messages') {
+      setFormTab(prevTabRef.current || 'basic');
+    } else {
+      prevTabRef.current = formTab;
+      setFormTab('messages');
+    }
+  };
   const [showSendMenu, setShowSendMenu] = useState(false);
   const [showDocManager, setShowDocManager] = useState(false);
   const [previewVersion, setPreviewVersion] = useState(null);
@@ -476,7 +487,7 @@ export default function EventFormModal({
             {hasPermission('tab_basic') && (
               <button
                 type="button"
-                onClick={() => setFormTab('messages')}
+                onClick={toggleChat}
                 className={`relative px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 text-sm transition-all border ${formTab === 'messages' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
               >
                 <MessageCircle size={16} />

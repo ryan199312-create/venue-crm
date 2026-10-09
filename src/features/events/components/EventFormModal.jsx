@@ -19,13 +19,15 @@ import { useAI } from '../../../hooks/useAI';
 import { useAuth } from '../../../context/AuthContext';
 import { getScopedSettings } from '../../../services/helpers';
 import { useLang } from '../../../i18n/language';
+import { db } from '../../../core/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 export default function EventFormModal({
   isOpen, onClose, editingEvent, formData, setFormData, appSettings, users,
   onSubmit, onSaveSignature, onUploadProof, onMultiImageUpload, onRemoveProof, addToast,
   onPrint, events
 }) {
-  const { hasPermission, userProfile } = useAuth();
+  const { hasPermission, userProfile, appId } = useAuth();
   const { generate } = useAI();
   const { L } = useLang();
 
@@ -137,6 +139,19 @@ export default function EventFormModal({
     }
   }, [formTab, highlightTarget, setFormData]);
 
+  // Persist the menus array (incl. snapshots) straight to the event doc, so a saved/deleted
+  // snapshot survives even if the modal is closed without clicking 儲存活動 (Save Event).
+  // Returns true if it hit the DB; false for a brand-new event that has no id yet (then the
+  // snapshot stays in the draft and persists when the event is first saved).
+  const persistMenusToEvent = async (newMenus) => {
+    if (!editingEvent?.id || !appId) return false;
+    await updateDoc(
+      doc(db, 'artifacts', appId, 'private', 'data', 'events', editingEvent.id),
+      { menus: newMenus }
+    );
+    return true;
+  };
+
   const restoreMenuSnapshot = (menuId, snapshot) => {
     setFormData(prev => ({
       ...prev,
@@ -159,22 +174,19 @@ export default function EventFormModal({
     setPreviewVersion(null);
   };
 
-  const deleteMenuSnapshot = (menuId, versionId) => {
-    setFormData(prev => ({
-      ...prev,
-      menus: prev.menus.map(m => {
-        if (m.id === menuId) {
-          return {
-            ...m,
-            versions: (m.versions || []).filter(v => v.id !== versionId)
-          };
-        }
-        return m;
-      })
-    }));
+  const deleteMenuSnapshot = async (menuId, versionId) => {
+    const newMenus = (formData.menus || []).map(m =>
+      m.id === menuId ? { ...m, versions: (m.versions || []).filter(v => v.id !== versionId) } : m
+    );
+    setFormData(prev => ({ ...prev, menus: newMenus }));
+    try {
+      await persistMenusToEvent(newMenus); // keep the deletion in the DB too
+    } catch (e) {
+      addToast(`${L('刪除快照失敗 (Failed to delete snapshot)')}: ${e.message}`, "error");
+    }
   };
 
-  const saveMenuSnapshot = (menuId) => {
+  const saveMenuSnapshot = async (menuId) => {
     const menuToSave = formData.menus?.find(m => m.id === menuId);
     if (!menuToSave) return addToast(L('找不到菜單快照來源 (Menu snapshot source not found)'), "error");
 
@@ -183,31 +195,37 @@ export default function EventFormModal({
     if (snapshotName === null) return;
     if (snapshotName.trim() === "") snapshotName = defaultName;
 
-    setFormData(prev => ({
-      ...prev,
-      menus: prev.menus.map(m => {
-        if (m.id === menuId) {
-          const newVersion = {
-            id: Date.now(),
-            name: snapshotName,
-            // 🌟 Fix: Store in 'data' array for VersionPreviewModal compatibility
-            data: [{
-              title: m.title,
-              content: m.content,
-              price: m.price,
-              priceType: m.priceType
-            }],
-            timestamp: new Date().toISOString()
-          };
-          return {
-            ...m,
-            versions: [newVersion, ...(m.versions || [])]
-          };
-        }
-        return m;
-      })
-    }));
-    addToast(`${L('快照已儲存: (Snapshot saved:)')} ${snapshotName}`, "success");
+    const newVersion = {
+      id: Date.now(),
+      name: snapshotName,
+      // Store in a 'data' array for VersionPreviewModal compatibility.
+      data: [{
+        title: menuToSave.title,
+        content: menuToSave.content,
+        price: menuToSave.price,
+        priceType: menuToSave.priceType
+      }],
+      timestamp: new Date().toISOString()
+    };
+    const newMenus = (formData.menus || []).map(m =>
+      m.id === menuId ? { ...m, versions: [newVersion, ...(m.versions || [])] } : m
+    );
+
+    // Reflect it in the draft immediately...
+    setFormData(prev => ({ ...prev, menus: newMenus }));
+
+    // ...then write it straight to the event so it's saved globally (not just the draft).
+    try {
+      const persisted = await persistMenusToEvent(newMenus);
+      addToast(
+        persisted
+          ? `${L('快照已儲存至活動: (Snapshot saved to event:)')} ${snapshotName}`
+          : `${L('快照已儲存（儲存活動後生效）: (Snapshot saved — persists once you save the event:)')} ${snapshotName}`,
+        "success"
+      );
+    } catch (e) {
+      addToast(`${L('快照儲存至活動失敗 (Failed to save snapshot to event)')}: ${e.message}`, "error");
+    }
   };
 
   const moveMenu = (index, direction) => {

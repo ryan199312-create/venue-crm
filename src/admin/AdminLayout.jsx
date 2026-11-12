@@ -33,6 +33,7 @@ const DocumentRouter = React.lazy(() => import('../features/documents/components
 const AnalysisAssistant = React.lazy(() => import('../components/AnalysisAssistant'));
 
 import { usePdfGenerator } from '../features/documents/hooks/usePdfGenerator';
+import { printHtmlDocument } from '../features/documents/nativePrint';
 
 /**
  * AdminLayout
@@ -78,6 +79,7 @@ export default function AdminLayout() {
   const [printData, setPrintData] = useState(null);
   const [printMode, setPrintMode] = useState('EO');
   const [printLang, setPrintLang] = useState('en');
+  const cancelPrintRef = useRef(null); // tears down a native print still in flight (a newer print supersedes it)
   const [isDataAiOpen, setIsDataAiOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
@@ -219,193 +221,29 @@ export default function AdminLayout() {
     setPrintData(formData);
     setPrintMode(m);
     setPrintLang(lang);
-    
+
     try {
       // 1. Wait for React to render the hidden .print-container (a document renders in
       //    well under this; kept small for speed).
       await new Promise(resolve => setTimeout(resolve, 150));
 
-      // 2. Setup Iframe
-      let iframe = document.getElementById('print-iframe');
-      if (iframe) iframe.remove();
-      
-      iframe = document.createElement('iframe');
-      iframe.id = 'print-iframe';
-      iframe.style.cssText = 'position:fixed; opacity:0; pointer-events:none; width:1px; height:1px; left:-100px; top:-100px;';
-      document.body.appendChild(iframe);
-
-      const doc = iframe.contentDocument || iframe.contentWindow.document;
       const printContainer = document.querySelector('.print-container');
-      
       if (!printContainer) {
         throw new Error("Print container not found");
       }
 
-      const printContent = printContainer.innerHTML;
-      
-      // OPTIMIZATION: Extract Theme Variables to restore brand colors
-      const rootStyle = getComputedStyle(document.documentElement);
-      const themeVars = `
-        :root {
-          --brand-primary: ${rootStyle.getPropertyValue('--brand-primary') || '#4F46E5'};
-          --brand-secondary: ${rootStyle.getPropertyValue('--brand-secondary') || '#1e293b'};
-          --brand-accent: ${rootStyle.getPropertyValue('--brand-accent') || '#8b5cf6'};
-        }
-      `;
-
-      // MORE AGGRESSIVE CSS PRUNING: Only grab styles that are likely needed
-      const styleElements = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
-      const appStyles = styleElements
-        .map(s => {
-          const html = s.outerHTML;
-          // Skip obviously irrelevant or massive third-party styles that don't affect layout
-          if (html.includes('google-analytics') || html.includes('hot-update') || html.includes('vite/client')) return '';
-          if (s.tagName === 'LINK' && (html.includes('fontawesome') || html.includes('inter-font'))) return '';
-          return html;
-        })
-        .join('\n');
-
-      // 3. Inject content with optimized Paged.js and counters
-      doc.open();
-      doc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Print - ${formData.orderId}</title>
-            <meta charset="UTF-8">
-            ${appStyles}
-            <style>
-              ${themeVars}
-              
-              /* NATIVE FONT LOADING */
-              @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-              
-              /* RESET & BASE */
-              body { 
-                font-family: 'Noto Sans TC', sans-serif !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                background: white !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              
-              .print-container { 
-                display: block !important; 
-                position: static !important; 
-                width: 100% !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              
-              /* PAGED.JS ENGINE CONFIGURATION */
-              @page {
-                size: A4;
-                margin: 15mm 15mm 15mm 15mm;
-
-                @bottom-left {
-                  content: element(footerLeft);
-                  font-size: 8px;
-                  color: #64748b;
-                  font-family: sans-serif;
-                  text-transform: uppercase;
-                  border-top: 0.5pt solid #cbd5e1;
-                  padding-top: 1.5mm;
-                  white-space: nowrap;
-                }
-
-                @bottom-right {
-                  content: "Page " counter(page) " of " counter(pages);
-                  font-size: 8px;
-                  color: #0f172a;
-                  font-family: sans-serif;
-                  font-weight: bold;
-                  border-top: 0.5pt solid #cbd5e1;
-                  padding-top: 1.5mm;
-                  text-align: right;
-                }
-              }
-
-              /* MAP DATA TO PAGED.JS ELEMENTS */
-              .running-footer-left { position: running(footerLeft); }
-              
-              /* HIDE SOURCE ELEMENTS ONLY AFTER RUNNING */
-              .pagedjs-footer-source { 
-                position: absolute;
-                top: 0;
-                left: 0;
-                visibility: hidden;
-                height: 0;
-                width: 0;
-                overflow: hidden;
-              }
-
-              .page-break { page-break-after: always !important; break-after: page !important; }
-              .break-inside-avoid { break-inside: avoid !important; }
-              .print-page { box-shadow: none !important; margin: 0 !important; }
-
-              /* PREVENT TRAILING BLANK PAGES */
-              @page:blank { display: none !important; }
-            </style>
-          </head>
-          <body>
-            <div class="print-container">
-              ${printContent}
-            </div>
-            
-            <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"></script>
-            <script>
-              window.PagedConfig = {
-                auto: true,
-                after: (flow) => {
-                  // Ensure all images are loaded before printing
-                  const images = document.querySelectorAll('img');
-                  const imagePromises = Array.from(images).map(img => {
-                    if (img.complete) return Promise.resolve();
-                    return new Promise(resolve => {
-                      img.onload = resolve;
-                      img.onerror = resolve; // Continue even on error
-                    });
-                  });
-
-                  Promise.all(imagePromises).then(() => {
-                    // Wait for fonts (so Chinese renders) then print — no fixed buffer.
-                    const go = () => requestAnimationFrame(() => {
-                      window.print();
-                      window.parent.postMessage('print_done', '*');
-                    });
-                    (document.fonts && document.fonts.ready ? document.fonts.ready.then(go) : go());
-                  });
-                }
-              };
-              
-              // Fallback: if Paged.js never fires its after() hook, print anyway.
-              setTimeout(() => {
-                window.print();
-                window.parent.postMessage('print_done', '*');
-              }, 3500);
-            </script>
-          </body>
-        </html>
-      `);
-      doc.close();
-
-      // 4. Cleanup Listener
-      const handleMessage = (event) => {
-        if (event.data === 'print_done') {
+      // 2. Paginate + print it in a hidden iframe. This waits for Paged.js to finish (it never
+      //    prints a half-paginated document) and falls back to plain native printing.
+      cancelPrintRef.current?.();
+      cancelPrintRef.current = printHtmlDocument({
+        title: `Print - ${formData.orderId}`,
+        content: printContainer.innerHTML,
+        onDone: () => {
+          cancelPrintRef.current = null;
           setIsPreparingPrint(false);
           setPrintData(null);
-          window.removeEventListener('message', handleMessage);
-          
-          // Cleanup iframe after a delay
-          setTimeout(() => {
-            const frame = document.getElementById('print-iframe');
-            if (frame) frame.remove();
-          }, 1000);
-        }
-      };
-      window.addEventListener('message', handleMessage);
-
+        },
+      });
     } catch (err) {
       console.error("Print Error:", err);
       addToast(L("列印啟動失敗，請再試一次 (Printing failed — please try again)"), "error");

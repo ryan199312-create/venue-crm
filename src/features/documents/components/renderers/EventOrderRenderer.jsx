@@ -337,18 +337,19 @@ export const EventOrderRenderer = ({ data, printMode, appSettings }) => {
                             </div>
                             <div className="border-2 border-slate-200 rounded-xl box-decoration-clone mb-4">
                               <div className="bg-[var(--brand-primary)] text-white px-3 py-1.5 font-bold text-sm uppercase rounded-t-[10px]">🛠️ Setup (場地)</div>
-                              <div className="p-3 grid grid-cols-2 gap-2 text-xs">
+                              <div className="p-3 grid grid-cols-3 gap-2 text-xs">
                                 <div className="p-2 bg-white border border-slate-200 rounded text-center"><span className="block text-[9px] text-slate-400 uppercase">Table Cloth</span><span className="block font-bold text-slate-900">{data.tableClothColor || 'Std'}</span></div>
                                 <div className="p-2 bg-white border border-slate-200 rounded text-center"><span className="block text-[9px] text-slate-400 uppercase">Chair Cover</span><span className="block font-bold text-slate-900">{data.chairCoverColor || 'Std'}</span></div>
+                                <div className="p-2 bg-white border border-slate-200 rounded text-center"><span className="block text-[9px] text-slate-400 uppercase">Head Table (主家席)</span><span className="block font-bold text-slate-900">{data.headTableColorType === 'custom' ? (data.headTableCustomColor || '-') : `Same as Guest${data.tableClothColor ? ` (${data.tableClothColor})` : ''}`}</span></div>
 
-                                <div className="col-span-2 p-2 bg-white border border-slate-200 rounded mt-2">
+                                <div className="col-span-3 p-2 bg-white border border-slate-200 rounded mt-2">
                                   <span className="block text-[9px] text-slate-400 uppercase">設備與佈置 (Equipment & Decor)</span>
                                   <div className="text-[10px] font-bold text-slate-800 leading-snug mt-1">
                                     {[setupStr, avStr, decorStr].filter(Boolean).join(' / ') || 'Standard Setup'}
                                   </div>
                                 </div>
-                                {data.venueDecor && shouldShowField(data, printMode, 'venueDecor', false, true) && <div className="col-span-2 mt-2 p-2 bg-slate-50 rounded italic text-[10px] border border-slate-100"><span className="font-bold not-italic">佈置備註:</span> {data.venueDecor}</div>}
-                                {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-2 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-[var(--brand-accent)] font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
+                                {data.venueDecor && shouldShowField(data, printMode, 'venueDecor', false, true) && <div className="col-span-3 mt-2 p-2 bg-slate-50 rounded italic text-[10px] border border-slate-100"><span className="font-bold not-italic">佈置備註:</span> {data.venueDecor}</div>}
+                                {data.otherNotes && shouldShowField(data, printMode, 'otherNotes', true, true) && (<div className="col-span-3 mt-2 pt-2 border-t border-slate-100"><span className="block text-[9px] text-[var(--brand-accent)] font-bold uppercase mb-1">Remarks / Attention</span><p className="font-bold text-slate-900">{data.otherNotes}</p></div>)}
                               </div>
                             </div>
                           </>

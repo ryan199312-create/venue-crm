@@ -113,12 +113,12 @@ STRICT RULES:
 4. Format: Output the original Chinese line, followed immediately by the English translation on the next line. 
 5. Spacing: Remove ALL empty lines between items. 
 6. Punctuation: Do NOT add full stops. Do not add bullet points. Use Title Case for English translations.`;
-      let translatedText = await generate(content, systemPrompt);
-      if (!translatedText) throw new Error("Translation API Failed");
+      // throwOnError: surface the real reason (auth, billing, network) instead of a generic toast.
+      const translatedText = await generate(content, systemPrompt, { throwOnError: true });
       handleMenuChange(menuId, 'content', translatedText.replace(/\n\s*\n/g, '\n').trim());
       addToast("菜單翻譯完成！", "success");
     } catch (error) {
-      addToast("翻譯失敗，請稍後再試", "error");
+      addToast(`翻譯失敗 (Translate failed): ${error.message}`, "error");
     } finally {
       setTranslatingMenuId(null);
     }
@@ -135,12 +135,11 @@ STRICT RULES:
 3. Format: Output original Chinese line, followed immediately by English translation on the next line. 
 4. Spacing: Remove ALL empty lines. 
 5. Punctuation: Do NOT add full stops. Use Title Case for English translations.`;
-      let translatedText = await generate(formData.drinksPackage, systemPrompt);
-      if (!translatedText) throw new Error("Translation API Failed");
+      const translatedText = await generate(formData.drinksPackage, systemPrompt, { throwOnError: true });
       setFormData(prev => ({ ...prev, drinksPackage: translatedText.replace(/\n\s*\n/g, '\n').trim() }));
       addToast("酒水翻譯完成！", "success");
     } catch (error) {
-      addToast("翻譯失敗，請稍後再試", "error");
+      addToast(`翻譯失敗 (Translate failed): ${error.message}`, "error");
     } finally {
       setIsTranslatingDrinks(false);
     }

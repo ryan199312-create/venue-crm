@@ -1,16 +1,79 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { functions, db, storage, auth } from '../../../core/firebase';
-import { httpsCallable } from 'firebase/functions';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { storage, auth } from '../../../core/firebase';
+import { ref, uploadString } from 'firebase/storage';
 import DocumentRouter from '../components/DocumentRouter';
 import { getDocStyle } from '../docStyles';
 import { useAuth } from '../../../context/AuthContext';
 
+const PDF_ENDPOINT = 'https://asia-east2-event-management-system-9f764.cloudfunctions.net/enqueuePdfJob';
+
+// Turn SDK / network failures into something staff can act on. When the Firebase project's
+// billing is disabled, Storage answers 402 and Cloud Run rejects the request before any CORS
+// headers are added, so the browser only ever sees a generic "Failed to fetch".
+function describePdfError(err, stage) {
+  const msg = err?.message || String(err);
+  const serverResponse = err?.serverResponse || err?.customData?.serverResponse || '';
+  if (/\b402\b|billing|payment required/i.test(`${msg} ${serverResponse}`)) {
+    return 'Firebase 專案帳單已停用 (Firebase billing is disabled for this project — re-enable it in Google Cloud)';
+  }
+  if (err instanceof TypeError && /fetch/i.test(msg)) {
+    return stage === 'generate'
+      ? '無法連接 PDF 服務 (Cannot reach the PDF service — check the project billing / function deployment)'
+      : '無法連接 Firebase Storage (Cannot reach Firebase Storage)';
+  }
+  if (err?.code === 'storage/unauthorized') {
+    return '沒有上傳權限 (No permission to upload the document payload)';
+  }
+  return msg;
+}
+
+// Open a URL in a new tab. By the time the PDF is ready the click's user activation has
+// expired, so a popup blocker may refuse — report that instead of failing silently.
+function openInNewTab(url) {
+  // (Not the 'noopener' feature string: that makes window.open return null even on success.)
+  const win = window.open(url, '_blank');
+  if (!win) throw new Error('瀏覽器阻擋了彈出視窗，請允許此網站的彈出視窗 (The browser blocked the popup — allow popups for this site)');
+  try { win.opener = null; } catch { /* cross-origin — ignore */ }
+}
+
+// Save a cross-origin file under its own name. A plain <a download> is ignored for
+// cross-origin URLs (the browser navigates to the PDF instead), so fetch the bytes and save
+// them from a blob: URL. firebasestorage.googleapis.com answers with
+// Access-Control-Allow-Origin: * so this needs no bucket CORS config. If the fetch fails
+// anyway, fall back to opening the file in a new tab.
+async function downloadFile(url, fileName) {
+  let objectUrl = null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    objectUrl = URL.createObjectURL(blob);
+  } catch (err) {
+    console.warn('[PDF] Could not fetch the file for download, opening it instead:', err);
+    openInNewTab(url);
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  // Give the browser time to start the download before releasing the blob.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60 * 1000);
+}
+
 export function usePdfGenerator() {
   const { appId } = useAuth();
-  
+
+  /**
+   * Render a document to PDF via the enqueuePdfJob Cloud Function.
+   *   download: save the file to disk (under its generated name)
+   *   silent:   neither download nor open — the caller only wants { url, fileName }
+   *   (default) open the PDF in a new tab
+   */
   const generatePdf = async ({ docType, data, appSettings, download = false, lang = 'en', silent = false }) => {
     const docFont = getDocStyle(appSettings).font;
     const jobId = Math.random().toString(36).substring(7);
@@ -103,61 +166,57 @@ export function usePdfGenerator() {
       </html>
     `;
 
-    // 2. Upload HTML to Storage (Avoid Firestore 1MB limit)
+    // 2. Upload HTML to Storage (avoids the Firestore 1MB limit)
     const htmlPath = `pdf_payloads/${appId}/${jobId}.html`;
     const htmlRef = ref(storage, htmlPath);
-    await uploadString(htmlRef, styledHtml, 'raw', { contentType: 'text/html' });
-
-    // 3. Call Enqueue Function (Manual fetch for CORS stability)
-    // Send the caller's Firebase ID token so the function can authorize + tenant-scope the job.
-    const idToken = await auth.currentUser?.getIdToken();
-    const response = await fetch('https://asia-east2-event-management-system-9f764.cloudfunctions.net/enqueuePdfJob', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
-      },
-      body: JSON.stringify({
-        appId, 
-        htmlPath, 
-        fileName, 
-        docType, 
-        jobId,
-        orderId: data.orderId,
-        eventName: data.eventName
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to enqueue PDF job: ${await response.text()}`);
+    try {
+      await uploadString(htmlRef, styledHtml, 'raw', { contentType: 'text/html' });
+    } catch (err) {
+      throw new Error(describePdfError(err, 'upload'));
     }
 
-    const { data: { jobId: confirmedJobId } } = await response.json();
-
-    // 4. Listen for completion
-    return new Promise((resolve, reject) => {
-      const unsub = onSnapshot(doc(db, 'artifacts', appId, 'private', 'data', 'pdf_jobs', jobId), (snap) => {
-        const jobStatus = snap.data();
-        if (jobStatus?.status === 'completed') {
-          unsub();
-          if (download) {
-            const link = document.createElement('a');
-            link.href = jobStatus.url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          } else {
-            // Open in new tab
-            window.open(jobStatus.url, '_blank');
-          }
-          resolve({ url: jobStatus.url, fileName });
-        } else if (jobStatus?.status === 'error') {
-          unsub();
-          reject(new Error(jobStatus.error));
-        }
+    // 3. Generate. enqueuePdfJob renders synchronously and answers with the file URL, so
+    //    there is no job document to wait on. (Plain fetch rather than httpsCallable for
+    //    CORS stability; the ID token lets the function authorise + tenant-scope the job.)
+    const idToken = await auth.currentUser?.getIdToken();
+    let response;
+    try {
+      response = await fetch(PDF_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+        },
+        body: JSON.stringify({
+          appId,
+          htmlPath,
+          fileName,
+          docType,
+          jobId,
+          orderId: data.orderId,
+          eventName: data.eventName
+        })
       });
-    });
+    } catch (err) {
+      throw new Error(describePdfError(err, 'generate'));
+    }
+
+    if (!response.ok) {
+      const body = (await response.text().catch(() => '')).slice(0, 200);
+      throw new Error(`PDF 服務錯誤 (PDF service error) ${response.status}: ${body}`);
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    const url = payload?.data?.url;
+    if (!url) throw new Error('PDF 服務沒有回傳檔案 (The PDF service returned no file URL)');
+
+    // 4. Deliver
+    if (download) {
+      await downloadFile(url, fileName);
+    } else if (!silent) {
+      openInNewTab(url);
+    }
+    return { url, fileName };
   };
 
   return { generatePdf };

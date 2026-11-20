@@ -1,5 +1,5 @@
 /**
- * Native (browser) printing of documents — the "原生列印 (Native)" button.
+ * Native (browser) printing of documents — the "列印 (Print)" button in the document preview.
  *
  * The rendered document HTML is written into a hidden iframe, paginated there by Paged.js
  * (running footer + "Page X of Y"), and the iframe then prints itself.

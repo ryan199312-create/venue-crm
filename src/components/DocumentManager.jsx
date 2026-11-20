@@ -6,11 +6,12 @@ import { SignaturePad } from './ui';
 import { usePdfGenerator } from "../features/documents/hooks/usePdfGenerator";
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../i18n/language';
+import { useToast } from '../context/ToastContext';
 
 export default function DocumentManager({ eventData, appSettings, onSign, onPrint, onUpdateData, isClientPortal = false }) {
   const { hasPermission } = useAuth();
   const { L } = useLang();
-  const [isDownloading, setIsDownloading] = useState(null);
+  const { addToast } = useToast();
   const [previewDoc, setPreviewDoc] = useState(null);
   const [selectedMenuId, setSelectedMenuId] = useState(null);
   const [stagedSignature, setStagedSignature] = useState(null);
@@ -113,11 +114,6 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
     }
     return data;
   }, [eventData, previewDoc, selectedMenuId, stagedSignature, isClientPortal]);
-
-  const handleDownloadPDF = async (docType, includeSignature = true, menuId = null) => {
-    // Hidden as per user request to remove download button
-    return;
-  };
 
   const docs = [
     { id: 'EO', label: '內部行政單 (Event Order)', sub: 'Event Order', clientSignable: false, adminSignable: false, internalOnly: true, permission: 'doc_eo' },
@@ -297,30 +293,35 @@ export default function DocumentManager({ eventData, appSettings, onSign, onPrin
                         <button 
                           type="button" 
                           disabled={isGenerating}
-                          onClick={async () => { 
+                          onClick={async () => {
                             setIsGenerating(true);
                             try {
                               // previewDoc carries the selected menu language (MENU_CONFIRM_<LANG>_<id>);
-                              // use it directly so print matches the preview instead of reverting to bilingual.
+                              // use it directly so the file matches the preview instead of reverting to bilingual.
                               const docType = previewDoc;
-                              await generatePdf({ docType, data: dataToRender, appSettings, lang: effectiveLang });
+                              await generatePdf({ docType, data: dataToRender, appSettings, lang: effectiveLang, download: true });
+                              addToast(L('文件已產生 (Document ready)'), 'success');
+                            } catch (err) {
+                              // Without this the failure was silent: the spinner just stopped.
+                              console.error('[PDF download]', err);
+                              addToast(`${L('下載失敗 (Download failed)')}: ${err.message}`, 'error');
                             } finally {
                               setIsGenerating(false);
                             }
-                          }} 
+                          }}
                           className="flex items-center text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50"
                         >
-                          {isGenerating ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Printer size={14} className="mr-1.5" />}
-                          {isGenerating ? L('雲端列印 (PDF)') : L('PDF 列印 (PDF Print)')}
+                          {isGenerating ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Download size={14} className="mr-1.5" />}
+                          {isGenerating ? L('正在產生 (Generating)') : L('下載 (Download)')}
                         </button>
 
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => { onPrint(previewDoc, effectiveLang); closePreview(); }}
                           className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                         >
                           <Printer size={14} className="mr-1.5" />
-                          {L('原生列印 (Native)')}
+                          {L('列印 (Print)')}
                         </button>
                       </div>
                     )}
